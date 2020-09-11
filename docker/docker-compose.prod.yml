@@ -25,13 +25,13 @@ services:
   scraper:
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: scraper.Dockerfile
     restart: always
 
   worker:
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: worker.Dockerfile
     restart: always
 
 volumes:
