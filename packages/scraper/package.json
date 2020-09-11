@@ -22,7 +22,6 @@
     "@types/dotenv": "^8.2.0",
     "@types/ioredis": "^4.17.4",
     "@types/node": "^13.11.1",
-    "@types/readable-stream": "^2.3.9",
     "gts": "^2.0.2",
     "pm2": "^4.4.1",
     "tsc-watch": "^4.2.9",
