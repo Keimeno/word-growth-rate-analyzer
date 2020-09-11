@@ -1,0 +1,33 @@
+{
+  "name": "@keimeno/wgra-worker",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "serve": "npx tsc-watch --onSuccess \"node ./dist/index.js\"",
+    "check": "npx gts check",
+    "clean": "npx gts clean",
+    "compile": "npx tsc",
+    "fix": "npx gts fix",
+    "prepare": "yarn compile",
+    "pretest": "yarn compile",
+    "posttest": "yarn check"
+  },
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "ioredis": "^4.17.3",
+    "mongoose": "^5.10.5"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^8.2.0",
+    "@types/ioredis": "^4.17.4",
+    "@types/mongoose": "^5.7.36",
+    "@types/node": "^13.11.1",
+    "gts": "^2.0.2",
+    "pm2": "^4.4.1",
+    "tsc-watch": "^4.2.9",
+    "typescript": "^4.0.2"
+  },
+  "engines": {
+    "node": ">= 12.x.x"
+  }
+}

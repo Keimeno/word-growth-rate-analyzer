@@ -1,0 +1,24 @@
+{
+  "folders": [
+    {
+      "name": "Monorepo",
+      "path": "."
+    },
+    {
+      "name": "Scraper",
+      "path": "./packages/scraper"
+    },
+    {
+      "name": "Worker",
+      "path": "./packages/worker"
+    }
+  ],
+  "extensions": {
+    "recommendations": [
+      "aaron-bond.better-comments",
+      "editorconfig.editorconfig",
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint"
+    ]
+  }
+}
