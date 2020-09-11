@@ -24,7 +24,7 @@ export const incrementScrapedWordCount = (word: string) => {
   scrapedWordsCount.push({word, count: 1});
 };
 
-export const publishScrapedWordsCount = async () => {
+const publishScrapedWordsCount = async () => {
   try {
     await redis.publish('scrapedWordsCount', JSON.stringify(scrapedWordsCount));
     console.log(
