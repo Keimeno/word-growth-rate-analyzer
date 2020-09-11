@@ -7,6 +7,8 @@ COPY ./packages/worker/package.json ./packages/worker/
 RUN yarn
 RUN cd ./packages/worker && yarn
 
+RUN cd ./packages/worker && yarn compile
+
 COPY . .
 
 CMD ["yarn", "start:worker"]

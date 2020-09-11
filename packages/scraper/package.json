@@ -9,7 +9,6 @@
     "clean": "npx gts clean",
     "compile": "npx tsc",
     "fix": "npx gts fix",
-    "prepare": "yarn compile",
     "pretest": "yarn compile",
     "posttest": "yarn check"
   },
