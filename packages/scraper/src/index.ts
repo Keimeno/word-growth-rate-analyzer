@@ -3,3 +3,4 @@ config();
 config({path: '../../.env'});
 
 import './lib';
+import './scraped';
