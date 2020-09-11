@@ -4,6 +4,7 @@
   "license": "MIT",
   "scripts": {
     "serve": "npx tsc-watch --onSuccess \"node ./dist/index.js\"",
+    "start": "npx pm2-runtime ./dist/index.js",
     "check": "npx gts check",
     "clean": "npx gts clean",
     "compile": "npx tsc",
