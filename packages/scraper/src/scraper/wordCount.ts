@@ -1,7 +1,7 @@
 import {CommentStream} from 'snoostorm';
 import {Comment} from 'snoowrap';
 import {_} from '../lib';
-import {incrementScrapedWordCount} from '../scraped';
+import {incrementScrapedWordCount} from '../publisher';
 
 // every 15 seconds, it gets a maximum of 5000 comments
 // because the reddit api ratelimit is 600 api calls every 10 minutes
@@ -15,7 +15,7 @@ const retrieveWords = (item: Comment) => {
   const {body} = item;
   const unprocessedWords = body.split(' ');
 
-  // if we length of the word is longer than 64 we don't accept it
+  // if the length of the word is longer than 64 we don't accept it
   const filteredWords = unprocessedWords.filter(word => word.length <= 64);
 
   // only allow words that are alphabetical, and may have apostrophes
