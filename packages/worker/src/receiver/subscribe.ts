@@ -15,5 +15,6 @@ redis.psubscribe(scrapedWordsCount).then(() => {
 redis.on('pmessage', async (_, __, message) => {
   const scrapedWordsCount = JSON.parse(message) as ScrapedWordCount[];
 
+  console.log(`received ${scrapedWordsCount.length} word counts`);
   await storeWordsCount(scrapedWordsCount);
 });

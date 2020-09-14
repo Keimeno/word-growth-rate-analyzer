@@ -23,23 +23,28 @@ const userSchema = new Schema(
 
 const generateDatePrefix = () => {
   const date = new Date();
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  return `${date.getFullYear()}-${
+    date.getMonth() + 1
+  }-${date.getMilliseconds()}`;
 };
 
 export let DailyScrapedWordCount: Model<DailyScrapedWordCountDocument, {}>;
 
 export const updateDailyScrapedWordModel = async () => {
-  if (
-    DailyScrapedWordCount?.collection?.name ===
-    generateDatePrefix() + '_daily_scraped_word_count'
-  ) {
+  const collectionName = generateDatePrefix() + '_daily_scraped_word_count';
+
+  if (DailyScrapedWordCount?.collection?.name === collectionName) {
     return;
   }
 
   DailyScrapedWordCount = connection.model<DailyScrapedWordCountDocument>(
     'DailyScrapedWordCountDocument',
     userSchema,
-    generateDatePrefix() + '_daily_scraped_word_count'
+    collectionName
+  );
+
+  console.log(
+    `DailyScrapedWordCount receives new collection name: ${collectionName}`
   );
 
   await DailyScrapedWordCount.init();
