@@ -4,9 +4,10 @@ WORKDIR /usr/src/worker/
 COPY ./package.json .
 COPY ./packages/worker/package.json ./packages/worker/
 
-RUN yarn
-RUN cd ./packages/worker && yarn
+RUN npm i -g pnpm
+RUN pnpm i -g tsc-watch
+RUN pnpm install
 
 COPY . .
 
-CMD ["yarn", "start:worker"]
+CMD ["pnpm", "start:worker"]

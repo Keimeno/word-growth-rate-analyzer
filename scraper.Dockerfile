@@ -4,9 +4,10 @@ WORKDIR /usr/src/scraper/
 COPY ./package.json .
 COPY ./packages/scraper/package.json ./packages/scraper/
 
-RUN yarn
-RUN cd ./packages/scraper && yarn
+RUN npm i -g pnpm
+RUN pnpm i -g tsc-watch
+RUN pnpm install
 
 COPY . .
 
-CMD ["yarn", "start:scraper"]
+CMD ["pnpm", "start:scraper"]
