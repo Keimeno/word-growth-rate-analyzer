@@ -2,7 +2,7 @@ import {Schema, Document, Connection} from 'mongoose';
 
 export type ScrapedWordCount = {
   readonly word: string;
-  readonly createdAt: Date;
+  createdAt: Date;
   count: number;
 };
 
