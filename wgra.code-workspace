@@ -5,12 +5,12 @@
       "path": "."
     },
     {
-      "name": "Scraper",
-      "path": "./packages/scraper"
+      "name": "Common",
+      "path": "./packages/common"
     },
     {
-      "name": "Worker",
-      "path": "./packages/worker"
+      "name": "Scraper",
+      "path": "./packages/scraper"
     }
   ],
   "extensions": {
