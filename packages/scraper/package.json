@@ -13,8 +13,10 @@
     "posttest": "yarn check"
   },
   "dependencies": {
+    "@keimeno/wgra-common": "workspace:^0.0.0",
     "dotenv": "^8.6.0",
     "ioredis": "^4.27.6",
+    "mongoose": "^5.13.2",
     "snoostorm": "^1.5.2",
     "snoowrap": "^1.23.0"
   },

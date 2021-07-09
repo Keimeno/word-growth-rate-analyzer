@@ -1,5 +1,3 @@
-import {redis} from '../lib';
-
 const scrapedWordsCount = [] as ScrapedWordCount[];
 
 export type ScrapedWordCount = {
@@ -26,7 +24,6 @@ export const incrementScrapedWordCount = (word: string) => {
 
 const publishScrapedWordsCount = async () => {
   try {
-    await redis.publish('scrapedWordsCount', JSON.stringify(scrapedWordsCount));
     console.log(
       `Successfully published the count of ${scrapedWordsCount.length} words`
     );
