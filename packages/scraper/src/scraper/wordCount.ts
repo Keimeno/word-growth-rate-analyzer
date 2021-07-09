@@ -1,11 +1,11 @@
 import {CommentStream} from 'snoostorm';
 import {Comment} from 'snoowrap';
-import {_} from '../lib';
+import {client} from '../infrastructure';
 import {incrementScrapedWordCount} from '../publisher';
 
 // every 15 seconds, it gets a maximum of 5000 comments
 // because the reddit api ratelimit is 600 api calls every 10 minutes
-const comments = new CommentStream(_, {
+const comments = new CommentStream(client, {
   subreddit: 'all',
   limit: 5000,
   pollTime: 15000,

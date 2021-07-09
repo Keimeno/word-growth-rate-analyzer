@@ -2,6 +2,6 @@ import {config} from 'dotenv';
 config();
 config({path: '../../.env'});
 
-import './lib';
+import './infrastructure';
 import './publisher';
 import './scraper';

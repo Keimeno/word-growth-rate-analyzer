@@ -15,6 +15,3 @@ export const client = new Snoowrap({
   username: REDDIT_USERNAME,
   password: REDDIT_PASSWORD,
 });
-
-// short alias
-export const _ = client;
