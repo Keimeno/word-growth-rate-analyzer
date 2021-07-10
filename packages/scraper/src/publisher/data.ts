@@ -5,10 +5,13 @@ import {
 import {connection} from '../infrastructure';
 
 const HourlyScrapedWordCount = generateHourlyScrapedWordCountModel(connection);
-
 HourlyScrapedWordCount.init();
 
 const scrapedWordsCount: ScrapedWordCount[] = [];
+
+// using a placeholder date instead of creating a new date for every record
+// will save us a lot of memory
+const placeholderDate = new Date();
 
 export const incrementScrapedWordCount = (word: string) => {
   // check if there's already a ScrapedWordCount object in the
@@ -25,7 +28,7 @@ export const incrementScrapedWordCount = (word: string) => {
   }
 
   // item not found, create new object with count 1
-  scrapedWordsCount.push({word, count: 1, createdAt: new Date()});
+  scrapedWordsCount.push({word, count: 1, createdAt: placeholderDate});
 };
 
 const upsertScrapedWordsCount = async () => {
