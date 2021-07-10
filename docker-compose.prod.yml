@@ -28,11 +28,5 @@ services:
       dockerfile: ./docker/scraper.Dockerfile
     restart: always
 
-  worker:
-    build:
-      context: ..
-      dockerfile: ./docker/worker.Dockerfile
-    restart: always
-
 volumes:
   mongo_volume:
