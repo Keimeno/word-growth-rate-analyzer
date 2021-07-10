@@ -12,15 +12,15 @@ const hourlyScrapedWordCountSchema = new Schema(
   {
     word: {
       type: String,
-      unique: true,
+      index: true,
+    },
+    createdAt: {
+      type: Date,
       index: true,
     },
     count: {
       type: Number,
       default: 1,
-    },
-    createdAt: {
-      type: Date,
     },
   },
   {
