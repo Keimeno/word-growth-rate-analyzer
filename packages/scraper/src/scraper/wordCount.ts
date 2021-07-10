@@ -1,7 +1,7 @@
-import {CommentStream} from 'snoostorm';
 import {Comment} from 'snoowrap';
 import {client} from '../infrastructure';
 import {incrementScrapedWordCount} from '../publisher';
+import {CommentStream} from './commentStream';
 
 // every 5 seconds, it gets a maximum of 10000 comments
 // because the reddit api ratelimit is 600 api calls every 10 minutes
