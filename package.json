@@ -7,7 +7,8 @@
     "serve:docker": "docker-compose -f ./docker-compose.dev.yml up",
     "serve:scraper": "pnpm serve --stream --filter=@keimeno/wgra-scraper",
     "serve:common": "pnpm serve --stream --filter=@keimeno/wgra-common",
-    "start": "yarn start:docker",
+    "build": "pnpm build -r",
+    "start": "pnpm start:docker",
     "start:docker": "docker-compose -f ./docker-compose.prod.yml up -d",
     "start:scraper": "pnpm start --filter=@keimeno/wgra-scraper",
     "start:common": "pnpm start --filter=@keimeno/wgra-common"

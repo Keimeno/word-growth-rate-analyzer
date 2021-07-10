@@ -4,6 +4,7 @@
   "license": "MIT",
   "scripts": {
     "serve": "tsc-watch --onSuccess \"node ./dist/index.js\"",
+    "build": "tsc",
     "start": "pnpx pm2-runtime ./dist/index.js",
     "check": "pnpx gts check",
     "clean": "pnpx gts clean",
