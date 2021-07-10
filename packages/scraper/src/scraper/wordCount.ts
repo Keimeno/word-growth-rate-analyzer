@@ -3,12 +3,12 @@ import {Comment} from 'snoowrap';
 import {client} from '../infrastructure';
 import {incrementScrapedWordCount} from '../publisher';
 
-// every 15 seconds, it gets a maximum of 5000 comments
+// every 5 seconds, it gets a maximum of 10000 comments
 // because the reddit api ratelimit is 600 api calls every 10 minutes
 const comments = new CommentStream(client, {
   subreddit: 'all',
-  limit: 5000,
-  pollTime: 15000,
+  limit: 10000,
+  pollTime: 5000,
 });
 
 const retrieveWords = (item: Comment) => {

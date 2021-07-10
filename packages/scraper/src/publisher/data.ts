@@ -58,7 +58,15 @@ const upsertScrapedWordsCount = async () => {
       );
     }
 
-    console.log(`Successfully upserted ${wordsCount.length} words`);
+    const trueAmountWords = wordsCount.reduce(
+      (accumulator, currentValue) => accumulator + currentValue.count,
+      0
+    );
+    const hhmmss = new Date().toTimeString().split(' ')[0];
+
+    console.log(
+      `[${hhmmss}] Successfully upserted ${wordsCount.length} unique words and ${trueAmountWords} words in total`
+    );
   } catch (e) {
     console.log('Failed to upsert scrapedWordsCount', e);
   }
