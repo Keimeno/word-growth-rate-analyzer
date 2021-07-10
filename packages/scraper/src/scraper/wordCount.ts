@@ -21,7 +21,7 @@ const retrieveWords = (item: Comment) => {
     .filter(word => word.length <= 64);
 
   // only allow words that are alphabetical, and may have apostrophes
-  const words = filteredWords.filter(word => /^[a-zA-Z']+$/.test(word));
+  const words = filteredWords.filter(word => /^[a-zA-Z0-9']+$/.test(word));
 
   // turn all words into lowercase
   return words.map(word => word.toLowerCase());
