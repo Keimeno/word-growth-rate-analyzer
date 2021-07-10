@@ -16,7 +16,9 @@ const retrieveWords = (item: Comment) => {
   const unprocessedWords = body.split(' ');
 
   // if the length of the word is longer than 64 we don't accept it
-  const filteredWords = unprocessedWords.filter(word => word.length <= 64);
+  const filteredWords = unprocessedWords
+    .map(word => word.replace(/[^\w\s]/gi, ''))
+    .filter(word => word.length <= 64);
 
   // only allow words that are alphabetical, and may have apostrophes
   const words = filteredWords.filter(word => /^[a-zA-Z']+$/.test(word));
