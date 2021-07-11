@@ -14,7 +14,7 @@ The objective of this project is, to automatically analyse, store and 
 
 Since users are more active at different times of the day, and at different days of the week, we will get large fluctuations in the growth rate of each word. While this doesn't result in a direct problem, since in relation to other words, the resulting growth rate will stay meaningful, it will cause our dataset to become less readable.
 
-To resolve this problem, we need to calculate the growth rate of each word, based on the occurrence of the most common word, in our case "the". As an example, if we want to calculate the growth rate of the word "hello", we need the following inputs to calculate the growth rate.
+To resolve this problem, we need to calculate the growth rate of each word, based on the occurrence of the most common word. In our case "the". As an example, if we want to calculate the growth rate of the word "hello", we need the following inputs to calculate the growth rate.
 
 | Word  | Time Frame    | Occurrences |
 | :---- | :------------ | :---------- |
@@ -23,7 +23,7 @@ To resolve this problem, we need to calculate the growth rate of each word, base
 | the   | 15:00 - 16:00 | 120.000     |
 | the   | 16:00 - 17:00 | 150.000     |
 
-Given our example input, it may seem as if we have a growth rate of 50% for the word "hello" between our two time frames, but in reality we first need to take the word "the" - our most occurring word - as a baseline. In order to accomplish this, we need to divide the occurrences of "the", with the occurrences of "the" from the time frame before, meaning `150.000 / 120.000`. This will give us `1.25`, which is the growth rate in user activity between those time frames. Now we need to multiply the occurrences of the word "hello" in our first time frame with our user growth rate, which results in `4000 * 1.25 = 5000`. Now we can calculate the true growth rate by dividing the occurrences of one time frame with the time frame before using our adjusted occurrences, `6000 / 5000 = 1.2`. Now we know, that the true growth rate is 20%, and not 50%.
+Given our example input, it may seem as if we have a growth rate of 50% for the word "hello" between our two time frames. However, in reality we first need to take the word "the" - our most occurring word - as a baseline. Then we need to divide the occurrences of "the", with the occurrences of "the" from the time frame before, meaning `150.000 / 120.000`. This will give us `1.25`, which is the growth rate in user activity between those time frames. Next we have to multiply the occurrences of the word "hello" in our first time frame with our user growth rate, which results in `4000 * 1.25 = 5000`. We can now calculate the true growth rate by dividing the occurrences of one time frame with the time frame before using our adjusted occurrences, `6000 / 5000 = 1.2`. We then know, that the true growth rate is 20%, and not 50%.
 
 ### Spam messages
 
