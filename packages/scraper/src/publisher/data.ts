@@ -1,11 +1,11 @@
 import {
-  generateHourlyScrapedWordCountModel,
+  generateDailyScrapedWordCountModel,
   ScrapedWordCount,
 } from '@keimeno/wgra-common';
 import {connection} from '../infrastructure';
 
-const HourlyScrapedWordCount = generateHourlyScrapedWordCountModel(connection);
-HourlyScrapedWordCount.init();
+const DailyScrapedWordCount = generateDailyScrapedWordCountModel(connection);
+DailyScrapedWordCount.init();
 
 const scrapedWordsCount: ScrapedWordCount[] = [];
 
@@ -51,7 +51,7 @@ const upsertScrapedWordsCount = async () => {
 
     for (let i = 0; i < wordsCount.length; i++) {
       const {word, count} = wordsCount[i];
-      await HourlyScrapedWordCount.updateOne(
+      await DailyScrapedWordCount.updateOne(
         {word, createdAt},
         {$inc: {count}},
         {upsert: true}

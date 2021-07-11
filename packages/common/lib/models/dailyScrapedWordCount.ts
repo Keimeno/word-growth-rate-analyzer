@@ -6,9 +6,9 @@ export type ScrapedWordCount = {
   count: number;
 };
 
-type HourlyScrapedWordCountDocument = Document & ScrapedWordCount;
+type DailyScrapedWordCountDocument = Document & ScrapedWordCount;
 
-const hourlyScrapedWordCountSchema = new Schema(
+const dailyScrapedWordCountSchema = new Schema(
   {
     word: {
       type: String,
@@ -29,10 +29,10 @@ const hourlyScrapedWordCountSchema = new Schema(
   }
 );
 
-export const generateHourlyScrapedWordCountModel = (connection: Connection) => {
-  return connection.model<HourlyScrapedWordCountDocument>(
-    'HourlyScrapedWordCountDocument',
-    hourlyScrapedWordCountSchema,
-    'hourly_scraped_word_count'
+export const generateDailyScrapedWordCountModel = (connection: Connection) => {
+  return connection.model<DailyScrapedWordCountDocument>(
+    'DailyScrapedWordCountDocument',
+    dailyScrapedWordCountSchema,
+    'daily_scraped_word_count'
   );
 };

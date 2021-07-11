@@ -1,1 +1,1 @@
-export * from './hourlyScrapedWordCount';
+export * from './dailyScrapedWordCount';
