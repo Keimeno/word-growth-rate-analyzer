@@ -37,6 +37,7 @@ const upsertScrapedWordsCount = async () => {
     // we must overwrite the createdAt date
     const createdAt = new Date();
     createdAt.setMinutes(0, 0, 0);
+    createdAt.setHours(0);
 
     // create a deep clone of scrapedWordsCount
     // a clone must be created and the scrapedWordsCount
