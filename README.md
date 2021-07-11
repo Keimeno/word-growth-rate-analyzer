@@ -27,7 +27,7 @@ Given our example input, it may seem as if we have a growth rate of 50% for the 
 
 ### Spam messages
 
-If a user decides to write the word "foobar" hundreds of times in one comment, all occurrences will be added to our database, and the growth rate would be enormous. To take this problem, we can implement two potential solutions.
+If a user decides to write the word "foobar" hundreds of times in one comment, all occurrences will be added to our database, and the growth rate would be enormous. To resolve this problem, we can implement two potential solutions.
 
 1. We require a specific threshold, if a word is under this threshold, say 50 occurrences, we won't calculate the growth rate, since its value is not significant enough.
 2. Spam messages usually only occur once. If the occurrence for the word is back to normal after one time frame, we know that it was spam and can ignore it.
