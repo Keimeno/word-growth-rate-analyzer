@@ -1,6 +1,7 @@
 import {EventEmitter} from 'events';
 import * as Snoowrap from 'snoowrap';
 import {ListingOptions} from 'snoowrap/dist/objects';
+import {overviewState} from '../state';
 
 type Awaitable<T> = Promise<T> | T;
 
@@ -40,24 +41,29 @@ export default class Poll<T extends object> extends EventEmitter {
     this.frequency = frequency || 2000;
 
     this.interval = setInterval(async () => {
-      const batch = await get();
+      try {
+        const batch = await get();
 
-      const newItems: T[] = [];
-      const seen: Set<T[keyof T]> = new Set();
-      for (const item of batch) {
-        const id = item[identifier];
-        seen.add(id);
-        if (this.processed.has(id)) continue;
+        const newItems: T[] = [];
+        const seen: Set<T[keyof T]> = new Set();
+        for (const item of batch) {
+          const id = item[identifier];
+          seen.add(id);
+          if (this.processed.has(id)) continue;
 
-        // Emit for new items and add it to the list
-        newItems.push(item);
-        this.processed.add(id);
-        this.emit('item', item);
+          // Emit for new items and add it to the list
+          newItems.push(item);
+          this.processed.add(id);
+          this.emit('item', item);
+        }
+
+        this.processed = new Set(seen);
+        // Emit the new listing of all new items
+        this.emit('listing', newItems);
+        overviewState.successCount++;
+      } catch {
+        overviewState.errorCount++;
       }
-
-      this.processed = new Set(seen);
-      // Emit the new listing of all new items
-      this.emit('listing', newItems);
     }, frequency);
   }
 
