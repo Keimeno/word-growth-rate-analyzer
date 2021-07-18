@@ -3,6 +3,7 @@ import {
   ScrapedWordCount,
 } from '@keimeno/wgra-common';
 import {connection} from '../infrastructure';
+import {overviewState} from '../state';
 
 const DailyScrapedWordCount = generateDailyScrapedWordCountModel(connection);
 DailyScrapedWordCount.init();
@@ -64,6 +65,9 @@ const upsertScrapedWordsCount = async () => {
       0
     );
     const hhmmss = new Date().toTimeString().split(' ')[0];
+
+    overviewState.totalProcessedWordCount += trueAmountWords;
+    overviewState.totalProcessedUniqueWordCount += wordsCount.length;
 
     console.log(
       `[${hhmmss}] Successfully upserted ${wordsCount.length} unique words and ${trueAmountWords} words in total`
