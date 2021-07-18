@@ -5,3 +5,4 @@ config({path: '../../.env'});
 import './infrastructure';
 import './publisher';
 import './scraper';
+import './scheduler';
