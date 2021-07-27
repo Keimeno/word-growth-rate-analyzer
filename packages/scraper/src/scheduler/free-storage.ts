@@ -10,7 +10,7 @@ scheduler.scheduleJob('0 30 * * *', async () => {
   try {
     await DailyScrapedWordCount.deleteMany({
       createdAt: {
-        $lt: flattenDate(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+        $ne: flattenDate(new Date()),
       },
       count: {
         $lte: 10,
