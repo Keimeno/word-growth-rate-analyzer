@@ -6,3 +6,4 @@ import './infrastructure';
 import './publisher';
 import './scraper';
 import './scheduler';
+import './models';

@@ -1,12 +1,7 @@
-import {
-  generateDailyScrapedWordCountModel,
-  ScrapedWordCount,
-} from '@keimeno/wgra-common';
-import {connection} from '../infrastructure';
+import {ScrapedWordCount} from '@keimeno/wgra-common';
+import {DailyScrapedWordCount} from '../models';
 import {overviewState} from '../state';
-
-const DailyScrapedWordCount = generateDailyScrapedWordCountModel(connection);
-DailyScrapedWordCount.init();
+import {flattenDate} from '../utils';
 
 const scrapedWordsCount: ScrapedWordCount[] = [];
 
@@ -36,9 +31,7 @@ const upsertScrapedWordsCount = async () => {
   try {
     // in order to remove inconsistencies between lesser occurring words,
     // we must overwrite the createdAt date
-    const createdAt = new Date();
-    createdAt.setMinutes(0, 0, 0);
-    createdAt.setHours(0);
+    const createdAt = flattenDate(new Date());
 
     // create a deep clone of scrapedWordsCount
     // a clone must be created and the scrapedWordsCount
