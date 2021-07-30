@@ -12,8 +12,8 @@ const formatNumber = (num: number) => {
   return parts.join('.');
 };
 
-// schedule a job to run every 6 hours
-scheduler.scheduleJob('0 */6 * * *', async () => {
+// schedule a job to run every day at 18:00
+scheduler.scheduleJob('0 18 * * *', async () => {
   const state: Partial<OverviewState & {[key: string]: string}> = {};
   Object.keys(overviewState).forEach(key => {
     state[key] = formatNumber(overviewState[key]);
