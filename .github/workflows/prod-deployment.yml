@@ -19,7 +19,8 @@ jobs:
           image-name: wgra-scraper # Provide Docker image name
           image-tag: latest # Provide Docker image tag
           dockerfile: scraper.Dockerfile
-      - name: Notify Server
-        uses: distributhor/workflow-webhook@v2
-        env:
-          webhook_url: "${{ secrets.PROD_WEBHOOK_URL }}"
+      - name: HTTP Request Action
+        uses: fjogeleit/http-request-action@v1.8.0 
+        with:
+          url: "${{ secrets.PROD_WEBHOOK_URL }}"
+          method: 'GET'
