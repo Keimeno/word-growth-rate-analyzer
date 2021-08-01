@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy-scraper:
     runs-on: ubuntu-latest
     steps:
       # Checkout the repository
@@ -18,3 +18,4 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }} # Provide GITHUB_TOKEN to login into the GitHub Packages
           image-name: wgra-scraper # Provide Docker image name
           image-tag: latest # Provide Docker image tag
+          dockerfile: scraper.Dockerfile
