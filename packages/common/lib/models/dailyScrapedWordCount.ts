@@ -8,7 +8,7 @@ export type ScrapedWordCount = {
 
 type DailyScrapedWordCountDocument = Document & ScrapedWordCount;
 
-const dailyScrapedWordCountSchema = new Schema(
+const dailyScrapedWordCountSchema = new Schema<DailyScrapedWordCountDocument>(
   {
     word: {
       type: String,
