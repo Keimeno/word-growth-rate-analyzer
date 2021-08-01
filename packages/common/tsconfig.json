@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "lib",
     "outDir": "dist",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "lib": ["ESNext"]
   },
   "include": ["lib/**/*.ts", "test/**/*.ts"]
 }
