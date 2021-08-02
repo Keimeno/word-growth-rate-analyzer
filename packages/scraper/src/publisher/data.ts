@@ -68,9 +68,8 @@ const upsertScrapedWordsCount = async () => {
     overviewState.totalProcessedUniqueWordCount += wordsCount.length;
 
     // sum up the scraped words count and group by subreddit
-    const scrapedWordsCountGrouped = wordsCount.reduce<any>(
-      (accumulator, currentValue) => {
-        const {subreddit, count} = currentValue;
+    const scrapedWordsCountGrouped = wordsCount.reduce(
+      (accumulator, {subreddit, count}) => {
         if (!accumulator[subreddit]) {
           accumulator[subreddit] = count;
         } else {
