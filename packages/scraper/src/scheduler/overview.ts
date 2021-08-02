@@ -22,10 +22,11 @@ scheduler.scheduleJob('0 18 * * *', async () => {
   await notifyMobile({
     business: 'WGRA Scraper',
     object: 'Overview',
-    body:
-      `Processed Words: ${state.totalProcessedWordCount}; ` +
-      `Unique Words: ${state.totalProcessedUniqueWordCount}; ` +
-      `Successful requests: ${state.successCount}; ` +
+    body: 'Your daily overview is ready.',
+    content:
+      `Processed Words: ${state.totalProcessedWordCount}\n` +
+      `Unique Words: ${state.totalProcessedUniqueWordCount}\n` +
+      `Successful requests: ${state.successCount}\n` +
       `Unsuccessful requests: ${state.errorCount}`,
   });
 

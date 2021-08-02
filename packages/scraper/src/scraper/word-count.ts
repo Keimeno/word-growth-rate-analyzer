@@ -1,15 +1,13 @@
 import {Comment} from 'snoowrap';
 import {client} from '../infrastructure';
 import {incrementScrapedWordCount} from '../publisher';
-import {CommentStream} from './commentStream';
+import {parseNumberArray, parseStringArray} from '../utils';
+import {CommentStream} from './comment-stream';
 
-// every 5 seconds, it gets a maximum of 10000 comments
-// because the reddit api ratelimit is 600 api calls every 10 minutes
-const comments = new CommentStream(client, {
-  subreddit: 'all',
-  limit: 10000,
-  pollTime: 5000,
-});
+const {SUBREDDITS, POLL_TIMES} = process.env;
+
+const subreddits = parseStringArray(SUBREDDITS);
+const pollTimes = parseNumberArray(POLL_TIMES);
 
 const retrieveWords = (item: Comment) => {
   const {body} = item;
@@ -27,8 +25,16 @@ const retrieveWords = (item: Comment) => {
   return words.map(word => word.toLowerCase());
 };
 
-comments.on('item', item => {
-  const words = retrieveWords(item);
+subreddits.forEach((subreddit, index) => {
+  const stream = new CommentStream(client, {
+    subreddit,
+    limit: 100000,
+    pollTime: pollTimes[index],
+  });
 
-  words.forEach(incrementScrapedWordCount);
+  stream.on('item', comment => {
+    const words = retrieveWords(comment);
+
+    words.forEach(word => incrementScrapedWordCount(subreddit, word));
+  });
 });
