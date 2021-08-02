@@ -1,1 +1,1 @@
-export * from './notifyMobile';
+export * from './notify-mobile';

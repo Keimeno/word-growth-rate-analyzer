@@ -1,1 +1,1 @@
-export * from './dailyScrapedWordCount';
+export * from './daily-scraped-word-count';

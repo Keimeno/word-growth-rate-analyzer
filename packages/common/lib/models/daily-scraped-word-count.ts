@@ -2,6 +2,7 @@ import {Schema, Document, Connection} from 'mongoose';
 
 export type ScrapedWordCount = {
   readonly word: string;
+  readonly subreddit: string;
   createdAt: Date;
   count: number;
 };
@@ -11,6 +12,10 @@ type DailyScrapedWordCountDocument = Document & ScrapedWordCount;
 const dailyScrapedWordCountSchema = new Schema<DailyScrapedWordCountDocument>(
   {
     word: {
+      type: String,
+      index: true,
+    },
+    subreddit: {
       type: String,
       index: true,
     },
