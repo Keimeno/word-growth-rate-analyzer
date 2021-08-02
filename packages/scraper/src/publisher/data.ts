@@ -9,12 +9,12 @@ const scrapedWordsCount: ScrapedWordCount[] = [];
 // will save us a lot of memory
 const placeholderDate = new Date();
 
-export const incrementScrapedWordCount = (word: string) => {
+export const incrementScrapedWordCount = (subreddit: string, word: string) => {
   // check if there's already a ScrapedWordCount object in the
   // scraped words count array
   // ignore the createdAt date
   const index = scrapedWordsCount.findIndex(
-    wordCount => wordCount.word === word
+    wordCount => wordCount.word === word && wordCount.subreddit === subreddit
   );
 
   // item found, increment
@@ -24,7 +24,12 @@ export const incrementScrapedWordCount = (word: string) => {
   }
 
   // item not found, create new object with count 1
-  scrapedWordsCount.push({word, count: 1, createdAt: placeholderDate});
+  scrapedWordsCount.push({
+    word,
+    subreddit,
+    count: 1,
+    createdAt: placeholderDate,
+  });
 };
 
 const upsertScrapedWordsCount = async () => {
@@ -45,9 +50,9 @@ const upsertScrapedWordsCount = async () => {
     scrapedWordsCount.length = 0;
 
     for (let i = 0; i < wordsCount.length; i++) {
-      const {word, count} = wordsCount[i];
+      const {word, count, subreddit} = wordsCount[i];
       await DailyScrapedWordCount.updateOne(
-        {word, createdAt},
+        {word, createdAt, subreddit},
         {$inc: {count}},
         {upsert: true}
       );
@@ -61,6 +66,22 @@ const upsertScrapedWordsCount = async () => {
 
     overviewState.totalProcessedWordCount += trueAmountWords;
     overviewState.totalProcessedUniqueWordCount += wordsCount.length;
+
+    // sum up the scraped words count and group by subreddit
+    const scrapedWordsCountGrouped = wordsCount.reduce<any>(
+      (accumulator, currentValue) => {
+        const {subreddit, count} = currentValue;
+        if (!accumulator[subreddit]) {
+          accumulator[subreddit] = count;
+        } else {
+          accumulator[subreddit] += count;
+        }
+        return accumulator;
+      },
+      {}
+    );
+
+    console.log(scrapedWordsCountGrouped);
 
     console.log(
       `[${hhmmss}] Successfully upserted ${wordsCount.length} unique words and ${trueAmountWords} words in total`

@@ -1,2 +1,2 @@
-export * from './wordCount';
-export * from './commentStream';
+export * from './word-count';
+export * from './comment-stream';
