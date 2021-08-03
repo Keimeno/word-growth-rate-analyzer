@@ -7,7 +7,7 @@ const subreddits = parseStringArray(SUBREDDITS);
 const thresholdLimits = parseNumberArray(THRESHOLD_LIMITS);
 
 // schedule a job to run at 00:30 every day
-scheduler.scheduleJob('0 30 * * *', async () => {
+scheduler.scheduleJob('30 0 * * *', async () => {
   // delete all entries in the daily-scraped-word-count table
   // that are older than a day
   // and the count is less than the allowed threshold
