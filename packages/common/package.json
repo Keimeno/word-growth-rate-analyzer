@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "serve": "tsc-watch",
     "build": "tsc",

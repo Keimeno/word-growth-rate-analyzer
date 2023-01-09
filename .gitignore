@@ -3,3 +3,4 @@ dist
 *.log
 .env
 package-lock.json
+config.json

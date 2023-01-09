@@ -11,6 +11,10 @@
     {
       "name": "Scraper",
       "path": "./packages/scraper"
+    },
+    {
+      "name": "Analyzer",
+      "path": "./packages/analyzer"
     }
   ],
   "extensions": {

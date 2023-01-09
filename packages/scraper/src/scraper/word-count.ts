@@ -1,13 +1,8 @@
+import {config} from '@keimeno/wgra-common';
 import {Comment} from 'snoowrap';
 import {client} from '../infrastructure';
 import {incrementScrapedWordCount} from '../publisher';
-import {parseNumberArray, parseStringArray} from '../utils';
 import {CommentStream} from './comment-stream';
-
-const {SUBREDDITS, POLL_TIMES} = process.env;
-
-const subreddits = parseStringArray(SUBREDDITS);
-const pollTimes = parseNumberArray(POLL_TIMES);
 
 const retrieveWords = (item: Comment) => {
   const {body} = item;
@@ -25,16 +20,16 @@ const retrieveWords = (item: Comment) => {
   return words.map(word => word.toLowerCase());
 };
 
-subreddits.forEach((subreddit, index) => {
+config.subreddits.forEach(subreddit => {
   const stream = new CommentStream(client, {
-    subreddit,
+    subreddit: subreddit.name,
     limit: 100000,
-    pollTime: pollTimes[index],
+    pollTime: subreddit.pollFrequency,
   });
 
   stream.on('item', comment => {
     const words = retrieveWords(comment);
 
-    words.forEach(word => incrementScrapedWordCount(subreddit, word));
+    words.forEach(word => incrementScrapedWordCount(subreddit.name, word));
   });
 });

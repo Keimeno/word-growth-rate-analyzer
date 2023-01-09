@@ -1,0 +1,22 @@
+{
+  "subreddits": [
+    {
+      "name": "all",
+      "threshold": 250,
+      "baseline": "the",
+      "pollFrequency": 2000
+    },
+    {
+      "name": "news",
+      "threshold": 50,
+      "baseline": "the",
+      "pollFrequency": 60000
+    },
+    {
+      "name": "de",
+      "threshold": 10,
+      "baseline": "die",
+      "pollFrequency": 120000
+    }
+  ]
+}
