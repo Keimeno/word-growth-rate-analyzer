@@ -1,5 +1,5 @@
 {
-  "name": "@keimeno/wgra-scraper",
+  "name": "@keimeno/wgra-analyzer",
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@keimeno/wgra-common": "workspace:^0.0.0",
+    "date-fns": "^2.29.3",
     "dotenv": "^8.6.0",
     "ioredis": "^4.27.6",
     "mongoose": "^5.13.2",

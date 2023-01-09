@@ -4,6 +4,7 @@ services:
   redis:
     image: redis:latest
     container_name: wgra_redis
+    restart: always
     env_file:
       - .env
     command: redis-server --requirepass $REDIS_PASSWORD

@@ -2,8 +2,9 @@ version: "3.8"
 
 services:
   redis:
-    image: redis:latest
+    image: redis:6.2.5
     container_name: wgra_redis
+    restart: unless-stopped
     env_file:
       - .env
     command: redis-server --requirepass ${REDIS_PASSWORD}
@@ -11,9 +12,9 @@ services:
       - 3606:6379
 
   mongodb:
-    image: mongo:latest
+    image: mongo:5.0.1
     container_name: wgra_mongodb
-    restart: always
+    restart: unless-stopped
     logging:
       driver: none
     env_file:

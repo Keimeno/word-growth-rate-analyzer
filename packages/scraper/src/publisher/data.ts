@@ -1,7 +1,6 @@
-import {ScrapedWordCount} from '@keimeno/wgra-common';
+import {flattenDate, ScrapedWordCount} from '@keimeno/wgra-common';
 import {DailyScrapedWordCount} from '../models';
 import {overviewState} from '../state';
-import {flattenDate} from '../utils';
 
 const scrapedWordsCount: ScrapedWordCount[] = [];
 

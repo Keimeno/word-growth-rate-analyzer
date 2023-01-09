@@ -1,0 +1,1 @@
+import './analyze-word-trend';

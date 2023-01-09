@@ -5,12 +5,14 @@
   "scripts": {
     "serve": "concurrently -r \"yarn serve:docker\" \"yarn serve:scraper\" \"yarn serve:common\"",
     "serve:docker": "docker-compose -f ./docker-compose.dev.yml up",
-    "serve:scraper": "pnpm serve --stream --filter=@keimeno/wgra-scraper",
-    "serve:common": "pnpm serve --stream --filter=@keimeno/wgra-common",
+    "serve:scraper": "pnpm --stream --filter=@keimeno/wgra-scraper serve",
+    "serve:analyzer": "pnpm --stream --filter=@keimeno/wgra-analyzer serve",
+    "serve:common": "pnpm --stream --filter=@keimeno/wgra-common serve",
     "build": "pnpm build -r",
     "start": "pnpm start:docker",
     "start:docker": "docker-compose -f ./docker-compose.prod.yml up -d",
     "start:scraper": "pnpm start --filter=@keimeno/wgra-scraper",
+    "start:analyzer": "pnpm start --filter=@keimeno/wgra-analyzer",
     "start:common": "pnpm start --filter=@keimeno/wgra-common"
   },
   "devDependencies": {
