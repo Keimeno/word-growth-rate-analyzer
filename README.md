@@ -8,6 +8,19 @@ The objective of this project is, to automatically analyse, store and 
 
 ![WGRA Architecture](WGRA-Architecture.png)
 
+A proposal for the next version of the architecture lives in [docs/ARCHITECTURE-V2.md](docs/ARCHITECTURE-V2.md).
+
+## Running locally
+
+Requires Node >= 18, Docker and pnpm 7 (the lockfile version), e.g. via `npx pnpm@7`.
+
+1. `cp .env.example .env` and `cp config.example.json config.json`
+2. `cp packages/scraper/.env.example packages/scraper/.env` (same for `packages/analyzer`) and fill in the client id and secret of a Reddit "script" app. A Reddit username and password are optional, reading public listings works with the client credentials alone.
+3. `docker compose -f docker-compose.dev.yml up -d`
+4. `pnpm install && pnpm -r build`
+5. `cd packages/scraper && node dist/index.js` to start scraping
+6. `cd packages/analyzer && node dist/index.js <word> [subreddit] [days]` to see the day to day trend of a word
+
 ## Technical Risks
 
 ### Fluctuation between peak hours

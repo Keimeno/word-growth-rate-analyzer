@@ -19,7 +19,7 @@ services:
       - .env
     volumes:
       - ./init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh
-      - mongo_volume:/db/data
+      - mongo_volume:/data/db
     ports:
       - 3605:27017
 
@@ -28,6 +28,7 @@ services:
     volumes:
       - ./.env:/usr/src/scraper/.env
       - ./.scraper.env:/usr/src/scraper/packages/scraper/.env
+      - ./config.json:/usr/src/scraper/config.json
     restart: always
 
 volumes:
