@@ -1,0 +1,73 @@
+# Everything WGRA needs, the same locally and in production. All of it is free and open
+# source software, the only cost is the server it runs on.
+#
+#   docker compose up -d --build     # ClickHouse, Grafana and the ingester
+#
+# Ports are only bound to localhost. On a server, reach Grafana through an ssh tunnel
+# (ssh -L 3608:localhost:3608 your-server) or put a reverse proxy with TLS in front.
+name: wgra
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-wgra}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-wgra}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/wgra.xml:/etc/clickhouse-server/config.d/wgra.xml:ro
+    ports:
+      - 127.0.0.1:3607:8123
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  grafana:
+    image: grafana/grafana:13.2.2
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_PLUGINS_PREINSTALL_SYNC: grafana-clickhouse-datasource@4.22.1
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/term-explorer.json
+      # read by the datasource provisioning file
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-wgra}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-wgra}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - 127.0.0.1:3608:3000
+
+  ingest:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    # SIGTERM flushes buffered rows, give it time to finish
+    stop_grace_period: 30s
+
+volumes:
+  clickhouse_data:
+  grafana_data:

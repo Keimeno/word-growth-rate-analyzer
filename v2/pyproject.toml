@@ -1,0 +1,45 @@
+[project]
+name = "wgra"
+version = "2.0.0.dev0"
+description = "Word Growth Rate Analyzer: short and long term trends per subreddit"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "clickhouse-connect>=0.8",
+    "httpx>=0.28",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+wgra = "wgra.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["src", "tests"]
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

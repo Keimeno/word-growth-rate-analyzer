@@ -1,0 +1,66 @@
+# What to track. Every subreddit listed in a group is tracked completely (every comment
+# and post), a subreddit can be in several groups. Groups only matter for analysis:
+# dashboards and `wgra term --scope <group>` aggregate over them. All tracked
+# subreddits together also form the group "tracked".
+#
+# Changes take effect when the ingester restarts. New subreddits are counted from then
+# on, nothing is backfilled.
+groups:
+  tech:
+    - technology
+    - programming
+    - hardware
+    - gadgets
+    - LocalLLaMA
+    - MachineLearning
+    - artificial
+    - OpenAI
+    - ClaudeAI
+    - singularity
+    - webdev
+    - ExperiencedDevs
+    - cscareerquestions
+    - apple
+    - Android
+    - linux
+    - selfhosted
+    - homelab
+    - buildapc
+  science:
+    - science
+    - space
+    - Futurology
+  news:
+    - news
+    - worldnews
+    - europe
+  finance:
+    - investing
+    - stocks
+    - wallstreetbets
+    - personalfinance
+    - CryptoCurrency
+    - Economics
+  gaming:
+    - gaming
+    - Games
+    - pcgaming
+  de:
+    - de
+    - Finanzen
+    - de_EDV
+
+# Stopwords for phrases depend on the language. Unlisted subreddits are english.
+languages:
+  de: [de, Finanzen, de_EDV]
+
+# A sample of all of reddit, the "normal" vocabulary trends are compared against.
+# Reddit only returns the last second or two of r/all, so this is always a sample.
+background:
+  subreddit: all
+  requests_per_minute: 20
+
+ingest:
+  # reddit's free tier allows 100 requests per minute per client id
+  requests_per_minute: 90
+  max_subreddits_per_feed: 25

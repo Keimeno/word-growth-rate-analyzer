@@ -1,0 +1,255 @@
+{
+  "uid": "wgra-rising",
+  "title": "Rising (preview)",
+  "description": "A first, simple look at what's rising. The real trend scoring comes in phase 2.",
+  "tags": [
+    "wgra"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "group",
+        "label": "Group",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "definition": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "sort": 0,
+        "current": {
+          "text": "tracked",
+          "value": "tracked"
+        }
+      },
+      {
+        "type": "query",
+        "name": "subreddit",
+        "label": "Subreddits",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
+        "definition": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "allValue": "$__all",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "type": "custom",
+        "name": "source",
+        "label": "Source",
+        "query": "comment,post",
+        "options": [
+          {
+            "text": "comment",
+            "value": "comment",
+            "selected": true
+          },
+          {
+            "text": "post",
+            "value": "post",
+            "selected": true
+          }
+        ],
+        "current": {
+          "text": [
+            "comment",
+            "post"
+          ],
+          "value": [
+            "comment",
+            "post"
+          ]
+        },
+        "multi": true,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "kind",
+        "label": "Kind",
+        "query": "word,phrase,domain,subreddit",
+        "options": [
+          {
+            "text": "word",
+            "value": "word",
+            "selected": true
+          },
+          {
+            "text": "phrase",
+            "value": "phrase",
+            "selected": true
+          },
+          {
+            "text": "domain",
+            "value": "domain",
+            "selected": false
+          },
+          {
+            "text": "subreddit",
+            "value": "subreddit",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "word",
+            "phrase"
+          ],
+          "value": [
+            "word",
+            "phrase"
+          ]
+        },
+        "multi": true,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "min_mentions",
+        "label": "Min mentions (24h)",
+        "query": "5,10,25,50,100",
+        "options": [
+          {
+            "text": "5",
+            "value": "5",
+            "selected": false
+          },
+          {
+            "text": "10",
+            "value": "10",
+            "selected": true
+          },
+          {
+            "text": "25",
+            "value": "25",
+            "selected": false
+          },
+          {
+            "text": "50",
+            "value": "50",
+            "selected": false
+          },
+          {
+            "text": "100",
+            "value": "100",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "10",
+          "value": "10"
+        },
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "min_authors",
+        "label": "Min authors (24h)",
+        "query": "3,5,10,25",
+        "options": [
+          {
+            "text": "3",
+            "value": "3",
+            "selected": false
+          },
+          {
+            "text": "5",
+            "value": "5",
+            "selected": true
+          },
+          {
+            "text": "10",
+            "value": "10",
+            "selected": false
+          },
+          {
+            "text": "25",
+            "value": "25",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "5",
+          "value": "5"
+        },
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "table",
+      "title": "Rising: last 24 hours vs usual",
+      "description": "times_usual: the share of comments and posts mentioning a term in the last 24 hours, divided by its usual share. Usual blends the term's share in the 7 days before with its share in the sample of all of reddit. Without history yet, the reddit-wide share dominates, so this first shows what is distinctive for the group and turns into what is rising as history accumulates. Ignores the time picker. The real trend scoring comes in phase 2.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 24
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= now() - INTERVAL 24 HOUR) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n       AND hour >= now() - INTERVAL 8 DAY AND hour < now() - INTERVAL 24 HOUR) AS n_before,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit = '_sample'\n       AND hour >= now() - INTERVAL 8 DAY) AS n_background,\n    -- how many comments' worth of weight the reddit-wide share gets in \"usual\"\n    500 AS prior_weight,\n    candidates AS (\n        SELECT\n            term,\n            kind,\n            sumIf(docs, hour >= now() - INTERVAL 24 HOUR) AS mentions_24h,\n            uniqCombinedMergeIf(12)(authors, hour >= now() - INTERVAL 24 HOUR) AS authors_24h,\n            sumIf(docs, hour < now() - INTERVAL 24 HOUR) AS mentions_before\n        FROM term_hourly\n        WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind IN (${kind:singlequote}) AND hour >= now() - INTERVAL 8 DAY\n        GROUP BY term, kind\n        HAVING mentions_24h >= $min_mentions AND authors_24h >= $min_authors\n    ),\n    background AS (\n        SELECT term, kind, sum(docs) AS mentions\n        FROM term_hourly\n        WHERE subreddit = '_sample'\n          AND hour >= now() - INTERVAL 8 DAY\n          AND (term, kind) IN (SELECT term, kind FROM candidates)\n        GROUP BY term, kind\n    )\nSELECT\n    c.term AS term,\n    c.kind AS kind,\n    c.mentions_24h AS mentions_24h,\n    c.authors_24h AS authors_24h,\n    c.mentions_before AS mentions_7d_before,\n    b.mentions AS mentions_reddit_sample,\n    (c.mentions_before + prior_weight * (b.mentions + 1) / (n_background + 1))\n        / (n_before + prior_weight) AS usual_share,\n    round(1000 * c.mentions_24h / n_now, 2) AS per_1000_now,\n    round(1000 * usual_share, 2) AS per_1000_usual,\n    round(c.mentions_24h / n_now / usual_share, 1) AS times_usual\nFROM candidates AS c\nLEFT JOIN background AS b USING (term, kind)\nORDER BY times_usual DESC, mentions_24h DESC\nLIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usual_share"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    }
+  ]
+}
