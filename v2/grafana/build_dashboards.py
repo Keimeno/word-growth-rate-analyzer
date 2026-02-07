@@ -86,7 +86,10 @@ def panel(kind, title, sql, x, y, w, h, *, description="", table=False, unit=Non
     return result
 
 
-def query_variable(name, label, sql, *, multi=False, include_all=False, default=None):
+def query_variable(
+    name, label, sql, *, multi=False, include_all=False, default=None, all_value="$__all"
+):
+    """all_value="$__all" is for $__conditionalAll, None expands "All" to every value."""
     variable = {
         "type": "query",
         "name": name,
@@ -100,7 +103,8 @@ def query_variable(name, label, sql, *, multi=False, include_all=False, default=
         "sort": 0,
     }
     if include_all:
-        variable["allValue"] = "$__all"
+        if all_value:
+            variable["allValue"] = all_value
         variable["current"] = {"text": ["All"], "value": ["$__all"]}
     elif default:
         variable["current"] = {"text": default, "value": default}
@@ -337,7 +341,7 @@ LIMIT 100
 rising_dashboard = dashboard(
     "wgra-rising",
     "Rising (preview)",
-    "A first, simple look at what's rising. The real trend scoring comes in phase 2.",
+    "A first, simple look at what's rising. The real trend scoring is in Trending now.",
     [
         panel(
             "table",
@@ -402,7 +406,7 @@ LIMIT 200
                 "before with its share in the sample of all of reddit. Without history yet, the "
                 "reddit-wide share dominates, so this first shows what is distinctive for the "
                 "group and turns into what is rising as history accumulates. Ignores the time "
-                "picker. The real trend scoring comes in phase 2."
+                "picker. The real trend scoring is on the Trending now dashboard."
             ),
             fieldConfig={
                 "defaults": {},
@@ -583,8 +587,379 @@ ORDER BY comments DESC
     refresh="1m",
 )
 
+# What the analyzer found (wgra analyze, every 15 minutes). A scope is a tracked subreddit
+# ("r/technology") or a group ("tech"), the dashboard shows a group and its subreddits.
+TREND_SCOPES = "scope IN (${scope:singlequote})"
+LATEST_RUN = (
+    "(SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run"
+)
+LATEST_TRENDS = (
+    "horizon = ${horizon:sqlstring} AND detected_at = latest_run AND "
+    f"{TREND_SCOPES} AND kind IN (${{kind:singlequote}}) "
+    "AND (subsumed_by = '' OR ${subsumed:sqlstring} = 'show')"
+)
+
+
+def explore_url(scope: str = "scope") -> str:
+    """SQL for the term explorer url of a trend: its group, or its subreddit."""
+    return (
+        "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
+        f"if(startsWith({scope}, 'r/'), "
+        "concat('&var-group=tracked&var-subreddit=', "
+        f"encodeURLFormComponent(substring({scope}, 3))), "
+        f"concat('&var-group=', encodeURLFormComponent({scope}))), '&from=now-7d&to=now')"
+    )
+
+
+# each trend's hourly mentions in the group in the week before the run, for the sparklines
+SPARKLINES = f"""
+WITH {LATEST_RUN}
+SELECT hour AS time, term, sum(docs) AS mentions
+FROM term_hourly
+WHERE hour > latest_run - INTERVAL 7 DAY AND hour <= latest_run
+  AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${{group:sqlstring}})
+  AND (kind, term) IN (SELECT kind, term FROM trends WHERE {LATEST_TRENDS})
+GROUP BY time, term
+ORDER BY time
+"""
+
+
+def with_sparklines(table_panel: dict) -> dict:
+    """Adds a column with each term's mentions over the last week, as a sparkline."""
+    table_panel["targets"].append({**target(SPARKLINES), "refId": "B"})
+    columns = [
+        "term",
+        "scope",
+        "score",
+        "times_usual",
+        "mentions",
+        "authors",
+        "Trend #B",
+        "breadth",
+        "kind",
+        "mentions_before",
+        "alert",
+        "subsumed_by",
+        "explore",
+    ]
+    table_panel["transformations"] = [
+        # one row per term, with its series as a sparkline
+        {"id": "timeSeriesTable", "options": {}},
+        {"id": "joinByField", "options": {"byField": "term", "mode": "outerTabular"}},
+        # the join names the table's columns after their query ("scope A")
+        {
+            "id": "organize",
+            "options": {
+                "renameByName": {
+                    **{f"{column} A": column for column in columns},
+                    "Trend #B": "last 7 days",
+                },
+                "indexByName": {
+                    name: index
+                    for index, column in enumerate(columns)
+                    for name in (column, f"{column} A")
+                },
+            },
+        },
+    ]
+    table_panel["options"] = {"sortBy": [{"displayName": "score", "desc": True}]}
+    table_panel["fieldConfig"]["overrides"].append(
+        {
+            "matcher": {"id": "byName", "options": "last 7 days"},
+            "properties": [
+                {"id": "custom.cellOptions", "value": {"type": "sparkline", "hideValue": True}},
+                {"id": "custom.width", "value": 200},
+            ],
+        }
+    )
+    return table_panel
+
+
+def link_to_explorer(column: str) -> dict:
+    """A table override: clicking `column` opens the term explorer (url in "explore")."""
+    return {
+        "matcher": {"id": "byName", "options": column},
+        "properties": [
+            {
+                "id": "links",
+                "value": [
+                    {"title": "Open in the term explorer", "url": "${__data.fields.explore}"}
+                ],
+            }
+        ],
+    }
+
+
+def hidden(column: str) -> dict:
+    return {
+        "matcher": {"id": "byName", "options": column},
+        "properties": [{"id": "custom.hidden", "value": True}],
+    }
+
+
+def width(column: str, pixels: int) -> dict:
+    return {
+        "matcher": {"id": "byName", "options": column},
+        "properties": [{"id": "custom.width", "value": pixels}],
+    }
+
+
+trending_dashboard = dashboard(
+    "wgra-trending",
+    "Trending now",
+    "Terms mentioned far more than usual, scored every 15 minutes by wgra analyze.",
+    [
+        panel(
+            "stat",
+            "Last run",
+            "SELECT toUnixTimestamp(max(detected_at)) * 1000 FROM trends "
+            "WHERE horizon = ${horizon:sqlstring}",
+            0,
+            0,
+            6,
+            4,
+            table=True,
+            unit="dateTimeFromNow",
+            description="When wgra analyze last scored this horizon. It runs every 15 minutes.",
+        ),
+        panel(
+            "stat",
+            "Days of history",
+            f"""
+SELECT max(reference_days)
+FROM trends
+WHERE horizon = ${{horizon:sqlstring}} AND {TREND_SCOPES}
+  AND detected_at = (SELECT max(detected_at) FROM trends WHERE horizon = ${{horizon:sqlstring}})
+""",
+            6,
+            0,
+            6,
+            4,
+            table=True,
+            description="Days of data the window is compared with, up to 28. With less than 3 "
+            "days there are no alerts, and on the first day the window is compared with the "
+            "share of the term on all of reddit (the r/all sample): what's distinctive, not "
+            "what's rising.",
+        ),
+        panel(
+            "stat",
+            "Trending terms",
+            f"""
+WITH {LATEST_RUN}
+SELECT uniqExact(term) FROM trends WHERE {LATEST_TRENDS}
+""",
+            12,
+            0,
+            6,
+            4,
+            table=True,
+            description="Distinct terms trending in the selected scopes in the latest run.",
+        ),
+        panel(
+            "stat",
+            "Alerts sent, last 24h",
+            "SELECT count() FROM trends WHERE alert = 'sent' "
+            "AND detected_at > now() - INTERVAL 24 HOUR",
+            18,
+            0,
+            6,
+            4,
+            table=True,
+            description="Instant alerts to ntfy, in all scopes. At most 5 a day by default.",
+        ),
+        with_sparklines(
+            panel(
+                "table",
+                "Trending now",
+                f"""
+WITH {LATEST_RUN}
+SELECT
+    scope,
+    term,
+    kind,
+    round(z, 1) AS score,
+    if(is_new, 'new', toString(round(ratio, 1))) AS times_usual,
+    mentions,
+    authors,
+    if(scope_type = 'group', concat(toString(breadth), '/', toString(members)), '')
+        AS breadth,
+    reference_mentions AS mentions_before,
+    alert,
+    subsumed_by,
+    {explore_url()} AS explore
+FROM trends FINAL
+WHERE {LATEST_TRENDS}
+ORDER BY z DESC
+LIMIT 200
+""",
+                0,
+                4,
+                24,
+                14,
+                table=True,
+                description=(
+                    "The latest run. score: strength of the evidence (z of the weighted log odds, "
+                    "see docs/ARCHITECTURE-V2.md §4.2), what trends are ranked by. times_usual: "
+                    "the share of comments and posts mentioning the term in the window, divided "
+                    "by its share in the 28 days before. new: barely mentioned before. breadth: "
+                    "for a group, in how many of its subreddits the term trends, of those "
+                    "mentioning it. subsumed_by: a phrase that explains this burst ('pro' "
+                    "because of 'vision pro'), shown when Subsumed is set to show. Click a term "
+                    "to open it in the term explorer."
+                ),
+                fieldConfig={
+                    "defaults": {},
+                    "overrides": [
+                        link_to_explorer("term"),
+                        hidden("explore"),
+                        width("scope", 170),
+                        width("score", 70),
+                        width("times_usual", 100),
+                        width("mentions", 90),
+                        width("authors", 80),
+                        width("breadth", 80),
+                        width("kind", 70),
+                        width("mentions_before", 130),
+                        width("alert", 80),
+                    ],
+                },
+            ),
+        ),
+        panel(
+            "timeseries",
+            "The top trends over time (per 1,000 comments and posts in the group)",
+            f"""
+WITH {LATEST_RUN}
+SELECT t.time AS time, t.term AS term, 1000 * t.docs / s.docs AS per_1000
+FROM (
+    SELECT $__timeInterval(hour) AS time, term, sum(docs) AS docs
+    FROM term_hourly
+    WHERE $__timeFilter(hour)
+      AND subreddit IN (SELECT subreddit FROM subreddit_groups
+                        WHERE group_name = ${{group:sqlstring}})
+      AND (kind, term) IN (
+          SELECT kind, term FROM trends
+          WHERE {LATEST_TRENDS} AND subsumed_by = ''
+          GROUP BY kind, term ORDER BY max(z) DESC LIMIT 8
+      )
+    GROUP BY time, term
+) AS t
+INNER JOIN (
+    SELECT $__timeInterval(hour) AS time, sum(docs) AS docs
+    FROM scope_hourly
+    WHERE $__timeFilter(hour)
+      AND subreddit IN (SELECT subreddit FROM subreddit_groups
+                        WHERE group_name = ${{group:sqlstring}})
+    GROUP BY time
+) AS s USING time
+ORDER BY time
+""",
+            0,
+            18,
+            24,
+            10,
+            description="The 8 strongest trends of the latest run, as a share of all comments "
+            "and posts in the group's subreddits.",
+            interval="1h",
+            series_label="term",
+        ),
+        panel(
+            "table",
+            "Strongest trends of the last 24 hours (the daily digest)",
+            f"""
+SELECT
+    term,
+    argMax(scope, z) AS strongest_in,
+    round(max(z), 1) AS score,
+    if(argMax(is_new, z), 'new', toString(round(argMax(ratio, z), 1))) AS times_usual,
+    argMax(mentions, z) AS mentions,
+    min(detected_at) AS first_seen,
+    max(detected_at) AS last_seen,
+    arrayStringConcat(arraySort(groupUniqArray(horizon)), ', ') AS horizons,
+    {explore_url("strongest_in")} AS explore
+FROM trends
+WHERE detected_at > now() - INTERVAL 24 HOUR AND {TREND_SCOPES}
+  AND kind IN (${{kind:singlequote}}) AND subsumed_by = ''
+GROUP BY term
+ORDER BY max(z) DESC
+LIMIT 100
+""",
+            0,
+            28,
+            12,
+            12,
+            table=True,
+            description="Each term at its strongest, in any of the selected scopes and either "
+            "horizon. The daily digest sends the top 10 of each group.",
+            fieldConfig={
+                "defaults": {},
+                "overrides": [link_to_explorer("term"), hidden("explore")],
+            },
+        ),
+        panel(
+            "table",
+            "Alerts, last 14 days",
+            f"""
+SELECT detected_at AS time, horizon, scope, term, alert, round(z, 1) AS score,
+       if(is_new, 'new', toString(round(ratio, 1))) AS times_usual, mentions, authors,
+       {explore_url()} AS explore
+FROM trends FINAL
+WHERE alert != '' AND detected_at > now() - INTERVAL 14 DAY AND {TREND_SCOPES}
+ORDER BY detected_at DESC
+LIMIT 200
+""",
+            12,
+            28,
+            12,
+            12,
+            table=True,
+            description="Trends strong enough for an instant alert, and what happened: sent, "
+            "failed, capped (daily limit reached), cooldown (alerted in the last 72h), warmup "
+            "(less than 3 days of history), skipped (scope never alerts), muted (a run without "
+            "notifications). Only one scope per term and run gets a status.",
+            fieldConfig={
+                "defaults": {},
+                "overrides": [link_to_explorer("term"), hidden("explore"), width("time", 160)],
+            },
+        ),
+    ],
+    [
+        query_variable(
+            "group",
+            "Group",
+            "SELECT DISTINCT group_name FROM subreddit_groups "
+            "ORDER BY group_name = 'tracked' DESC, group_name",
+            default="tracked",
+        ),
+        query_variable(
+            "scope",
+            "Scopes",
+            "SELECT scope FROM ("
+            "SELECT ${group:sqlstring} AS scope, 0 AS position "
+            "UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups "
+            "WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+            multi=True,
+            include_all=True,
+            all_value=None,
+        ),
+        custom_variable("horizon", "Horizon", ["24h", "6h"], default="24h"),
+        custom_variable(
+            "kind",
+            "Kind",
+            ["word", "phrase", "domain", "subreddit"],
+            default=["word", "phrase", "domain", "subreddit"],
+            multi=True,
+        ),
+        custom_variable("subsumed", "Subsumed", ["hide", "show"], default="hide"),
+    ],
+    "now-7d",
+    refresh="5m",
+)
+
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, board in [
+    ("trending", trending_dashboard),
     ("term-explorer", terms_dashboard),
     ("rising", rising_dashboard),
     ("ingestion", ingestion_dashboard),

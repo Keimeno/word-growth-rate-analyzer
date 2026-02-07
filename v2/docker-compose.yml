@@ -1,10 +1,11 @@
 # Everything WGRA needs, the same locally and in production. All of it is free and open
 # source software, the only cost is the server it runs on.
 #
-#   docker compose up -d --build     # ClickHouse, Grafana and the ingester
+#   docker compose up -d --build     # ClickHouse, Grafana, ntfy, ingester and analyzer
 #
 # Ports are only bound to localhost. On a server, reach Grafana through an ssh tunnel
-# (ssh -L 3608:localhost:3608 your-server) or put a reverse proxy with TLS in front.
+# (ssh -L 3608:localhost:3608 your-server) or put a reverse proxy with TLS in front. The
+# same goes for ntfy, see the README for getting alerts onto a phone.
 name: wgra
 
 services:
@@ -68,6 +69,50 @@ services:
     # SIGTERM flushes buffered rows, give it time to finish
     stop_grace_period: 30s
 
+  # Scores trends every 15 minutes, sends alerts and the daily digests to ntfy
+  analyze:
+    build: .
+    command: ["wgra", "analyze"]
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      ntfy:
+        condition: service_started
+    env_file: .env
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      NTFY_URL: ${NTFY_URL:-http://ntfy}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+
+  # Push notifications. Self-hosted, so no account and no message limits.
+  ntfy:
+    image: binwiederhier/ntfy:v2.28.0
+    command: serve
+    restart: unless-stopped
+    environment:
+      # the url phones and browsers use to reach this server
+      NTFY_BASE_URL: ${NTFY_BASE_URL:-http://localhost:3609}
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+      # keep messages a while, so a phone that was offline still gets them
+      NTFY_CACHE_DURATION: 72h
+      NTFY_BEHIND_PROXY: "true"
+      # iOS only gets instant notifications through ntfy.sh (free). Only a message id
+      # is sent there, the phone then fetches the message from this server.
+      NTFY_UPSTREAM_BASE_URL: ${NTFY_UPSTREAM_BASE_URL:-}
+    volumes:
+      - ntfy_cache:/var/cache/ntfy
+    ports:
+      - 127.0.0.1:3609:80
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/v1/health | grep -q '\"healthy\":true'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   clickhouse_data:
   grafana_data:
+  ntfy_cache:

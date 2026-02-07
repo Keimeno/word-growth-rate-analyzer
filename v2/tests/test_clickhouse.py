@@ -1,42 +1,13 @@
-"""Runs the migrations against a real ClickHouse (from .env) in a throwaway database.
+"""Runs the migrations against a real ClickHouse, in a throwaway database (conftest.py)."""
 
-Skipped locally when ClickHouse isn't reachable (start it with
-`docker compose up -d clickhouse`), but never skipped in CI.
-"""
-
-import os
-import secrets
-from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from dotenv import load_dotenv
 from helpers import make_config, make_item
 
-from wgra.config import Env
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
 from wgra.query import term_series
-from wgra.store import connect, migrate, split_statements
-
-
-@pytest.fixture
-def client() -> Iterator:
-    load_dotenv()
-    try:
-        env = Env.from_environ(require_reddit=False)
-        admin = connect(env)
-        admin.command("SELECT 1")
-    except Exception as error:
-        if os.environ.get("CI"):
-            raise
-        pytest.skip(f"ClickHouse not available: {error}")
-
-    database = f"wgra_test_{secrets.token_hex(4)}"
-    admin.command(f"CREATE DATABASE {database}")
-    try:
-        yield connect(env, database=database)
-    finally:
-        admin.command(f"DROP DATABASE {database}")
+from wgra.store import migrate, split_statements
 
 
 def test_split_statements_ignores_comment_lines():
@@ -45,7 +16,7 @@ def test_split_statements_ignores_comment_lines():
 
 
 def test_migrations_are_applied_once(client):
-    assert migrate(client) == ["001_init"]
+    assert migrate(client) == ["001_init", "002_trends"]
     assert migrate(client) == []
 
 

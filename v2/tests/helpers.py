@@ -1,4 +1,7 @@
+from datetime import UTC, datetime, timedelta
+
 from wgra.config import Config, parse_config
+from wgra.detect.short_term import Trend
 from wgra.reddit.models import RedditItem
 
 
@@ -44,3 +47,30 @@ def _base36(number: int) -> str:
         out = digits[remainder] + out
         if number == 0:
             return out
+
+
+def make_trend(term: str = "vision pro", **overrides: object) -> Trend:
+    detected_at = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    values: dict[str, object] = {
+        "horizon": "24h",
+        "scope": "r/technology",
+        "term": term,
+        "detected_at": detected_at,
+        "scope_type": "subreddit",
+        "kind": "phrase",
+        "window_start": detected_at - timedelta(hours=24),
+        "window_end": detected_at,
+        "mentions": 300,
+        "total": 10_000,
+        "reference_mentions": 5,
+        "reference_total": 280_000,
+        "authors": 250,
+        "prior": 1.0,
+        "log_odds": 6.0,
+        "ratio": 400.0,
+        "z": 12.0,
+        "is_new": False,
+        "reference_days": 28,
+    }
+    values.update(overrides)
+    return Trend(**values)  # type: ignore[arg-type]

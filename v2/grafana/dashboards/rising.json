@@ -1,7 +1,7 @@
 {
   "uid": "wgra-rising",
   "title": "Rising (preview)",
-  "description": "A first, simple look at what's rising. The real trend scoring comes in phase 2.",
+  "description": "A first, simple look at what's rising. The real trend scoring is in Trending now.",
   "tags": [
     "wgra"
   ],
@@ -208,7 +208,7 @@
     {
       "type": "table",
       "title": "Rising: last 24 hours vs usual",
-      "description": "times_usual: the share of comments and posts mentioning a term in the last 24 hours, divided by its usual share. Usual blends the term's share in the 7 days before with its share in the sample of all of reddit. Without history yet, the reddit-wide share dominates, so this first shows what is distinctive for the group and turns into what is rising as history accumulates. Ignores the time picker. The real trend scoring comes in phase 2.",
+      "description": "times_usual: the share of comments and posts mentioning a term in the last 24 hours, divided by its usual share. Usual blends the term's share in the 7 days before with its share in the sample of all of reddit. Without history yet, the reddit-wide share dominates, so this first shows what is distinctive for the group and turns into what is rising as history accumulates. Ignores the time picker. The real trend scoring is on the Trending now dashboard.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"

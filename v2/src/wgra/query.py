@@ -5,9 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from clickhouse_connect.driver.client import Client
+
+if TYPE_CHECKING:
+    from wgra.detect.short_term import Trend
 
 Bucket = Literal["hour", "day"]
 
@@ -102,3 +105,40 @@ def ingestion_status(client: Client) -> dict[str, Sequence[Sequence[Any]]]:
         """
     ).result_rows
     return {"feeds": feeds, "subreddits": subreddits, "tables": tables}
+
+
+def latest_trends(
+    client: Client, horizon: str, scope: str | None = None, limit: int = 30
+) -> tuple[datetime | None, list[Trend]]:
+    """The trends of the analyzer's most recent run, strongest first."""
+    from wgra.detect.short_term import TREND_COLUMNS, Trend
+
+    latest = client.query(
+        "SELECT max(detected_at), count() FROM trends WHERE horizon = {horizon:String}",
+        parameters={"horizon": horizon},
+    ).result_rows[0]
+    if not latest[1]:
+        return None, []
+    rows = client.query(
+        f"""
+        SELECT {", ".join(TREND_COLUMNS)}
+        FROM trends FINAL
+        WHERE horizon = {{horizon:String}} AND detected_at = {{detected_at:DateTime('UTC')}}
+          AND subsumed_by = '' AND ({{scope:String}} = '' OR scope = {{scope:String}})
+        ORDER BY z DESC
+        LIMIT {{limit:UInt32}}
+        """,
+        parameters={
+            "horizon": horizon,
+            "detected_at": latest[0],
+            "scope": normalize_trend_scope(scope) if scope else "",
+            "limit": limit,
+        },
+    ).result_rows
+    return latest[0], [Trend(*row) for row in rows]
+
+
+def normalize_trend_scope(scope: str) -> str:
+    """Groups are plain names, subreddits "r/name" (as stored in the trends table)."""
+    scope = scope.strip().removeprefix("/")
+    return f"r/{scope[2:].lower()}" if scope.lower().startswith("r/") else scope

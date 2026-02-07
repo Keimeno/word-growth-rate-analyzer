@@ -64,3 +64,50 @@ ingest:
   # reddit's free tier allows 100 requests per minute per client id
   requests_per_minute: 90
   max_subreddits_per_feed: 25
+
+# Short-term trends (`wgra analyze`). Every 15 minutes, every tracked subreddit and every
+# group is scored: how much more of the conversation mentions a term in the window than
+# in the reference period before it. See docs/ARCHITECTURE-V2.md §4.2.
+detect:
+  interval_minutes: 15
+  horizons:
+    24h: {window_hours: 24, reference_days: 28}
+    # compared with the same 6 hours of the day on the 28 days before
+    6h: {window_hours: 6, reference_days: 28, same_hours: true}
+  # what a term needs in the window to count as trending
+  min_mentions: 10     # comments and posts mentioning it
+  min_authors: 5       # different people, so one spammer can't make a trend
+  min_ratio: 2         # times its usual share
+  min_z: 3             # strength of the evidence (the score trends are ranked by)
+  # the same per scope, a group or "r/<subreddit>", only what differs
+  scopes:
+    r/de_edv: {min_mentions: 5, min_authors: 3}
+  # The prior: each term's share in the r/all sample over the last 90 days, worth 5% of
+  # the documents compared. It keeps rare terms stable and damps terms that are common
+  # everywhere on reddit but rare in the scope. Every term also gets one pseudo-mention,
+  # so brand-new terms get finite scores.
+  prior_days: 90
+  prior_weight: 0.05
+  prior_floor: 1
+  # no alerts while a scope has fewer days of history, everything would look new
+  min_reference_days: 3
+  max_per_scope: 50
+
+# Push notifications through ntfy, where to is set in .env (NTFY_URL, NTFY_TOPIC).
+notify:
+  # instant alerts only for the strongest trends, and at most this many per day
+  alert_min_z: 10
+  alert_min_authors: 20
+  # or when a term trends in this many subreddits of a group at once, and in this share
+  # of the group's subreddits mentioning it (6 of 9 is a story, 3 of 31 isn't)
+  alert_min_breadth: 3
+  alert_min_breadth_share: 0.3
+  max_alerts_per_day: 5
+  # a term isn't alerted again within this time unless its score doubles
+  cooldown_hours: 72
+  # one digest per group every day: its strongest trends of the last 24 hours
+  digest_time: "08:00"
+  timezone: Europe/Berlin
+  digest_size: 10
+  # scored and shown in Grafana, but no alerts or digests
+  skip_scopes: [sample]

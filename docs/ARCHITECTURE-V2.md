@@ -1,6 +1,6 @@
 # WGRA v2: Architecture and Plan
 
-Status: proposal · October 2026
+Status: phases 1 and 2 built, collecting history · October 2026
 
 ## 1. What the system is for
 
@@ -141,7 +141,8 @@ The schema as built is in
 | `scope_hourly` | AggregatingMergeTree | (subreddit, source, hour) | forever | Denominators: comments, tokens, distinct authors |
 | `polls` | MergeTree | (feed, ts) | 90 days | Every request: ingestion health and coverage |
 | `subreddit_groups` | MergeTree | (group, subreddit) | rewritten on start | The groups from `config.yaml`, for dashboards and queries |
-| `trends` (phase 2) | ReplacingMergeTree | (horizon, scope, term, detected_at) | forever | Detector output, alert state |
+| `trends` | ReplacingMergeTree | (horizon, scope, term, detected_at) | 90 days, alerts forever | Detector output, alert state |
+| `notifications` | MergeTree | (kind, sent_at) | forever | Every message sent to ntfy; makes the daily digest go out once |
 
 Each term row carries `occurrences` (sum), `docs` (number of comments
 containing the term) and `authors` (`uniqCombined` state, a mergeable
@@ -170,12 +171,14 @@ If `term_daily` grows faster than wanted, the lever is a TTL that, after
 
 ### 3.3 `analyze`
 
-The same Python package as `ingest`, with a separate entrypoint and an
-in-process scheduler:
+The same Python package as `ingest`, with a separate entrypoint (`wgra analyze`)
+and a plain loop that runs on the clock (:00, :15, :30, :45):
 
-* every 15 min: short-term burst scoring for all scopes → `trends` → alerts
+* every 15 min: short-term burst scoring for all scopes → `trends` → alerts, and
+  once a day the digests (built, phase 2)
 * daily: long-term scoring on weekly series → `trends` → weekly report on Mondays
-* hourly: LLM explanation for newly alerted trends
+  (phase 4)
+* hourly: LLM explanation for newly alerted trends (phase 3)
 
 ### 3.4 Grafana
 
@@ -206,6 +209,15 @@ There are two notification types:
 
 * **Instant alerts** for very high scores, capped at about 5/day.
 * A **daily digest** with the top items per group.
+
+As built (phase 2): ntfy v2.28.0 runs in the compose file on `localhost:3609`.
+The analyzer publishes JSON (so terms and titles can be any unicode), with
+markdown bodies, a click URL that opens the term in the Grafana term explorer, and
+buttons for the explorer and the Trending now dashboard. To reach a phone, put
+ntfy behind the same reverse proxy as Grafana (`NTFY_BASE_URL`), or point
+`NTFY_URL` at the public ntfy.sh with a long random topic. iOS needs
+`NTFY_UPSTREAM_BASE_URL=https://ntfy.sh` for instant delivery, which is free
+and only passes message IDs.
 
 ### 3.6 Cost: free apart from the server
 
@@ -252,30 +264,69 @@ Compare a **window** `W` (last 24h, plus a fast 6h variant) with a
 **weighted log-odds ratio with an informative Dirichlet prior** (Monroe,
 Colaresi & Quinn, *Fightin' Words*, 2008). It's the standard approach for
 "which words are over-represented in corpus A vs B", and it holds up for rare
-and brand-new terms:
+and brand-new terms. As built
+([`v2/src/wgra/detect/scoring.py`](../v2/src/wgra/detect/scoring.py)):
 
 ```
-α_w   = α0 · background_rate(w)        # prior from all scopes, last 90 days
-δ_w   = log((y_W + α_w) / (n_W + α0 − y_W − α_w))
-      − log((y_B + α_w) / (n_B + α0 − y_B − α_w))
-σ²_w  ≈ 1 / (y_W + α_w) + 1 / (y_B + α_w)
+π_w   = share of r/all sample comments mentioning w, last 90 days
+m_W   = κ · n_W                         # pseudo-documents per side, κ = 0.05
+m_B   = κ · n_B + max(n_W − n_B, 0)
+α_c   = m_c · π_w + f                   # f = 1, the floor
+β_c   = m_c · (1 − π_w) + f
+δ_w   = log((y_W + α_W) / (n_W − y_W + β_W))
+      − log((y_B + α_B) / (n_B − y_B + β_B))
+σ²_w  ≈ 1 / (y_W + α_W) + 1 / (y_B + α_B)
 z_w   = δ_w / σ_w
 ```
 
+The proposal had the paper's form, `α_w = α0 · π_w` added to both sides.
+Three changes came out of testing it:
+
+* **Pseudo-counts in proportion to each side's size.** The paper compares
+  corpora of similar size. Here `B` is 28 times `W`, and the same pseudo-counts
+  pull the small window much harder toward the reddit-wide share than the
+  reference. A term that's common on reddit but rare in a subreddit then looks
+  like it's rising while nothing changes: a stable term at 0.1% of a scope and
+  5% of the sample comes out at 3.2× (z 6.5) with `α0` worth 5% of the window.
+  With `α_c ∝ n_c` a term whose share doesn't change scores exactly 0. The prior
+  then blends both shares with the reddit-wide share by the same amount. That
+  damps bursts of terms that are common everywhere but rare in the scope (likely
+  spill-over from elsewhere) and leaves the scope's own vocabulary alone.
+* **A floor.** Without it a term absent from the sample and the reference
+  period has `α = 0` and an infinite `σ`, so brand-new names could never score.
+* **The first day.** While a scope has less history than one window, the
+  reddit-wide share stands in for the missing part (`max(n_W − n_B, 0)`
+  pseudo-documents). The first day then shows what's distinctive for each scope
+  (tech: ai, code, claude; news: trump; gaming: game) instead of nothing. It
+  fades out as history comes in. Alerts wait for 3 days of history anyway.
+
 * **Rank** by `z`, the strength of evidence. **Show** `exp(δ)`, the "x times
-  more than usual" figure. **Gate** on `y_W ≥ 10`, `a_W ≥ 5` and
-  `exp(δ) ≥ 2`. All thresholds are per-scope config, tuned on real data.
+  more than usual" figure. **Gate** on `y_W ≥ 10`, `a_W ≥ 5`,
+  `exp(δ) ≥ 2` and `z ≥ 3`. All thresholds are in `config.yaml`, overridable
+  per scope, and get tuned on real data with the replay harness.
+* **Stopwords** are never trends as single words (they still bound phrases).
+  For a group, only words that are stopwords in every language of its
+  subreddits: "war" is German for "was", but not in r/worldnews.
 * **New terms:** when `y_B ≈ 0`, the prior keeps the score finite. Flag these
   as `new`, since they're often product or project names.
 * **N-gram subsumption:** if `vision pro` is trending, suppress `vision` and
-  `pro` when their burst is mostly explained by the bigram.
-* **Cooldown:** don't re-alert the same (scope, term) within 72h unless its
-  score doubles.
-* **Breadth:** for a group, count how many member subs show `z > 3`. A term
-  bursting in 6 of 9 tech subs is a bigger story than one sub at `z = 12`.
+  `pro` when their burst is mostly explained by the bigram. As built: subtract
+  the counts of the trending phrases containing the word (only the shortest of
+  nested ones, `apple vision pro` is inside `vision pro`'s count) and check the
+  gates again. Suppressed rows are kept with `subsumed_by` set.
+* **Cooldown:** don't re-alert the same term within 72h unless its score
+  doubles. As built, the cooldown is per term across scopes, and a run alerts a
+  term once, in its strongest scope: `openai` bursting in r/OpenAI, tech and
+  tracked is one story, and the cap is only 5 a day.
+* **Breadth:** for a group, count how many member subs show `z > 3` (with at
+  least 3 mentions there). A term bursting in 6 of 9 tech subs is a bigger story
+  than one sub at `z = 12`. Groups alert on breadth ≥ 3 if that's also ≥ 30% of
+  the subreddits mentioning the term: 3 of 31 isn't broad.
 * **Hour-of-day effects** in topic mix (for example "breakfast" in the
   morning) matter only for the 6h window. For that window, build `B` from
   the same hours of the day across the last 28 days.
+* **Live runs include the current hour**, so a burst shows up within 15
+  minutes. Rates stay right because `n` covers the same partial hour.
 
 ### 4.3 Long term: sustained trends
 
@@ -358,7 +409,7 @@ explanation goes into the alert and the dashboard.
 | Storage | MongoDB 5 (end of life since 2024-10), Redis | **ClickHouse 26.8 LTS** | Built for "group billions of (time, scope, term) rows". Has materialized views, TTL, HyperLogLog states, about 10x compression. |
 | Dashboards | none | **Grafana** + ClickHouse datasource | Dashboards and alerting with zero front-end code |
 | Push | HookNotifier (still running) | **ntfy, self-hosted** | Free, open source, no limits when self-hosted, click actions |
-| Scheduling | node-schedule | APScheduler in `analyze` | Same idea, in-process |
+| Scheduling | node-schedule | A loop in `analyze` | One job every 15 minutes needs no scheduler library |
 | Explanations | — | Optional: local model via Ollama (free), or a paid API | Wasn't feasible six years ago |
 | Deploy | Kubernetes (planned), pm2 | **Docker Compose on one VPS**, GitHub Actions → GHCR | Right-sized for the job |
 | Quality | none | ruff, mypy/pyright, pytest, golden tokenizer tests | — |
@@ -396,9 +447,9 @@ v2/
     store/                  # clickhouse client, migrations runner
     migrations/*.sql
     query.py                # read-only queries for the CLI
-    cli.py                  # wgra ingest | migrate | status | term
-    detect/                 # phase 2: short_term.py, long_term.py, scoring.py
-    notify/                 # phase 2: ntfy, digests
+    cli.py                  # wgra ingest | analyze | replay | trends | notify-test | migrate | status | term
+    detect/                 # scoring.py, short_term.py, alerts.py, run.py, replay.py (long_term.py: phase 4)
+    notify/                 # ntfy.py, messages.py
     explain/                # phase 3: optional LLM explanations
   tests/
 ```
@@ -473,21 +524,79 @@ Still open:
 * **Done when:** it runs 72h unattended on the VPS, ≥ 99% of polls succeed,
   there are no gaps in tracked feeds, and storage growth per day is measured
   against the sizing estimate (§3.2).
-* Ingestion stall alert (Grafana alert → ntfy) together with phase 2's ntfy.
+* Ingestion stall alert (Grafana alert → ntfy). ntfy is now in the compose file.
 * Deploying to the VPS (phase 5 automates it; until then
   `git pull && docker compose up -d --build`).
 
-### Phase 2: short-term detection (about 1 week)
+### Phase 2: short-term detection (built 2026-10-10, collecting history)
 
-* Scoring from §4.2 (SQL aggregation, scoring in Python), `trends` table,
-  cooldowns, n-gram subsumption.
-* ntfy alerts and daily digest. "Trending now" and "Term explorer"
-  dashboards.
-* Replay harness: re-run detection over stored history with different
-  thresholds, so tuning doesn't require waiting.
+Built, in `v2/` (see §4.2 for the scoring as built):
+
+* `trends` and `notifications` tables
+  ([`002_trends.sql`](../v2/src/wgra/migrations/002_trends.sql)). Every run
+  stores the top 50 trends per scope and horizon, with the counts behind the
+  score, breadth, subsumption and what happened with the alert. Re-running the
+  same time replaces rows. Non-alert rows expire after 90 days.
+* Detection for every tracked subreddit (`r/name`) and every group in
+  `subreddit_groups`, on two horizons: 24h vs the 28 days before, and 6h vs the
+  same 6 hours of the day on the 28 days before. ClickHouse finds the
+  candidates in the window (mentions first, then author sketches only for the
+  survivors) and counts them in the reference period and the sample. Python
+  scores, gates, subsumes and computes breadth. A second small query gets the
+  per-subreddit counts for breadth, only for the stored group trends.
+* Alerts: at most 5 a day, only for `z ≥ 10` with 20 authors, or broad group
+  trends; a 72h cooldown across scopes unless the score doubles; one alert per
+  term and run; no alerts before 3 days of history ("warmup").
+* `wgra analyze` (every 15 minutes, or `--once`, `--no-notify`), an `analyze`
+  service and ntfy v2.28.0 in the compose file. A daily digest per group at
+  08:00 Europe/Berlin (configurable) with the 10 strongest trends of the last
+  24 hours in the group and its subreddits.
+* `wgra replay --from … --to … [--min-z …]`: runs the detector as of past
+  hours over stored data, simulates warmup, cooldown and the cap in memory, and
+  reports alerts per day and group. Nothing is written or sent, so it can run
+  next to the live loop with any settings. `--csv` dumps every trend of every
+  step.
+* `wgra trends`, `wgra notify-test`.
+* Grafana **Trending now**: last run, days of history, the latest trends per
+  group and its subreddits with score, times usual, mentions, authors,
+  breadth and a 7-day sparkline, linking to the term explorer; the top trends
+  over time; the strongest trends of the last 24h (what the digest sends); and
+  alerts with their status.
+* 107 tests (from 59): the scoring math, gates, subsumption, breadth, alert
+  rules, messages and config, plus detection end to end in a throwaway
+  ClickHouse database on 29 days of synthetic history (a phrase burst with
+  subsumed words, a new term in two subreddits, a stable term, a spammer, a
+  daily breakfast pattern for the 6h same-hours reference, alerts, cooldown,
+  digests and replay).
+
+Measured on 2026-10-10:
+
+* **Live, first hour of data:** `wgra analyze --once` took 2.6s and wrote 433
+  trends in 23 scopes. Without history these are "distinctive vs reddit"
+  (tech: ai, code, claude; news: trump; gaming: game), all in warmup, no
+  alerts. A test notification arrived through the local ntfy; alert and digest
+  payloads (markdown, click URL, buttons) were accepted by it.
+* **Production scale, synthetic:** 29 days of 37 subreddits at the measured
+  rate (about 120k term rows per hour, 53M rows in `term_hourly` after
+  merges), 90 days of sample. One run of both horizons over all 45 scopes:
+  **19s, 108 queries, the slowest 2.2s, at most 120 MB per query** (the first
+  version needed 1 GB for the tracked group, until breadth got its own
+  query). About 1.2 billion rows read per run, mostly from the page cache. The
+  Trending now queries take under 200 ms.
+* **Noise floor:** on that synthetic data, which has no trends, Poisson noise
+  alone reached z ≈ 6 for mid-frequency terms, never the alert threshold of 10.
+  Those noise trends rank low on the dashboard; real data is burstier, so
+  check the floor again with `wgra replay` once there's history.
+
+Still open:
+
 * **Done when:** about 10 or fewer alerts per day per group at default
   settings, and in a one-week manual review you judge at least 70% of them
-  "real".
+  "real". Needs about 4 weeks of data for the full reference period;
+  `wgra replay` over the first 1–2 weeks gives the first numbers.
+* Tuning `prior_weight`, `alert_min_z` and the gates on real data.
+* If runs get slow as `term_hourly` grows: read full days of the reference
+  period from `term_daily` (only the 6h horizon needs hours).
 
 ### Phase 3: groups and explanations (about 1 week)
 
@@ -576,19 +685,30 @@ Changes from the first sketch:
 
 ## Appendix B: short-term candidate query
 
+The query as built is `COUNTS_SQL` in
+[`v2/src/wgra/detect/short_term.py`](../v2/src/wgra/detect/short_term.py). In
+short, per scope and horizon:
+
 ```sql
--- window = last 24h, reference = 28 days before that, one scope
-WITH now() - INTERVAL 24 HOUR AS w_start,
-     w_start - INTERVAL 28 DAY AS b_start
-SELECT
-    kind, term,
-    sumIf(docs, hour >= w_start)                    AS y_w,
-    sumIf(docs, hour <  w_start)                    AS y_b,
-    uniqCombinedMergeIf(12)(authors, hour >= w_start) AS authors_w
+WITH candidates AS (
+    -- terms mentioned often enough in the window, then by enough people
+    SELECT kind, term FROM term_hourly
+    WHERE subreddit IN {subreddits} AND <hour in window>
+      AND (kind, term) IN (SELECT kind, term FROM term_hourly
+                           WHERE subreddit IN {subreddits} AND <hour in window>
+                           GROUP BY kind, term HAVING sum(docs) >= 10)
+    GROUP BY kind, term
+    HAVING uniqCombinedMerge(12)(authors) >= 5
+)
+SELECT kind, term,
+       sumIf(docs, <hour in window>)                    AS y_w,
+       sumIf(docs, <hour in reference>)                 AS y_b,
+       uniqCombinedMergeIf(12)(authors, <hour in window>) AS authors_w,
+       <their docs in the _sample scope of term_daily, 90 days> AS y_sample
 FROM term_hourly
-WHERE subreddit = {scope:String} AND hour >= b_start
-GROUP BY kind, term
-HAVING y_w >= 10 AND authors_w >= 5;
--- n_w / n_b come from scope_hourly; α_w from a 90-day background table.
--- The log-odds z-score (§4.2) is computed in Python on this candidate set.
+WHERE subreddit IN {subreddits} AND <hour in window or reference>
+  AND (kind, term) IN (SELECT kind, term FROM candidates)
+GROUP BY kind, term;
+-- "in reference" for the 6h horizon: the same hours of the day only.
+-- n_W, n_B and the sample's total come from scope_hourly, one query per run.
 ```
