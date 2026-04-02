@@ -1,5 +1,5 @@
-"""wgra command line: ``wgra ingest | analyze | replay | trends | notify-test | migrate |
-status | term``."""
+"""wgra command line: ``wgra ingest | analyze | long-term | replay | trends | notify-test |
+migrate | status | term``."""
 
 from __future__ import annotations
 
@@ -21,10 +21,12 @@ from dotenv import load_dotenv
 
 from wgra.config import Env, load_config
 from wgra.detect.short_term import GROUP, Trend
-from wgra.query import ingestion_status, latest_trends, term_series
+from wgra.notify.messages import per_month_text
+from wgra.query import ingestion_status, latest_long_term, latest_trends, term_series
 from wgra.store import connect, migrate
 
 if TYPE_CHECKING:
+    from wgra.detect.long_term import LongTermResult, LongTermTrend
     from wgra.detect.run import Analyzer
 
 
@@ -66,13 +68,17 @@ def _analyzer(args: argparse.Namespace, notify: bool = True) -> Analyzer:
     return Analyzer(config, env, client, ntfy)
 
 
+def _until_stopped() -> threading.Event:
+    stop = threading.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: stop.set())
+    return stop
+
+
 def cmd_analyze(args: argparse.Namespace) -> None:
     analyzer = _analyzer(args, notify=not args.no_notify)
     if not args.once:
-        stop = threading.Event()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            signal.signal(sig, lambda *_: stop.set())
-        analyzer.run_forever(stop)
+        analyzer.run_forever(_until_stopped(), long_term=not args.no_long_term)
         return
 
     result = analyzer.run_once()
@@ -131,8 +137,92 @@ TREND_HEADERS = (
 )
 
 
+def cmd_long_term(args: argparse.Namespace) -> None:
+    analyzer = _analyzer(args, notify=not args.no_notify)
+    if not args.once:
+        analyzer.run_forever(_until_stopped(), short_term=False)
+        return
+    as_of = args.as_of or datetime.now(UTC)
+    result = analyzer.run_long_term(as_of, write=not args.dry_run)
+    _print_long_term_result(result)
+    top = sorted(result.trends, key=lambda trend: (trend.category, trend.rank, trend.horizon))
+    if top:
+        print()
+        _print_long_term(top[: args.top])
+    if args.dry_run:
+        print("\ndry run, nothing stored")
+
+
+def _print_long_term_result(result: LongTermResult) -> None:
+    print(
+        f"Long-term trends as of {result.detected_at:%Y-%m-%d %H:%M} UTC: the complete weeks "
+        f"before {result.week:%a %Y-%m-%d}, {result.seconds:.1f}s"
+    )
+    horizons = sorted(
+        {stats.window.weeks for stats in result.windows}
+        | {gap.weeks for gap in result.insufficient}
+    )
+    for weeks in horizons:
+        windows = [stats for stats in result.windows if stats.window.weeks == weeks]
+        gaps = [gap for gap in result.insufficient if gap.weeks == weeks]
+        if not windows:
+            most = max((gap.available for gap in gaps), default=0)
+            print(
+                f"  {weeks}w: insufficient history in all {len(gaps)} scopes, "
+                f"at most {most} of {weeks} weeks"
+            )
+            continue
+        categories = Counter(
+            trend.category for trend in result.trends if trend.horizon == f"{weeks}w"
+        )
+        print(
+            f"  {weeks}w: {len(windows)} scopes, {sum(s.above_floor for s in windows):,} terms "
+            f"tested, {sum(s.candidates for s in windows):,} candidates: "
+            + (", ".join(f"{n} {category}" for category, n in sorted(categories.items())) or "none")
+        )
+        if gaps:
+            print(
+                "       insufficient history: "
+                + ", ".join(f"{gap.scope} ({gap.available} of {weeks} weeks)" for gap in gaps)
+            )
+    if result.first_week and not result.windows:
+        print(
+            f"The first complete week of data starts {result.first_week:%a %Y-%m-%d}: "
+            f"{min(horizons, default=13)} weeks of history from "
+            f"{result.first_week + timedelta(weeks=min(horizons, default=13)):%a %Y-%m-%d} on."
+        )
+
+
+def _print_long_term(trends: Sequence[LongTermTrend]) -> None:
+    _print_table(
+        ("horizon", "scope", "term", "category", "per month", "q", "spike", "per 1k", "mentions"),
+        [
+            (
+                trend.horizon,
+                trend.scope,
+                trend.term,
+                trend.category,
+                per_month_text(trend.growth),
+                f"{trend.q_value:.1e}",
+                f"{trend.spike_share:.2f}",
+                f"{trend.start_share:.2f} → {trend.end_share:.2f}",
+                trend.mentions,
+            )
+            for trend in trends
+        ],
+    )
+
+
 def cmd_trends(args: argparse.Namespace) -> None:
     client = connect(Env.from_environ(require_reddit=False))
+    if args.horizon.endswith("w"):
+        week, long_term = latest_long_term(client, args.horizon, args.scope, args.limit)
+        if week is None:
+            print(f"no {args.horizon} trends yet, see `wgra long-term --once`")
+            return
+        print(f"{args.horizon} trends of the weeks before {week:%a %Y-%m-%d}")
+        _print_long_term(long_term)
+        return
     detected_at, trends = latest_trends(client, args.horizon, args.scope, args.limit)
     if detected_at is None:
         print("no trends yet, run `wgra analyze --once`")
@@ -262,11 +352,33 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--no-notify", action="store_true", help="send nothing, mark alerts as muted"
     )
     analyze.add_argument("--top", type=int, default=25, help="trends to print with --once")
+    analyze.add_argument(
+        "--no-long-term", action="store_true", help="no daily long-term run and weekly reports"
+    )
     analyze.set_defaults(func=cmd_analyze)
+
+    long_term = commands.add_parser(
+        "long-term",
+        help="detect long-term trends (wgra analyze also runs it once a day)",
+        description="Theil–Sen and Mann–Kendall on weekly shares over 13, 26 and 52 weeks. "
+        "Without --once, runs it every day after long_term.run_at and sends the weekly "
+        "reports, for running it apart from `wgra analyze --no-long-term`.",
+    )
+    long_term.add_argument("--once", action="store_true", help="run once and print the result")
+    long_term.add_argument(
+        "--as-of",
+        type=_utc,
+        help="UTC date or time to run as of, e.g. 2026-12-01: analyzes the complete weeks "
+        "before its week (default: now)",
+    )
+    long_term.add_argument("--dry-run", action="store_true", help="store nothing")
+    long_term.add_argument("--no-notify", action="store_true", help="no weekly reports")
+    long_term.add_argument("--top", type=int, default=30, help="trends to print with --once")
+    long_term.set_defaults(func=cmd_long_term)
 
     trends = commands.add_parser("trends", help="the latest trends the analyzer found")
     trends.add_argument("--scope", help="a group or r/subreddit (default: all)")
-    trends.add_argument("--horizon", default="24h")
+    trends.add_argument("--horizon", default="24h", help="24h, 6h, or long-term: 13w, 26w, 52w")
     trends.add_argument("--limit", type=int, default=30)
     trends.set_defaults(func=cmd_trends)
 
@@ -305,7 +417,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     term.add_argument("term")
     term.add_argument("--scope", default="tracked", help="group or subreddit (default: tracked)")
     term.add_argument("--days", type=int, default=7)
-    term.add_argument("--bucket", choices=["day", "hour"], default="day")
+    term.add_argument("--bucket", choices=["day", "hour", "week"], default="day")
     term.set_defaults(func=cmd_term)
 
     args = parser.parse_args(argv)

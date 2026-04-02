@@ -4,12 +4,13 @@ Finds out which words and phrases are gaining or losing share of the conversatio
 subreddits and groups of subreddits, over hours (short term) and months (long term).
 The design and the roadmap are in [../docs/ARCHITECTURE-V2.md](../docs/ARCHITECTURE-V2.md).
 
-Phases 1 and 2 are built. The ingester collects comments and posts from the subreddits
+Phases 1, 2 and 4 are built. The ingester collects comments and posts from the subreddits
 in [config.yaml](config.yaml) into ClickHouse. Every 15 minutes the analyzer scores what
 is mentioned far more than usual, per subreddit and per group, stores it for Grafana and
-sends the strongest trends and a daily digest to your phone through ntfy. Long-term
-trends (phase 4) need months of history, so collecting should start as early as
-possible.
+sends the strongest trends and a daily digest to your phone through ntfy. Once a day it
+also looks for long-term trends, terms that grow or fade steadily over 13, 26 and 52
+weeks, and sends a weekly report. Those need at least 13 complete weeks of history, so
+collecting should start as early as possible.
 
 ## Cost
 
@@ -45,8 +46,12 @@ Requires Docker. Works the same on a laptop and on a server.
    * **Trending now**: what the analyzer found, per group and its subreddits: score,
      times the usual share, mentions, authors, breadth, a sparkline of the last week,
      and the alerts. Click a term to explore it.
+   * **Long-term trends**: per group and its subreddits, the emerging, mainstreaming,
+     fading and one-off terms of the last 13, 26 or 52 weeks, with growth per month,
+     significance and the weekly share as a sparkline.
    * **Term explorer**: how often terms are mentioned over time, where, and recent
-     examples.
+     examples. Per hour, day or week, and for groups pooled or as the average of the
+     subreddits' shares.
    * **Rising (preview)**: a simpler first look at what's mentioned more than usual.
    * **Ingestion**: is the ingester healthy and complete.
 
@@ -128,6 +133,46 @@ The phone has to reach ntfy and, for the links, Grafana:
   `NTFY_TOPIC`. Free and without an account (up to 250 messages a day, WGRA sends about
   a dozen), but anyone who knows the topic can read it.
 
+## Long-term trends
+
+Once a day after 00:30 UTC, `wgra analyze` looks at weekly shares: per ISO week (Monday
+to Sunday, UTC), the comments and posts mentioning a term divided by all of them. The
+current week is left out, so the results change on Mondays. For every subreddit and
+group, over the last 13, 26 and 52 weeks:
+
+* Terms mentioned at least 20 times a week on average are tested. ClickHouse fits a
+  least squares line through every one's log share and picks the fastest growing and
+  fading, at most 100 per scope and window.
+* For those: the Theil–Sen slope as growth per month (robust against single spikes), the
+  Mann–Kendall test for a steady trend, corrected for testing many terms at once
+  (Benjamini–Hochberg over every term tested), and how much of the change comes from
+  the two highest weeks.
+* Each is **emerging** (significant growth, from at most 1 in 1,000 comments),
+  **mainstreaming** (significant growth of a common term), **fading**, **one-off**
+  (most of the change is one or two weeks far above the rest) or flat (not stored).
+* A group's share is the average of its subreddits' shares, so a big subreddit doesn't
+  drown out the small ones. `group_rate: pooled` divides all mentions by all comments
+  instead.
+
+A window runs once there are that many complete weeks of data, so the 13-week window
+starts 13 weeks after collection begins, and the 52-week window after a year. Until then
+the run reports "insufficient history". Every Monday at 08:00 (`notify:`) each group gets
+a report with its fastest emerging, mainstreaming and fading terms. All settings are in
+the `long_term:` section of [config.yaml](config.yaml), the statistics are explained in
+the [architecture](../docs/ARCHITECTURE-V2.md#43-long-term-sustained-trends).
+
+```bash
+uv run wgra long-term --once                      # run now, store and print the result
+uv run wgra long-term --once --as-of 2027-03-01   # as of a past date: the weeks before it
+uv run wgra long-term --once --dry-run            # store nothing
+uv run wgra trends --horizon 26w --scope tech     # the stored results
+```
+
+`--as-of` replays a past date over the stored data: it analyzes the complete weeks before
+that date's week and stores them under that week (runs of the same week replace each
+other). `wgra analyze --no-long-term` turns the daily run off, `wgra long-term` without
+`--once` runs only the daily long-term loop and the reports.
+
 ## Command line
 
 Needs [uv](https://docs.astral.sh/uv/). It reads `.env`, so it reaches the ClickHouse
@@ -138,8 +183,11 @@ uv sync
 uv run wgra status
 uv run wgra term "claude code" --scope tech --days 14
 uv run wgra term rust --scope programming --bucket hour --days 2
+uv run wgra term ai --scope tech --bucket week --days 180
 uv run wgra trends --scope tech                 # the latest trends
+uv run wgra trends --horizon 13w                # the latest long-term trends
 uv run wgra analyze --once --no-notify          # one analysis run, prints the top trends
+uv run wgra long-term --once --dry-run          # one long-term run
 uv run wgra notify-test
 ```
 
@@ -160,7 +208,8 @@ one of it with notifications on, or alerts go out twice.
 | `scope_hourly` | Per hour and subreddit: all comments, words and authors (the denominators) | forever |
 | `polls` | Every request to Reddit, for the ingestion dashboard | 90 days |
 | `trends` | Every 15 minutes, the top 50 trends per scope and horizon, with the numbers behind them and what happened with the alert | 90 days, alerts forever |
-| `notifications` | Every message sent to ntfy | forever |
+| `long_term_trends` | Every week, the emerging, mainstreaming, fading and one-off terms per scope and window, with the statistics and weekly shares behind them | forever |
+| `notifications` | Every message sent to ntfy (alerts, digests, weekly reports) | forever |
 
 * Terms are single words, 2-3 word phrases that don't start or end with a stopword, linked
   domains and mentioned subreddits.
@@ -184,3 +233,7 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy
   (or with `uv run wgra migrate`).
 * The dashboards are generated: edit `grafana/build_dashboards.py` and run
   `uv run python grafana/build_dashboards.py`. Grafana reloads them within 10 seconds.
+* `bench/` measures the long-term detector at production scale: `bench/synthetic.py`
+  writes a year of synthetic history into a database of its own, `bench/long_term.py`
+  runs the detector over it and reports time and memory per query. Run them against a
+  ClickHouse of their own, never the live one (see the docstrings).

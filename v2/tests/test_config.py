@@ -107,3 +107,39 @@ def test_empty_notification_settings_mean_the_defaults(monkeypatch):
     assert env.ntfy_url == "http://localhost:3609"
     assert env.ntfy_topic == "wgra"
     assert env.grafana_url == "https://grafana.example"
+
+
+def test_long_term_defaults_and_overrides():
+    defaults = make_config().long_term
+    assert defaults.horizons == (13, 26, 52)
+    assert defaults.group_rate == "macro"
+    assert defaults.min_mentions_per_week == 20
+    config = make_config(
+        long_term={
+            "horizons": [26, 13, 13],
+            "group_rate": "pooled",
+            "run_at": "01:15",
+            "exclude_scopes": ["r/DE", "tracked"],
+        },
+        notify={"report_day": "Sunday", "report_time": "18:00", "report_size": 3},
+    )
+    assert config.long_term.horizons == (13, 26)
+    assert config.long_term.group_rate == "pooled"
+    assert config.long_term.exclude_scopes == ("r/de", "tracked")
+    assert (config.notify.report_day, config.notify.report_time) == ("sunday", "18:00")
+
+
+@pytest.mark.parametrize(
+    ("section", "values", "message"),
+    [
+        ("long_term", {"group_rate": "median"}, "macro or pooled"),
+        ("long_term", {"horizons": [2]}, "at least 4"),
+        ("long_term", {"run_at": "midnight"}, "run_at"),
+        ("long_term", {"min_growth": 0.95}, "above 1"),
+        ("notify", {"report_day": "someday"}, "weekday"),
+        ("notify", {"report_time": "25:00"}, "report_time"),
+    ],
+)
+def test_invalid_long_term_settings(section, values, message):
+    with pytest.raises(ValueError, match=message):
+        make_config(**{section: values})

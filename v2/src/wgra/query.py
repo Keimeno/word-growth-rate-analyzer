@@ -10,9 +10,10 @@ from typing import TYPE_CHECKING, Any, Literal
 from clickhouse_connect.driver.client import Client
 
 if TYPE_CHECKING:
+    from wgra.detect.long_term import LongTermTrend
     from wgra.detect.short_term import Trend
 
-Bucket = Literal["hour", "day"]
+Bucket = Literal["hour", "day", "week"]
 
 # a scope is a group from config.yaml or a single subreddit
 _SCOPE = (
@@ -44,11 +45,18 @@ def normalize_scope(scope: str) -> str:
 def term_series(
     client: Client, term: str, scope: str, days: int, bucket: Bucket = "day"
 ) -> list[TermPoint]:
-    """How many comments and posts in the scope mentioned the term, per hour or day."""
-    if bucket == "day":
-        term_table, term_bucket, scope_bucket = "term_daily", "day", "toDate(hour)"
+    """How many comments and posts in the scope mentioned the term, per hour, day or week
+    (ISO weeks, Monday to Sunday UTC, the current one so far)."""
+    if bucket in ("day", "week"):
+        term_table = "term_daily"
+        term_bucket = "day" if bucket == "day" else "toMonday(day)"
+        scope_bucket = "toDate(hour)" if bucket == "day" else "toMonday(hour)"
         term_filter = "day >= today() - {days:UInt32}"
         scope_filter = "hour >= toDateTime(today() - {days:UInt32}, 'UTC')"
+        if bucket == "week":
+            # whole weeks only
+            term_filter = "day >= toMonday(today() - {days:UInt32})"
+            scope_filter = "hour >= toDateTime(toMonday(today() - {days:UInt32}), 'UTC')"
     else:
         term_table, term_bucket, scope_bucket = "term_hourly", "hour", "hour"
         term_filter = scope_filter = "hour >= toStartOfHour(now()) - INTERVAL {days:UInt32} DAY"
@@ -142,3 +150,34 @@ def normalize_trend_scope(scope: str) -> str:
     """Groups are plain names, subreddits "r/name" (as stored in the trends table)."""
     scope = scope.strip().removeprefix("/")
     return f"r/{scope[2:].lower()}" if scope.lower().startswith("r/") else scope
+
+
+def latest_long_term(
+    client: Client, horizon: str, scope: str | None = None, limit: int = 30
+) -> tuple[date | None, list[LongTermTrend]]:
+    """The long-term trends of the latest analyzed week, by category and strength."""
+    from wgra.detect.long_term import LONG_TERM_COLUMNS, LongTermTrend
+
+    (week,) = client.query(
+        "SELECT max(week) FROM long_term_trends WHERE horizon = {horizon:String}",
+        parameters={"horizon": horizon},
+    ).result_rows[0]
+    rows = client.query(
+        f"""
+        SELECT {", ".join(LONG_TERM_COLUMNS)}
+        FROM long_term_trends FINAL
+        WHERE horizon = {{horizon:String}} AND week = {{week:Date}}
+          AND ({{scope:String}} = '' OR scope = {{scope:String}})
+        ORDER BY category, rank, scope
+        LIMIT {{limit:UInt32}}
+        """,
+        parameters={
+            "horizon": horizon,
+            "week": week,
+            "scope": normalize_trend_scope(scope) if scope else "",
+            "limit": limit,
+        },
+    ).result_rows
+    if not rows:
+        return None, []
+    return week, [LongTermTrend(*row) for row in rows]

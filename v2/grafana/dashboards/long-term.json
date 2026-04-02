@@ -1,0 +1,1575 @@
+{
+  "uid": "wgra-long-term",
+  "title": "Long-term trends",
+  "description": "Terms growing or fading steadily over 13, 26 or 52 weeks, found once a day by wgra analyze.",
+  "tags": [
+    "wgra"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1h",
+  "time": {
+    "from": "now-1y",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "group",
+        "label": "Group",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "definition": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "sort": 0,
+        "current": {
+          "text": "tracked",
+          "value": "tracked"
+        }
+      },
+      {
+        "type": "query",
+        "name": "scope",
+        "label": "Scopes",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+        "definition": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "type": "custom",
+        "name": "horizon",
+        "label": "Window",
+        "query": "13w,26w,52w",
+        "options": [
+          {
+            "text": "13w",
+            "value": "13w",
+            "selected": true
+          },
+          {
+            "text": "26w",
+            "value": "26w",
+            "selected": false
+          },
+          {
+            "text": "52w",
+            "value": "52w",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "13w",
+          "value": "13w"
+        },
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "kind",
+        "label": "Kind",
+        "query": "word,phrase,domain,subreddit",
+        "options": [
+          {
+            "text": "word",
+            "value": "word",
+            "selected": true
+          },
+          {
+            "text": "phrase",
+            "value": "phrase",
+            "selected": true
+          },
+          {
+            "text": "domain",
+            "value": "domain",
+            "selected": true
+          },
+          {
+            "text": "subreddit",
+            "value": "subreddit",
+            "selected": true
+          }
+        ],
+        "current": {
+          "text": [
+            "word",
+            "phrase",
+            "domain",
+            "subreddit"
+          ],
+          "value": [
+            "word",
+            "phrase",
+            "domain",
+            "subreddit"
+          ]
+        },
+        "multi": true,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Last run",
+      "description": "When the latest stored results were found. The detector runs every day after 00:30 UTC; the results only change when a week has completed.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT toUnixTimestamp(max(detected_at)) * 1000 FROM long_term_trends WHERE horizon = ${horizon:sqlstring}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Weeks analyzed up to",
+      "description": "The last day of the last complete week analyzed (weeks run Monday to Sunday, UTC). The current week isn't complete yet and is left out.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest SELECT formatDateTime(latest - 1, '%a %e %b %Y')",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Weeks of history",
+      "description": "Complete weeks of data in the group's subreddits. A window runs once it has that many weeks: 13, 26 or 52. Until then there's nothing here.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT greatest(max(intDiv(toMonday(today()) - first_week, 7)), 0)\nFROM (\n    SELECT if(toDayOfWeek(min(hour)) = 1, toMonday(min(hour)), toMonday(min(hour)) + 7)\n           AS first_week\n    FROM scope_hourly\n    WHERE source = 'comment' AND subreddit IN (\n        SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}\n    )\n    GROUP BY subreddit\n)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Trends",
+      "description": "Stored trends in the selected scopes and window, at most 25 per scope and category.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT countIf(category = 'emerging') AS emerging,\n       countIf(category = 'mainstreaming') AS mainstreaming,\n       countIf(category = 'fading') AS fading,\n       countIf(category = 'one-off') AS `one-off`\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Emerging: rare at the start of the window, growing steadily",
+      "description": "Terms mentioned by at most 1 in 1,000 comments and posts at the start of the window that grew significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'emerging'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT toDateTime(window_start, 'UTC') + toIntervalWeek(i - 1) AS time,\n       concat(scope, ' · ', term) AS id, weekly[i] AS per_1000\nFROM long_term_trends FINAL\nARRAY JOIN arrayEnumerate(weekly) AS i\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'emerging'\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "scope"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "q"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "sci"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "start_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "end_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "spike_share"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "peak"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "weekly share"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "per_month",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "id",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "scope A": "scope",
+              "term A": "term",
+              "per_month A": "per_month",
+              "Trend #B A": "Trend #B",
+              "q A": "q",
+              "start_per_1000 A": "start_per_1000",
+              "end_per_1000 A": "end_per_1000",
+              "mentions A": "mentions",
+              "spike_share A": "spike_share",
+              "peak A": "peak",
+              "kind A": "kind",
+              "explore A": "explore",
+              "id A": "id",
+              "Trend #B": "weekly share"
+            },
+            "indexByName": {
+              "scope": 0,
+              "scope A": 0,
+              "term": 1,
+              "term A": 1,
+              "per_month": 2,
+              "per_month A": 2,
+              "Trend #B": 3,
+              "Trend #B A": 3,
+              "q": 4,
+              "q A": 4,
+              "start_per_1000": 5,
+              "start_per_1000 A": 5,
+              "end_per_1000": 6,
+              "end_per_1000 A": 6,
+              "mentions": 7,
+              "mentions A": 7,
+              "spike_share": 8,
+              "spike_share A": 8,
+              "peak": 9,
+              "peak A": 9,
+              "kind": 10,
+              "kind A": 10,
+              "explore": 11,
+              "explore A": 11,
+              "id": 12,
+              "id A": 12
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Mainstreaming: common already, still growing",
+      "description": "Terms above 1 in 1,000 at the start of the window that kept growing significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'mainstreaming'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT toDateTime(window_start, 'UTC') + toIntervalWeek(i - 1) AS time,\n       concat(scope, ' · ', term) AS id, weekly[i] AS per_1000\nFROM long_term_trends FINAL\nARRAY JOIN arrayEnumerate(weekly) AS i\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'mainstreaming'\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "scope"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "q"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "sci"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "start_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "end_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "spike_share"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "peak"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "weekly share"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "per_month",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "id",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "scope A": "scope",
+              "term A": "term",
+              "per_month A": "per_month",
+              "Trend #B A": "Trend #B",
+              "q A": "q",
+              "start_per_1000 A": "start_per_1000",
+              "end_per_1000 A": "end_per_1000",
+              "mentions A": "mentions",
+              "spike_share A": "spike_share",
+              "peak A": "peak",
+              "kind A": "kind",
+              "explore A": "explore",
+              "id A": "id",
+              "Trend #B": "weekly share"
+            },
+            "indexByName": {
+              "scope": 0,
+              "scope A": 0,
+              "term": 1,
+              "term A": 1,
+              "per_month": 2,
+              "per_month A": 2,
+              "Trend #B": 3,
+              "Trend #B A": 3,
+              "q": 4,
+              "q A": 4,
+              "start_per_1000": 5,
+              "start_per_1000 A": 5,
+              "end_per_1000": 6,
+              "end_per_1000 A": 6,
+              "mentions": 7,
+              "mentions A": 7,
+              "spike_share": 8,
+              "spike_share A": 8,
+              "peak": 9,
+              "peak A": 9,
+              "kind": 10,
+              "kind A": 10,
+              "explore": 11,
+              "explore A": 11,
+              "id": 12,
+              "id A": 12
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Fading",
+      "description": "Terms whose share shrank significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'fading'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT toDateTime(window_start, 'UTC') + toIntervalWeek(i - 1) AS time,\n       concat(scope, ' · ', term) AS id, weekly[i] AS per_1000\nFROM long_term_trends FINAL\nARRAY JOIN arrayEnumerate(weekly) AS i\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'fading'\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "scope"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "q"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "sci"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "start_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "end_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "spike_share"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "peak"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "weekly share"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "per_month",
+            "desc": false
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "id",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "scope A": "scope",
+              "term A": "term",
+              "per_month A": "per_month",
+              "Trend #B A": "Trend #B",
+              "q A": "q",
+              "start_per_1000 A": "start_per_1000",
+              "end_per_1000 A": "end_per_1000",
+              "mentions A": "mentions",
+              "spike_share A": "spike_share",
+              "peak A": "peak",
+              "kind A": "kind",
+              "explore A": "explore",
+              "id A": "id",
+              "Trend #B": "weekly share"
+            },
+            "indexByName": {
+              "scope": 0,
+              "scope A": 0,
+              "term": 1,
+              "term A": 1,
+              "per_month": 2,
+              "per_month A": 2,
+              "Trend #B": 3,
+              "Trend #B A": 3,
+              "q": 4,
+              "q A": 4,
+              "start_per_1000": 5,
+              "start_per_1000 A": 5,
+              "end_per_1000": 6,
+              "end_per_1000 A": 6,
+              "mentions": 7,
+              "mentions A": 7,
+              "spike_share": 8,
+              "spike_share A": 8,
+              "peak": 9,
+              "peak A": 9,
+              "kind": 10,
+              "kind A": 10,
+              "explore": 11,
+              "explore A": 11,
+              "id": 12,
+              "id A": 12
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "One-offs: the change is one event, not a trend",
+      "description": "Terms whose change between the first and second half of the window comes mostly from one or two weeks far above the rest (spike_share at least 0.5, peak at least 3 times the median week). Sorted by that change. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'one-off'\nORDER BY abs(log(change)) DESC\nLIMIT 100",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT toDateTime(window_start, 'UTC') + toIntervalWeek(i - 1) AS time,\n       concat(scope, ' · ', term) AS id, weekly[i] AS per_1000\nFROM long_term_trends FINAL\nARRAY JOIN arrayEnumerate(weekly) AS i\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'one-off'\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "scope"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_month"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "q"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "sci"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "start_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "end_per_1000"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "spike_share"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "peak"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "weekly share"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "per_month",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "id",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "scope A": "scope",
+              "term A": "term",
+              "per_month A": "per_month",
+              "Trend #B A": "Trend #B",
+              "q A": "q",
+              "start_per_1000 A": "start_per_1000",
+              "end_per_1000 A": "end_per_1000",
+              "mentions A": "mentions",
+              "spike_share A": "spike_share",
+              "peak A": "peak",
+              "kind A": "kind",
+              "explore A": "explore",
+              "id A": "id",
+              "Trend #B": "weekly share"
+            },
+            "indexByName": {
+              "scope": 0,
+              "scope A": 0,
+              "term": 1,
+              "term A": 1,
+              "per_month": 2,
+              "per_month A": 2,
+              "Trend #B": 3,
+              "Trend #B A": 3,
+              "q": 4,
+              "q A": 4,
+              "start_per_1000": 5,
+              "start_per_1000 A": 5,
+              "end_per_1000": 6,
+              "end_per_1000 A": 6,
+              "mentions": 7,
+              "mentions A": 7,
+              "spike_share": 8,
+              "spike_share A": 8,
+              "peak": 9,
+              "peak A": 9,
+              "kind": 10,
+              "kind A": 10,
+              "explore": 11,
+              "explore A": 11,
+              "id": 12,
+              "id A": 12
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "The strongest trends, weekly share (per 1,000 comments and posts)",
+      "description": "The 8 fastest growing or fading terms in the selected scopes, as analyzed: weekly, a group's share the average of its subreddits'.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT toDateTime(window_start, 'UTC') + toIntervalWeek(i - 1) AS time,\n       concat(scope, ' · ', term) AS trend, weekly[i] AS per_1000\nFROM long_term_trends FINAL\nARRAY JOIN arrayEnumerate(weekly) AS i\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category IN ('emerging', 'mainstreaming', 'fading')\n  AND (concat(scope, ' · ', term)) IN (\n      SELECT concat(scope, ' · ', term) FROM long_term_trends FINAL\n      WHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category IN ('emerging', 'mainstreaming', 'fading')\n      ORDER BY abs(log(growth)) DESC\n      LIMIT 8\n  )\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.trend}",
+          "custom": {
+            "spanNulls": true,
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

@@ -169,6 +169,48 @@ def dashboard(uid, title, description, panels, variables, time_from, refresh="")
     }
 
 
+# The term explorer's buckets: auto (Grafana's interval), hour, day or week (ISO weeks,
+# Monday to Sunday UTC). Days and weeks come from term_daily, which is kept forever,
+# hours from term_hourly (180 days).
+DAILY = "${bucket:sqlstring} IN ('day', 'week')"
+HOUR_BUCKET = "if(${bucket:sqlstring} = 'hour', hour, $__timeInterval(hour))"
+DAY_BUCKET = (
+    "if(${bucket:sqlstring} = 'week', toDateTime(toMonday(day), 'UTC'), toDateTime(day, 'UTC'))"
+)
+TOTAL_BUCKET = (
+    "multiIf(${bucket:sqlstring} = 'week', toDateTime(toMonday(hour), 'UTC'), "
+    "${bucket:sqlstring} = 'day', toStartOfDay(hour), "
+    "${bucket:sqlstring} = 'hour', hour, $__timeInterval(hour))"
+)
+# daily buckets count whole days, the comments in them too
+DAYS = "day >= toDate($__fromTime) AND day <= toDate($__toTime)"
+HOURS = (
+    f"if({DAILY}, hour >= toStartOfDay($__fromTime) "
+    "AND hour < toStartOfDay($__toTime) + INTERVAL 1 DAY, $__timeFilter(hour))"
+)
+
+
+def term_rows(columns: str, hourly: str, daily: str, group_by: str) -> str:
+    """The selected terms' rows in the selected bucket, from term_hourly or term_daily."""
+    return f"""
+    SELECT {columns.format(bucket=hourly)}
+    FROM term_hourly
+    WHERE NOT {DAILY} AND $__timeFilter(hour) AND {TERMS} AND {SCOPE}
+    GROUP BY {group_by}
+    UNION ALL
+    SELECT {columns.format(bucket=daily)}
+    FROM term_daily
+    WHERE {DAILY} AND {DAYS} AND {TERMS} AND {SCOPE}
+    GROUP BY {group_by}"""
+
+
+MENTIONS_PER_SUBREDDIT = term_rows(
+    "{bucket} AS time, subreddit, term, sum(docs) AS docs",
+    HOUR_BUCKET,
+    DAY_BUCKET,
+    "time, subreddit, term",
+)
+
 terms_dashboard = dashboard(
     "wgra-terms",
     "Term explorer",
@@ -178,19 +220,24 @@ terms_dashboard = dashboard(
             "timeseries",
             "Share of comments and posts mentioning the term (per 1,000)",
             f"""
-SELECT t.time AS time, t.term AS term, 1000 * t.docs / s.docs AS per_1000
+WITH totals AS (
+    SELECT {TOTAL_BUCKET} AS time, subreddit, sum(docs) AS n
+    FROM scope_hourly
+    WHERE {HOURS} AND {SCOPE}
+    GROUP BY time, subreddit
+)
+SELECT t.time AS time, t.term AS term,
+       if(${{rate:sqlstring}} = 'macro', 1000 * t.share_sum / s.members, 1000 * t.docs / s.n)
+           AS per_1000
 FROM (
-    SELECT $__timeInterval(hour) AS time, term, sum(docs) AS docs
-    FROM term_hourly
-    WHERE $__timeFilter(hour) AND {TERMS} AND {SCOPE}
+    SELECT time, term, sum(c.docs) AS docs, sum(c.docs / totals.n) AS share_sum
+    FROM ({MENTIONS_PER_SUBREDDIT}
+    ) AS c
+    INNER JOIN totals USING (time, subreddit)
     GROUP BY time, term
 ) AS t
-INNER JOIN (
-    SELECT $__timeInterval(hour) AS time, sum(docs) AS docs
-    FROM scope_hourly
-    WHERE $__timeFilter(hour) AND {SCOPE}
-    GROUP BY time
-) AS s USING time
+INNER JOIN (SELECT time, sum(n) AS n, count() AS members FROM totals GROUP BY time) AS s
+    USING time
 ORDER BY time
 """,
             0,
@@ -201,7 +248,11 @@ ORDER BY time
                 "Comments and posts that contain the term, per 1,000 comments and posts in the "
                 "selected subreddits. Dividing by the total removes the daily and weekly activity "
                 "swings, so the line shows the share of the conversation. Separate several terms "
-                "with commas."
+                "with commas. Bucket: week sums whole ISO weeks (Monday to Sunday, UTC), as the "
+                "long-term trends do; days and weeks reach back further than hours (180 days). "
+                "Group rate: pooled divides all mentions by all comments and posts; macro "
+                "averages each subreddit's share, so a big subreddit doesn't drown out the "
+                "small ones (the long-term trends of groups use it)."
             ),
             interval="1h",
             series_label="term",
@@ -210,9 +261,9 @@ ORDER BY time
             "timeseries",
             "Mentions",
             f"""
-SELECT $__timeInterval(hour) AS time, term, sum(docs) AS mentions
-FROM term_hourly
-WHERE $__timeFilter(hour) AND {TERMS} AND {SCOPE}
+SELECT time, term, sum(docs) AS mentions
+FROM ({MENTIONS_PER_SUBREDDIT}
+)
 GROUP BY time, term
 ORDER BY time
 """,
@@ -229,10 +280,15 @@ ORDER BY time
             "timeseries",
             "Distinct authors",
             f"""
-SELECT $__timeInterval(hour) AS time, term, uniqCombinedMerge(12)(authors) AS authors
-FROM term_hourly
-WHERE $__timeFilter(hour) AND {TERMS} AND {SCOPE}
-GROUP BY time, term
+SELECT * FROM ({
+                term_rows(
+                    "{bucket} AS time, term, uniqCombinedMerge(12)(authors) AS authors",
+                    HOUR_BUCKET,
+                    DAY_BUCKET,
+                    "time, term",
+                )
+            }
+)
 ORDER BY time
 """,
             12,
@@ -253,14 +309,22 @@ SELECT t.term AS term, t.subreddit AS subreddit, t.docs AS mentions, t.authors A
        round(1000 * t.docs / s.docs, 2) AS per_1000
 FROM (
     SELECT term, subreddit, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors
-    FROM term_hourly
-    WHERE $__timeFilter(hour) AND {TERMS} AND {SCOPE}
+    FROM ({
+                term_rows(
+                    "term, subreddit, sum(docs) AS docs, uniqCombinedMergeState(12)(authors) "
+                    "AS authors",
+                    "",
+                    "",
+                    "term, subreddit",
+                )
+            }
+    )
     GROUP BY term, subreddit
 ) AS t
 INNER JOIN (
     SELECT subreddit, sum(docs) AS docs
     FROM scope_hourly
-    WHERE $__timeFilter(hour) AND {SCOPE}
+    WHERE {HOURS} AND {SCOPE}
     GROUP BY subreddit
 ) AS s USING subreddit
 ORDER BY mentions DESC
@@ -334,6 +398,8 @@ LIMIT 100
             "current": {"text": "ai, claude, gpt", "value": "ai, claude, gpt"},
         },
         *scope_variables(),
+        custom_variable("bucket", "Bucket", ["auto", "hour", "day", "week"], default="auto"),
+        custom_variable("rate", "Group rate", ["pooled", "macro"], default="pooled"),
     ],
     "now-2d",
 )
@@ -957,9 +1023,337 @@ LIMIT 200
 )
 
 
+# What the long-term detector found (once a day, wgra analyze): per scope and window
+# (13, 26, 52 weeks), the terms growing or fading steadily, of the latest analyzed week.
+LATEST_WEEK = (
+    "(SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest"
+)
+LONG_TERM_ROWS = (
+    "week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) "
+    "AND kind IN (${kind:singlequote})"
+)
+# a trend's row: scopes can share terms (a group and its subreddits)
+TREND_ID = "concat(scope, ' · ', term)"
+
+
+def weekly_explore_url() -> str:
+    """SQL for the term explorer url of a long-term trend: weekly, over its window."""
+    return (
+        "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
+        "if(startsWith(scope, 'r/'), "
+        "concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), "
+        "concat('&var-group=', encodeURLFormComponent(scope))), "
+        "'&var-bucket=week&var-rate=macro&from=', "
+        "toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now')"
+    )
+
+
+def long_term_table(category: str, title: str, y: int, description: str) -> dict:
+    """The latest trends of one category, with each one's weekly share as a sparkline."""
+    order = "change" if category == "one-off" else "growth"
+    table = panel(
+        "table",
+        title,
+        f"""
+WITH {LATEST_WEEK}
+SELECT
+    {TREND_ID} AS id,
+    scope,
+    term,
+    round(100 * (growth - 1), 1) AS per_month,
+    q_value AS q,
+    round(start_share, 3) AS start_per_1000,
+    round(end_share, 3) AS end_per_1000,
+    mentions,
+    round(spike_share, 2) AS spike_share,
+    round(peak, 1) AS peak,
+    kind,
+    {weekly_explore_url()} AS explore
+FROM long_term_trends FINAL
+WHERE {LONG_TERM_ROWS} AND category = '{category}'
+ORDER BY abs(log({order})) DESC
+LIMIT 100
+""",
+        0,
+        y,
+        24,
+        10,
+        table=True,
+        description=description,
+        fieldConfig={
+            "defaults": {},
+            "overrides": [
+                link_to_explorer("term"),
+                hidden("explore"),
+                hidden("id"),
+                width("scope", 170),
+                width("per_month", 100),
+                {
+                    "matcher": {"id": "byName", "options": "per_month"},
+                    "properties": [{"id": "unit", "value": "percent"}],
+                },
+                {
+                    "matcher": {"id": "byName", "options": "q"},
+                    "properties": [
+                        {"id": "unit", "value": "sci"},
+                        {"id": "decimals", "value": 1},
+                        {"id": "custom.width", "value": 90},
+                    ],
+                },
+                width("start_per_1000", 120),
+                width("end_per_1000", 120),
+                width("mentions", 90),
+                width("spike_share", 100),
+                width("peak", 70),
+                width("kind", 70),
+            ],
+        },
+    )
+    # each trend's weekly share over its window, from the stored series
+    table["targets"].append(
+        {
+            **target(
+                f"""
+WITH {LATEST_WEEK}
+SELECT toDateTime(window_start, 'UTC') + toIntervalWeek(i - 1) AS time,
+       {TREND_ID} AS id, weekly[i] AS per_1000
+FROM long_term_trends FINAL
+ARRAY JOIN arrayEnumerate(weekly) AS i
+WHERE {LONG_TERM_ROWS} AND category = '{category}'
+ORDER BY time
+"""
+            ),
+            "refId": "B",
+        }
+    )
+    columns = [
+        "scope",
+        "term",
+        "per_month",
+        "Trend #B",
+        "q",
+        "start_per_1000",
+        "end_per_1000",
+        "mentions",
+        "spike_share",
+        "peak",
+        "kind",
+        "explore",
+        "id",
+    ]
+    table["transformations"] = [
+        {"id": "timeSeriesTable", "options": {}},
+        {"id": "joinByField", "options": {"byField": "id", "mode": "outerTabular"}},
+        {
+            "id": "organize",
+            "options": {
+                "renameByName": {
+                    **{f"{column} A": column for column in columns},
+                    "Trend #B": "weekly share",
+                },
+                "indexByName": {
+                    name: index
+                    for index, column in enumerate(columns)
+                    for name in (column, f"{column} A")
+                },
+            },
+        },
+    ]
+    table["fieldConfig"]["overrides"].append(
+        {
+            "matcher": {"id": "byName", "options": "weekly share"},
+            "properties": [
+                {"id": "custom.cellOptions", "value": {"type": "sparkline", "hideValue": True}},
+                {"id": "custom.width", "value": 200},
+            ],
+        }
+    )
+    descending = category != "fading"
+    table["options"] = {"sortBy": [{"displayName": "per_month", "desc": descending}]}
+    return table
+
+
+LONG_TERM_COLUMNS_HELP = (
+    "per_month: growth per month (Theil–Sen slope of the log weekly share, robust to "
+    "one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the "
+    "run tested, at most 0.05. start/end_per_1000: the trend line at the first and last "
+    "week of the window. spike_share: how much of the change comes from the two highest "
+    "weeks. peak: the highest week, times the median week. A group's share is the average "
+    "of its subreddits' shares. Click a term to open it in the term explorer, weekly."
+)
+
+long_term_dashboard = dashboard(
+    "wgra-long-term",
+    "Long-term trends",
+    "Terms growing or fading steadily over 13, 26 or 52 weeks, found once a day by wgra analyze.",
+    [
+        panel(
+            "stat",
+            "Last run",
+            "SELECT toUnixTimestamp(max(detected_at)) * 1000 FROM long_term_trends "
+            "WHERE horizon = ${horizon:sqlstring}",
+            0,
+            0,
+            6,
+            4,
+            table=True,
+            unit="dateTimeFromNow",
+            description="When the latest stored results were found. The detector runs every "
+            "day after 00:30 UTC; the results only change when a week has completed.",
+        ),
+        panel(
+            "stat",
+            "Weeks analyzed up to",
+            f"WITH {LATEST_WEEK} SELECT formatDateTime(latest - 1, '%a %e %b %Y')",
+            6,
+            0,
+            6,
+            4,
+            table=True,
+            description="The last day of the last complete week analyzed (weeks run Monday to "
+            "Sunday, UTC). The current week isn't complete yet and is left out.",
+            options={
+                "colorMode": "none",
+                "graphMode": "none",
+                "textMode": "value",
+                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "/.*/", "values": False},
+            },
+        ),
+        panel(
+            "stat",
+            "Weeks of history",
+            """
+SELECT greatest(max(intDiv(toMonday(today()) - first_week, 7)), 0)
+FROM (
+    SELECT if(toDayOfWeek(min(hour)) = 1, toMonday(min(hour)), toMonday(min(hour)) + 7)
+           AS first_week
+    FROM scope_hourly
+    WHERE source = 'comment' AND subreddit IN (
+        SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}
+    )
+    GROUP BY subreddit
+)
+""",
+            12,
+            0,
+            6,
+            4,
+            table=True,
+            description="Complete weeks of data in the group's subreddits. A window runs once "
+            "it has that many weeks: 13, 26 or 52. Until then there's nothing here.",
+        ),
+        panel(
+            "stat",
+            "Trends",
+            f"""
+WITH {LATEST_WEEK}
+SELECT countIf(category = 'emerging') AS emerging,
+       countIf(category = 'mainstreaming') AS mainstreaming,
+       countIf(category = 'fading') AS fading,
+       countIf(category = 'one-off') AS `one-off`
+FROM long_term_trends FINAL
+WHERE {LONG_TERM_ROWS}
+""",
+            18,
+            0,
+            6,
+            4,
+            table=True,
+            description="Stored trends in the selected scopes and window, at most 25 per scope "
+            "and category.",
+        ),
+        long_term_table(
+            "emerging",
+            "Emerging: rare at the start of the window, growing steadily",
+            4,
+            "Terms mentioned by at most 1 in 1,000 comments and posts at the start of the window "
+            "that grew significantly and steadily. " + LONG_TERM_COLUMNS_HELP,
+        ),
+        long_term_table(
+            "mainstreaming",
+            "Mainstreaming: common already, still growing",
+            14,
+            "Terms above 1 in 1,000 at the start of the window that kept growing significantly "
+            "and steadily. " + LONG_TERM_COLUMNS_HELP,
+        ),
+        long_term_table(
+            "fading",
+            "Fading",
+            24,
+            "Terms whose share shrank significantly and steadily. " + LONG_TERM_COLUMNS_HELP,
+        ),
+        long_term_table(
+            "one-off",
+            "One-offs: the change is one event, not a trend",
+            34,
+            "Terms whose change between the first and second half of the window comes mostly "
+            "from one or two weeks far above the rest (spike_share at least 0.5, peak at least "
+            "3 times the median week). Sorted by that change. " + LONG_TERM_COLUMNS_HELP,
+        ),
+        panel(
+            "timeseries",
+            "The strongest trends, weekly share (per 1,000 comments and posts)",
+            f"""
+WITH {LATEST_WEEK}
+SELECT toDateTime(window_start, 'UTC') + toIntervalWeek(i - 1) AS time,
+       {TREND_ID} AS trend, weekly[i] AS per_1000
+FROM long_term_trends FINAL
+ARRAY JOIN arrayEnumerate(weekly) AS i
+WHERE {LONG_TERM_ROWS} AND category IN ('emerging', 'mainstreaming', 'fading')
+  AND ({TREND_ID}) IN (
+      SELECT {TREND_ID} FROM long_term_trends FINAL
+      WHERE {LONG_TERM_ROWS} AND category IN ('emerging', 'mainstreaming', 'fading')
+      ORDER BY abs(log(growth)) DESC
+      LIMIT 8
+  )
+ORDER BY time
+""",
+            0,
+            44,
+            24,
+            10,
+            description="The 8 fastest growing or fading terms in the selected scopes, as "
+            "analyzed: weekly, a group's share the average of its subreddits'.",
+            series_label="trend",
+        ),
+    ],
+    [
+        query_variable(
+            "group",
+            "Group",
+            "SELECT DISTINCT group_name FROM subreddit_groups "
+            "ORDER BY group_name = 'tracked' DESC, group_name",
+            default="tracked",
+        ),
+        query_variable(
+            "scope",
+            "Scopes",
+            "SELECT scope FROM ("
+            "SELECT ${group:sqlstring} AS scope, 0 AS position "
+            "UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups "
+            "WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+            multi=True,
+            include_all=True,
+            all_value=None,
+        ),
+        custom_variable("horizon", "Window", ["13w", "26w", "52w"], default="13w"),
+        custom_variable(
+            "kind",
+            "Kind",
+            ["word", "phrase", "domain", "subreddit"],
+            default=["word", "phrase", "domain", "subreddit"],
+            multi=True,
+        ),
+    ],
+    "now-1y",
+    refresh="1h",
+)
+
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, board in [
     ("trending", trending_dashboard),
+    ("long-term", long_term_dashboard),
     ("term-explorer", terms_dashboard),
     ("rising", rising_dashboard),
     ("ingestion", ingestion_dashboard),

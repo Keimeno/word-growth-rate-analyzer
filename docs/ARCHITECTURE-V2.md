@@ -1,6 +1,6 @@
 # WGRA v2: Architecture and Plan
 
-Status: phases 1 and 2 built, collecting history · October 2026
+Status: phases 1, 2 and 4 built, collecting history · October 2026
 
 ## 1. What the system is for
 
@@ -142,6 +142,7 @@ The schema as built is in
 | `polls` | MergeTree | (feed, ts) | 90 days | Every request: ingestion health and coverage |
 | `subreddit_groups` | MergeTree | (group, subreddit) | rewritten on start | The groups from `config.yaml`, for dashboards and queries |
 | `trends` | ReplacingMergeTree | (horizon, scope, term, detected_at) | 90 days, alerts forever | Detector output, alert state |
+| `long_term_trends` | ReplacingMergeTree | (horizon, scope, term, week) | forever | Long-term detector output, one set per week |
 | `notifications` | MergeTree | (kind, sent_at) | forever | Every message sent to ntfy; makes the daily digest go out once |
 
 Each term row carries `occurrences` (sum), `docs` (number of comments
@@ -176,21 +177,26 @@ and a plain loop that runs on the clock (:00, :15, :30, :45):
 
 * every 15 min: short-term burst scoring for all scopes → `trends` → alerts, and
   once a day the digests (built, phase 2)
-* daily: long-term scoring on weekly series → `trends` → weekly report on Mondays
-  (phase 4)
+* daily after 00:30 UTC: long-term scoring on weekly series → `long_term_trends`,
+  and a weekly report per group on Mondays (built, phase 4)
 * hourly: LLM explanation for newly alerted trends (phase 3)
 
 ### 3.4 Grafana
 
 Grafana is provisioned from files in the repo, using the official ClickHouse
-datasource. There are three dashboards, and none of them need custom
-front-end code:
+datasource. None of the dashboards need custom front-end code:
 
 1. **Trending now:** per scope or group, a top-N table with score, ratio,
    authors and a sparkline, linking to the explorer.
-2. **Term explorer:** pick terms and scopes, see the relative-frequency time
-   series with an hourly/daily/weekly toggle, plus example comments.
-3. **Ingestion health:** requests/min vs budget, items/min per stream,
+2. **Long-term trends** (phase 4): per group and its subreddits, the emerging,
+   mainstreaming, fading and one-off terms of the latest week for a 13-, 26- or
+   52-week window, with growth per month, q-value, start and end share, spike
+   share and the weekly share as a sparkline, linking to the explorer.
+3. **Term explorer:** pick terms and scopes, see the relative-frequency time
+   series with an auto/hourly/daily/weekly toggle (days and weeks from
+   `term_daily`, so beyond the 180 days of `term_hourly`) and a pooled/macro
+   group rate toggle, plus example comments.
+4. **Ingestion health:** requests/min vs budget, items/min per stream,
    coverage, gaps, error rate. A Grafana alert sends to ntfy when ingestion
    stalls.
 
@@ -218,6 +224,12 @@ ntfy behind the same reverse proxy as Grafana (`NTFY_BASE_URL`), or point
 `NTFY_URL` at the public ntfy.sh with a long random topic. iOS needs
 `NTFY_UPSTREAM_BASE_URL=https://ntfy.sh` for instant delivery, which is free
 and only passes message IDs.
+
+The weekly report (phase 4) goes out once per group on Mondays at 08:00 in
+`notify.timezone`: the 5 fastest emerging, mainstreaming and fading terms of the
+latest week in the group and its subreddits, each term once at its strongest,
+linking to the explorer's weekly view and to the Long-term trends dashboard.
+Nothing is sent while there are no results (less than 13 weeks of history).
 
 ### 3.6 Cost: free apart from the server
 
@@ -330,26 +342,73 @@ Three changes came out of testing it:
 
 ### 4.3 Long term: sustained trends
 
-* Aggregate to **weekly** rates. That removes weekday effects and smooths
-  noise.
-* For every (scope, term) above a volume floor (for example 20 docs/week on
-  average), take the last 13, 26 and 52 weeks of `log(rate)` and compute:
-  * **Theil–Sen slope**, which is robust to one-off spikes, converted to a
-    growth factor per month: `exp(slope × 4.35)`.
-  * **Mann–Kendall** test p-value for a monotonic trend, with
-    **Benjamini–Hochberg** correction, because you're testing tens of
-    thousands of terms at once.
-  * **Spike share:** how much of the change comes from the top 1–2 weeks.
-    High spike share means "one event", not "trend".
-* Classify each term as `emerging` (low base, consistent growth),
-  `mainstreaming` (high base, still growing), `fading`, `one-off` or `flat`.
-* For speed, do a first pass in SQL (`simpleLinearRegression` over weekly
-  log rates for every term) and then run the robust statistics in Python on
-  the top few thousand candidates only.
-* **History is the bottleneck.** Long-term results need about 8–12 weeks of
-  data. Backfilling from historical dumps would shorten that, but it's
-  legally grey (§7), so plan around collecting your own history
-  (Phase 4).
+As built ([`v2/src/wgra/detect/long_term.py`](../v2/src/wgra/detect/long_term.py)
+for the queries and the run,
+[`trend_stats.py`](../v2/src/wgra/detect/trend_stats.py) for the statistics), once
+a day after 00:30 UTC in `wgra analyze`, or with `wgra long-term --once [--as-of DATE]`:
+
+* **Weekly shares.** ISO weeks, Monday to Sunday UTC. The current, partial week is
+  left out, so the results change on Mondays and the other daily runs of a week
+  repeat them (rows are keyed by the week, a run replaces its week's rows for the
+  scopes it analyzed). Share = comments and posts mentioning the term in the week
+  divided by all comments and posts (`scope_hourly`). Weekly shares are computed
+  at query time from `term_daily` rather than kept in a weekly table: `term_daily`
+  is kept forever anyway, a stored copy would have to be backfilled and kept in
+  sync, and both group rates stay available. The weekly shares of every stored
+  trend are kept with it (the dashboard's sparklines).
+* **Windows of 13, 26 and 52 weeks**, each run once the scope has that many
+  complete weeks of history, otherwise reported as "insufficient history: N of 13
+  weeks". History counts from a subreddit's first **comment**: the first poll of a
+  post listing reaches back hours or days and would make a week look covered.
+* **Volume floor:** at least 20 mentions a week on average over the window,
+  pooled over a group's subreddits.
+* **First pass in ClickHouse** (Appendix C) for every term above the floor:
+  `simpleLinearRegression` of the log share over the week index, with 0.5
+  pseudo-mentions a week so weeks without a mention have a finite log. The
+  candidates: growing or shrinking by at least 5% a month by least squares, the
+  100 with the largest |t| per scope and window.
+* **Robust statistics in Python**, for the candidates:
+  * Theil–Sen slope of the log share, as growth per month `exp(slope × 4.35)`.
+    On the test history, a one-week burst at 20 times the usual share makes least
+    squares report +34% a month and Theil–Sen +2%.
+  * Mann–Kendall two-sided p-value (normal approximation with tie and continuity
+    corrections), on the shares: weeks without a mention are ties.
+  * **Benjamini–Hochberg over every term the run tested**: all terms above the
+    floor in all scopes and windows, the ones that weren't candidates counted with
+    p = 1. Correcting over the candidates alone found 105 "trends" in two
+    subreddits of pure noise, because the candidates are the most extreme of
+    thousands. Counting all found none among 2 million terms of noise. The price:
+    with 13 weekly points the smallest possible Mann–Kendall p is 2.6·10⁻⁶, so a
+    13-week trend has to be close to perfectly monotonic, unless the same run finds
+    many other trends (BH's threshold grows with the number of discoveries).
+  * **Spike share:** the change Δ = mean log share of the second half of the
+    window minus the first half (the middle week of 13 in neither), and Δ' the same
+    without the two highest weeks; spike share = 1 − Δ'/Δ, clipped to [0, 1]. A
+    steady trend scores 1/7 over 13 weeks and 1/26 over 52, a burst that fades
+    again close to 1, a level that steps up and stays 0.25.
+  * **Peak:** the highest week's share divided by the median week's.
+* **Classification** (thresholds in the `long_term:` section of `config.yaml`):
+
+  | Category | Rule (defaults) |
+  | --- | --- |
+  | one-off | spike share ≥ 0.5, peak ≥ 3, and a change of at least 5% a month: a significant trend, or the half-to-half change. Checked first. Without the peak condition, the noise of terms near the floor produced one-offs. |
+  | emerging | q ≤ 0.05, Theil–Sen growth ≥ +5% a month, trend line at the start of the window ≤ 1 per 1,000 comments and posts |
+  | mainstreaming | the same, starting above 1 per 1,000 |
+  | fading | q ≤ 0.05, growth ≤ −4.8% a month (1/1.05) |
+  | flat | everything else, not stored |
+
+  Stored: at most 25 per scope, window and category, the fastest growing or
+  fading first (one-offs by their change).
+* **Storage: a table of its own**, `long_term_trends`
+  ([`003_long_term_trends.sql`](../v2/src/wgra/migrations/003_long_term_trends.sql)),
+  not more horizons in `trends`. The rows share no statistics with burst rows
+  (growth, q, spike share and a weekly series instead of z, ratio, prior and
+  breadth). They're kept forever instead of 90 days: at most 13,500 rows a week, and
+  what was emerging when is the point. And phase 2's queries over `trends` (the
+  digest, the alert cooldown, Trending now) don't tell horizons apart. It follows
+  `trends` otherwise: the same scope names and columns where they mean the same,
+  `horizon` (13w, 26w, 52w), `rank`, ReplacingMergeTree, created by the
+  ingester or the analyzer, whichever starts first.
 
 ### 4.4 Scoping by subreddit and topic
 
@@ -367,7 +426,21 @@ background: [all]           # sampled, used for priors and "distinctive terms"
 
 * **Group rate:** the macro-average of the member subs' rates by default, so
   r/technology doesn't drown out r/hardware. The pooled rate is available as
-  a toggle.
+  a toggle. As built (phase 4) for long-term trends and the term explorer:
+  * a group's weekly share is the average of its subreddits' shares, over the
+    subreddits with comments that week; `long_term.group_rate: pooled` divides all
+    mentions by all comments and posts instead, and so does the explorer's
+    "Group rate: pooled" (its default, like before)
+  * a group is analyzed over the subreddits whose history covers the window, if
+    at least half of them do. A subreddit added to a group joins the average once
+    it has the history; joining at once would shift the average and make its
+    vocabulary look like it emerged.
+  * the pseudo-mentions are on the pooled scale, 0.5 / all comments of the week:
+    0.5 per member subreddit would swamp the small subreddits' shares.
+  * on the test history: a term at a constant share in a big subreddit and growing
+    fourfold in one 25 times smaller is mainstreaming in the group at +9% a month
+    with the macro average, and flat pooled.
+  * short-term burst scoring still pools a group's counts.
 * **Distinctive vocabulary:** run the same log-odds scoring with *group vs.
   background* instead of *now vs. before*. You get the terms that make a
   community what it is, which is useful for picking topic keywords and for
@@ -448,10 +521,12 @@ v2/
     migrations/*.sql
     query.py                # read-only queries for the CLI
     cli.py                  # wgra ingest | analyze | replay | trends | notify-test | migrate | status | term
-    detect/                 # scoring.py, short_term.py, alerts.py, run.py, replay.py (long_term.py: phase 4)
+    detect/                 # scoring.py, short_term.py, alerts.py, run.py, replay.py,
+                            # long_term.py, trend_stats.py
     notify/                 # ntfy.py, messages.py
     explain/                # phase 3: optional LLM explanations
   tests/
+  bench/                    # production-scale synthetic history, long-term benchmark
 ```
 
 ## 6. Delivery plan
@@ -600,18 +675,80 @@ Still open:
 
 ### Phase 3: groups and explanations (about 1 week)
 
-* Group config, macro-averaged group rates, breadth score, distinctive
+* Group config, macro-averaged group rates (built in phase 4 for long-term trends
+  and the term explorer), breadth score (built in phase 2), distinctive
   vocabulary.
 * LLM explanations and story clustering in alerts and on the dashboard.
 
-### Phase 4: long-term detection and backfill (code in about 1 week; useful once history exists)
+### Phase 4: long-term detection (built 2026-10-11, waiting for history)
 
-* Weekly rollups, Theil–Sen, Mann–Kendall, FDR, classification. Monday
-  report per group.
+Built, in `v2/` (see §4.3 and §4.4 for the method as built):
+
+* `long_term_trends`
+  ([`003_long_term_trends.sql`](../v2/src/wgra/migrations/003_long_term_trends.sql)),
+  the detector and its statistics, the `long_term:` section of `config.yaml`.
+* Daily run in `wgra analyze` after 00:30 UTC (`--no-long-term` turns it off). After
+  a restart it runs again at the next tick, so the Monday report never has stale
+  results. `wgra long-term --once [--as-of DATE] [--dry-run]` runs it on demand, as
+  of a past date for replays; without `--once` it's a daily loop of its own.
+  `wgra trends --horizon 13w|26w|52w` shows the stored results, `wgra term --bucket
+  week` weekly counts.
+* Weekly report per group on Mondays at 08:00 (`notify.report_day`, `report_time`,
+  `report_size`) through ntfy.
+* Grafana: the Long-term trends dashboard; the term explorer got the weekly bucket
+  and the pooled/macro group rate. Checked in a throwaway Grafana on demo data.
+* 153 tests (from 107): Theil–Sen, Mann–Kendall and Benjamini–Hochberg against
+  hand-derived reference values and against scipy (a dev dependency only), spike
+  share, peak, classification, config, report message, and end to end in a
+  throwaway ClickHouse database on 53 weeks of synthetic history with Poisson
+  noise: a term emerging (×50), one mainstreaming (×4), one fading (÷4), a flat
+  one, a one-week burst (one-off over 13 and 26 weeks, not a candidate over 52),
+  weekend-only and first-of-the-month terms (seasonal: flat), a growing term
+  below the floor, macro vs pooled group rates, a subreddit with 19 weeks of
+  history, as-of replays, re-runs, the daily schedule and the Monday report.
+
+Measured on 2026-10-11:
+
+* **Live:** `wgra long-term --once` applied migration 003 and reported
+  insufficient history for all 45 scopes and windows (the first complete week of
+  data starts Monday 2026-10-12, so 13-week results from Monday 2027-01-11). Nothing
+  stored.
+* **Production scale, synthetic** (`v2/bench/`): 53 weeks of the 37 subreddits at
+  about 130k comments a day and the r/all sample at 400k a day, with a Zipf-like
+  vocabulary, calibrated to the term rows per hour measured live: 1.03 billion
+  `term_daily` rows, 5.7 GiB. On a ClickHouse limited to 4 CPUs and 8 GB (the
+  planned VPS), one run of all 45 scopes × 3 windows: **262 s, 135 queries,
+  2.0 million terms tested, 7,484 candidates, 0 trends** (the data has none).
+  Median query 0.3 s and 39 MiB, 90th percentile 5.6 s and 301 MiB; a subreddit at
+  most 6 s and 301 MiB. The expensive ones are the big groups over 52 weeks:
+  `tracked` (37 subreddits) 54 s and **750 MiB**, `tech` 33 s and 736 MiB, the
+  sample 10 s and 558 MiB. 7.1 billion rows read in all, mostly from the page
+  cache.
+* What it took to get there, for the next round of tuning: aggregating in the
+  order of `term_daily`'s key (subreddit, term, …) instead of hash tables holding
+  every term of a year; small blocks (8192 rows), because the parts are read side by
+  side (the floor of the biggest subreddit over 52 weeks: 297 → 73 MiB); weekly
+  vectors only for terms above the floor, in a second pass (a 52-week subreddit:
+  1.3 GiB → 285 MiB); building them from one-hot arrays
+  instead of a lambda over (week, count) pairs, which ClickHouse copies for every
+  week; one Float32 sum per term and week for groups (1,017 → 750 MiB). Limiting a
+  query to 2 threads saves another quarter of memory at twice the time.
+
+Still open:
+
+* **Done when:** 13 weeks of history exist (2027-01-11), and in a review of the
+  first reports most emerging and fading terms look real. Tune `min_growth`,
+  `max_q`, `emerging_max_base` and the floor then, with `--as-of` replays.
+* If the daily run gets in the way: `long_term.exclude_scopes: [tracked]` saves
+  about 40% of it (the average over all 37 subreddits is the most expensive and
+  the least specific scope). A weekly rollup table filled once per week would cut
+  the reads further but needs backfilling and care with group membership changes.
+* Distinct authors aren't used yet. A bot posting a term steadily more often
+  would look like a trend; the ingester already drops known bots and copypasta.
 * Optional, private use only: backfill chosen subs from the Arctic Shift
   monthly dumps (available through 2026-08). Process them with DuckDB and
   write `term_daily` rows marked `source = 'backfill'`. Read the caveats in
-  §7 first.
+  §7 first. That would make long-term results available right away.
 
 ### Phase 5: hardening and cutover
 
@@ -711,4 +848,44 @@ WHERE subreddit IN {subreddits} AND <hour in window or reference>
 GROUP BY kind, term;
 -- "in reference" for the 6h horizon: the same hours of the day only.
 -- n_W, n_B and the sample's total come from scope_hourly, one query per run.
+```
+
+## Appendix C: long-term first pass
+
+The query as built is `FIRST_PASS` in
+[`v2/src/wgra/detect/long_term.py`](../v2/src/wgra/detect/long_term.py). Per scope
+and window, in short:
+
+```sql
+WITH
+    above_floor AS (
+        -- a subreddit: its terms with min_total mentions. A group of k subreddits: the
+        -- terms with min_total / k in one of them (a term above the floor in all of them
+        -- together has that much in at least one), then counted exactly in all of them.
+        SELECT kind, term FROM term_daily WHERE <the scope's subreddits, the window>
+        GROUP BY subreddit, term, kind HAVING sum(docs) >= {member_min}
+        ...
+    ),
+    per_member AS (
+        -- the order of term_daily's key: aggregated as the rows stream by
+        SELECT subreddit, kind, term,
+               sumForEach(arrayMap(w -> if(w = <week of day>, docs, 0), range(weeks))) AS by_week
+        FROM term_daily
+        WHERE <the scope's subreddits, the window> AND (kind, term) IN above_floor
+        GROUP BY subreddit, term, kind
+    ),
+    series AS (
+        -- macro: the members' shares summed per week; pooled: their mentions
+        SELECT kind, term, sum(arraySum(by_week)) AS mentions,
+               sumForEach(arrayMap((y, n) -> y / n, by_week, totals)) AS weekly_sum
+        FROM per_member INNER JOIN member_totals USING subreddit
+        GROUP BY kind, term
+    )
+SELECT kind, term, mentions, shares,
+       arrayReduce('simpleLinearRegression', weeks_with_data, log(share + 0.5 / n)).1 AS slope,
+       count() OVER () AS tested
+FROM series
+ORDER BY abs(slope) >= log(min_growth) / 4.35 DESC, abs(t) DESC
+LIMIT {max_candidates}
+SETTINGS optimize_aggregation_in_order = 1, max_block_size = 8192
 ```
