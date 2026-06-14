@@ -1,0 +1,960 @@
+{
+  "uid": "wgra-early-warning",
+  "title": "Early warning",
+  "description": "Which subreddits pick up terms before others, and forecasts of which current bursts will reach other subreddits, groups or all of reddit. Learned from at least 4–6 weeks of history.",
+  "tags": [
+    "wgra"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "5m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "topic",
+        "label": "Topic",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT topic FROM propagation_edges WHERE day = (SELECT max(day) FROM propagation_edges) ORDER BY topic = 'all' DESC, topic",
+        "definition": "SELECT DISTINCT topic FROM propagation_edges WHERE day = (SELECT max(day) FROM propagation_edges) ORDER BY topic = 'all' DESC, topic",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "sort": 0,
+        "current": {
+          "text": "all",
+          "value": "all"
+        }
+      },
+      {
+        "type": "query",
+        "name": "leader",
+        "label": "Leaders",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT leader FROM propagation_edges WHERE day = (SELECT max(day) FROM propagation_edges) ORDER BY leader",
+        "definition": "SELECT DISTINCT leader FROM propagation_edges WHERE day = (SELECT max(day) FROM propagation_edges) ORDER BY leader",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Edges learned",
+      "description": "When wgra analyze last learned the edges. It does once a day, after lead_lag.run_at (01:00 UTC).",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT toUnixTimestamp(max(computed_at)) * 1000 FROM propagation_edges",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Edges",
+      "description": "Leader -> follower pairs that pass the gates in the selected topic: at least 5 events, 3 hits and a q-value of at most 0.05.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() FROM propagation_edges FINAL WHERE day = (SELECT max(day) FROM propagation_edges) AND topic = ${topic:sqlstring}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Events, closed",
+      "description": "Terms that trended somewhere, the unit edges are learned from. An event is closed when its span (3 days before its first trend to 14 days after) is over; only closed events count for base rates.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() AS events, countIf(closed) AS closed FROM lead_lag_events FINAL",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pending forecasts",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() FROM forecasts FINAL WHERE outcome = 'pending'",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Forecasts that came true, 30 days",
+      "description": "Precision of the forecasts resolved in the last 30 days. `wgra replay --forecast` measures it on past data, with recall and calibration.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT if(count() = 0, NULL, countIf(outcome = 'hit') / count()) FROM forecasts FINAL WHERE outcome IN ('hit', 'miss') AND created_at > now() - INTERVAL 30 DAY",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Forecast alerts, 24h",
+      "description": "Forecast alerts are off by default (forecast.alert in config.yaml). They share the daily alert cap with trend alerts.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() FROM notifications WHERE kind = 'forecast' AND ok AND sent_at > now() - INTERVAL 24 HOUR",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Leader -> follower edges",
+      "description": "Learned daily from the events of the last 180 days. lead: median time from the leader's onset (the first hour its last 24h crossed 2x its usual share, z 3) to the follower's, IQR in days. n: the leader's onsets the follower hadn't crossed before, with a known outcome. hit_rate: of those, followed within 7 days. base_rate: the share of all events in which the follower crossed at all. probability: the hit rate shrunk to the base rate by 4 pseudo-events, with its 80% interval. lift: probability / base rate. q: one-sided binomial test of the hits against the base rate, Benjamini–Hochberg over all pairs. '(rest)': a group of the leader's, without the leader's own mentions. Edges need 4–6 weeks of history to mean anything.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 11
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    follower_type AS type,\n    lag_median AS lead,\n    concat(toString(round(lag_q25 / 24, 1)), '–', toString(round(lag_q75 / 24, 1)), 'd')\n        AS lead_iqr,\n    events AS n,\n    hits,\n    hit_rate,\n    base_rate,\n    probability,\n    concat(toString(round(100 * probability_low)), '–',\n           toString(round(100 * probability_high)), '%') AS interval,\n    round(lift, 1) AS lift,\n    q_value AS q,\n    leader_onsets\nFROM propagation_edges FINAL\nWHERE day = (SELECT max(day) FROM propagation_edges) AND topic = ${topic:sqlstring} AND leader IN (${leader:singlequote})\nORDER BY lift DESC\nLIMIT 500",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(lead)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(hit_rate|base_rate|probability)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "q"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "sci"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "leader"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "follower"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "type"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "n"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "hits"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "lift",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "nodeGraph",
+      "title": "Who leads whom",
+      "description": "The edges of the table above as a graph: arrows from leaders to followers, labeled with the median lead in days and the lift. A node's number is the edges it's part of.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT scope AS id, scope AS title, toFloat64(count()) AS mainstat\nFROM (\n    SELECT leader AS scope FROM propagation_edges FINAL WHERE day = (SELECT max(day) FROM propagation_edges) AND topic = ${topic:sqlstring} AND leader IN (${leader:singlequote})\n    UNION ALL\n    SELECT if(without_leader, concat(follower, ' (rest)'), follower) FROM propagation_edges FINAL WHERE day = (SELECT max(day) FROM propagation_edges) AND topic = ${topic:sqlstring} AND leader IN (${leader:singlequote})\n)\nGROUP BY scope",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT concat(leader, ' -> ', if(without_leader, concat(follower, ' (rest)'), follower)) AS id, leader AS source, if(without_leader, concat(follower, ' (rest)'), follower) AS target,\n       concat(toString(round(lag_median / 24, 1)), 'd') AS mainstat,\n       concat('lift ', toString(round(lift, 1))) AS secondarystat\nFROM propagation_edges FINAL\nWHERE day = (SELECT max(day) FROM propagation_edges) AND topic = ${topic:sqlstring} AND leader IN (${leader:singlequote})",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "type": "table",
+      "title": "Recent cascades",
+      "description": "Events of the last 14 days that reached more than one scope, with every scope's onset in the order they crossed (UTC). This is what the edges are learned from. reached: the scopes that crossed.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    term,\n    start AS first_trend,\n    topic,\n    arrayStringConcat(\n        arrayMap(o -> concat(o.1, ' ', formatDateTime(o.3, '%d %b %H:00')),\n                 arraySort(o -> o.3, arrayFilter(o -> o.2 = '', onsets))),\n        ' → ') AS cascade,\n    length(arrayFilter(o -> o.2 = '', onsets)) AS reached,\n    closed\nFROM lead_lag_events FINAL\nWHERE start > now() - INTERVAL 14 DAY AND length(onsets) > 1\nORDER BY start DESC\nLIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "first_trend"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "topic"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "type": "table",
+      "title": "Current forecasts",
+      "description": "A term rising in a leader that the follower hasn't picked up yet: the chance it will within 7 days of the leader's onset (the edge's probability, lowered for the time that already passed), against the follower's base rate, and when it's expected (the leader's onset plus the edge's median lead). Click a term to see it in the leader.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    term,\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    probability AS chance,\n    concat(toString(round(100 * probability_low)), '–',\n           toString(round(100 * probability_high)), '%') AS interval,\n    base_rate,\n    expected_at,\n    due_by,\n    leader_onset,\n    created_at,\n    edge_events AS n,\n    round(lift, 1) AS lift,\n    alert,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(leader, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(leader, 3))), concat('&var-group=', encodeURLFormComponent(leader))), '&from=now-7d&to=now') AS explore\nFROM forecasts FINAL\nWHERE outcome = 'pending'\nORDER BY probability DESC\nLIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(chance|base_rate)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "leader"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "follower"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "type": "table",
+      "title": "Track record, last 30 days",
+      "description": "Resolved forecasts: hit when the follower crossed by the due time, miss otherwise. warning: hours from the forecast to the follower's onset. lag: from the leader's onset to the follower's, against the lag the edge expected.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 14,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    created_at,\n    term,\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    probability AS chance,\n    outcome,\n    dateDiff('hour', created_at, follower_onset) AS warning,\n    dateDiff('hour', leader_onset, follower_onset) AS lag,\n    round(lag_median) AS expected_lag,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(follower, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(follower, 3))), concat('&var-group=', encodeURLFormComponent(follower))), '&from=now-7d&to=now') AS explore\nFROM forecasts FINAL\nWHERE outcome IN ('hit', 'miss') AND created_at > now() - INTERVAL 30 DAY\nORDER BY created_at DESC\nLIMIT 500",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(chance)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(warning|lag|expected_lag)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "created_at"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "type": "table",
+      "title": "Calibration, last 90 days",
+      "description": "Well calibrated forecasts come true about as often as they say. The base rate column is what always forecasting the follower's usual rate would say.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 36,
+        "w": 10,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    toUInt8(floor(least(probability, 0.999) * 5)) AS bin,\n    concat(toString(bin * 20), '–', toString(bin * 20 + 20), '%') AS predicted_bin,\n    count() AS forecasts,\n    avg(probability) AS predicted,\n    countIf(outcome = 'hit') / count() AS came_true,\n    avg(base_rate) AS base_rate\nFROM forecasts FINAL\nWHERE outcome IN ('hit', 'miss') AND created_at > now() - INTERVAL 90 DAY\nGROUP BY bin\nORDER BY bin",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(predicted|came_true|base_rate)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bin"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "type": "timeseries",
+      "title": "Forecasts per day, and how many came true",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 14,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toStartOfDay(created_at) AS time,\n       countIf(outcome = 'hit') AS came_true,\n       countIf(outcome = 'miss') AS missed,\n       countIf(outcome = 'pending') AS pending\nFROM forecasts FINAL\nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "spanNulls": true,
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Reddit vs Wikipedia (optional)",
+      "description": "With wikipedia.enabled: for events whose term names a Wikipedia article, did daily pageviews rise (3x their 28-day median, at least 100) after the term's first onset on reddit? `wgra wikipedia` prints a sign test.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 46,
+        "w": 10,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    count() AS events,\n    countIf(wiki_onset IS NOT NULL) AS with_interest,\n    countIf(lead_days > 0) AS reddit_first,\n    countIf(lead_days = 0) AS same_day,\n    countIf(lead_days < 0) AS wikipedia_first,\n    quantileExactIf(0.5)(lead_days, lead_days IS NOT NULL) AS median_lead_days\nFROM wiki_leads FINAL\nWHERE start > now() - INTERVAL 90 DAY",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ]
+}
