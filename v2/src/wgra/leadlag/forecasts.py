@@ -26,7 +26,7 @@ from wgra.config import ForecastConfig, LeadLagConfig, NotifyConfig
 from wgra.detect.alerts import CAPPED
 from wgra.detect.short_term import as_utc
 from wgra.leadlag.edges import ALL, Edge
-from wgra.leadlag.events import HOUR, Event, event_span, topic_of
+from wgra.leadlag.events import HOUR, Event, event_span
 from wgra.leadlag.stats import given_nothing_yet, remaining_lag, still_to_come
 
 PENDING = "pending"
@@ -102,18 +102,20 @@ class EdgeIndex:
     def leaders(self) -> set[str]:
         return set(self._edges)
 
+    def has(self, leader: str, follower_key: tuple[str, str]) -> bool:
+        """Whether there's an edge from the leader to the follower, in any topic."""
+        return bool(self._edges.get(leader, {}).get(follower_key))
+
     def __len__(self) -> int:
         return sum(len(by_follower) for by_follower in self._edges.values())
 
-    def of(self, leader: str, topic: str) -> list[Edge]:
-        """The leader's edges, the topic's where there is one, else the one over all events."""
-        chosen = []
-        for by_topic in self._edges.get(leader, {}).values():
-            edge = by_topic.get(topic) if topic else None
-            edge = edge or by_topic.get(ALL)
-            if edge is not None:
-                chosen.append(edge)
-        return chosen
+    def of(self, leader: str, topic: str) -> list[list[Edge]]:
+        """The leader's edges per follower, the topic's first if there is one, then the one
+        over all events."""
+        return [
+            [edge for edge in (by_topic.get(topic) if topic else None, by_topic.get(ALL)) if edge]
+            for by_topic in self._edges.get(leader, {}).values()
+        ]
 
 
 def decide(
@@ -131,20 +133,27 @@ def decide(
     known = event.onsets_known(now)
     # a follower crossing in the current hour has started too
     started = {onset.key for onset in event.onsets if onset.at <= now}
-    topic = topic_of(event.scopes_at(now), groups)
+    topic = event.topic(groups, now)
     forecasts = []
     for leader in sorted(set(leaders)):
         onset = known.get((leader, ""))
         if onset is None or onset.at > span.leaders_until or now >= onset.at + max_lag:
             continue
         elapsed = (now - onset.at) / HOUR
-        for edge in edges.of(leader, topic):
-            if edge.lift < forecast.min_lift or edge.follower_key in started:
+        for candidates in edges.of(leader, topic):
+            # the topic's edge if it passes the gates, else the one over all events: within a
+            # topic the follower's base rate can be high enough to keep the lift low
+            passing = [
+                (edge, still, probability)
+                for edge in candidates
+                if edge.lift >= forecast.min_lift and edge.follower_key not in started
+                for still in [still_to_come(edge.lags, elapsed, max_lag / HOUR)]
+                for probability in [given_nothing_yet(edge.probability, still)]
+                if probability >= forecast.min_probability
+            ]
+            if not passing:
                 continue
-            still = still_to_come(edge.lags, elapsed, max_lag / HOUR)
-            probability = given_nothing_yet(edge.probability, still)
-            if probability < forecast.min_probability:
-                continue
+            edge, still, probability = passing[0]
             forecasts.append(
                 Forecast(
                     kind=event.kind,

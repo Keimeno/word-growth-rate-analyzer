@@ -11,10 +11,18 @@ For each ordered pair, over the events of the training period:
   "how often does it pick up a term that trends somewhere"
 * the probability to follow: hits and misses with a prior of `prior_events` events at the
   base rate (stats.posterior), its interval, and lift = probability / base rate
-* a p-value (could the hits come from the base rate?) and a q-value (Benjamini–Hochberg
-  over every pair with at least `min_events`)
+* association: a p-value (could the hits come from the base rate?) and a q-value
+  (Benjamini–Hochberg over every pair with at least `min_events`)
+* direction: reverse, the events where the follower crossed first, at most `max_lag_days`
+  before the leader. Two scopes that pick up the same terms in either order are
+  associated, but neither leads. The leader must come first significantly more often
+  than not: a binomial test of hits against reverse at 1/2, Benjamini–Hochberg over the
+  associated pairs.
 
-An edge is stored when it has `min_events`, `min_hits` and q ≤ `max_q`. Followers: the other
+An edge is stored when it has `min_events` and `min_hits`, the leader was first in at
+least `min_lead_share` of the events where both crossed, and both q-values are at most
+`max_q`, for a topic's edge `max_q` divided by the number of topics: each topic is another
+look at the same data. Followers: the other
 tracked subreddits, the configured groups (without the leader's own counts when it's one of
 their subreddits) and the r/all sample ("sample", reddit-wide). Edges are learned over all
 events (topic "all") and per topic, the group an event trended in most.
@@ -41,7 +49,7 @@ from clickhouse_connect.driver.client import Client
 from wgra.config import SAMPLE_SCOPE, LeadLagConfig
 from wgra.detect.short_term import SUBREDDIT, Scope, as_utc, load_scopes, subreddit_scope
 from wgra.detect.trend_stats import benjamini_hochberg
-from wgra.leadlag.events import HOUR, Event, event_span, topic_of
+from wgra.leadlag.events import HOUR, Event, event_span
 from wgra.leadlag.onsets import SAMPLE, split_scopes
 from wgra.leadlag.stats import binomial_tail, posterior
 
@@ -144,6 +152,10 @@ class Edge:
     lift: float
     p_value: float
     q_value: float
+    # the follower crossed first (within max_lag_days), and hits / (hits + reverse)
+    reverse: int
+    lead_share: float
+    direction_q: float
     lag_median: float
     lag_q25: float
     lag_q75: float
@@ -164,8 +176,10 @@ class EdgeResult:
     # events in the training period, and of them those whose span is over
     training_events: int
     closed_events: int
-    # pairs with at least min_events: the Benjamini–Hochberg family
+    # pairs with at least min_events: the Benjamini–Hochberg family of association, and
+    # those associated: the family of direction
     tested: int
+    associated: int = 0
     edges: list[Edge] = field(default_factory=list)
 
 
@@ -173,6 +187,8 @@ class EdgeResult:
 class _Pair:
     hits: int = 0
     misses: int = 0
+    # the follower crossed at most max_lag before the leader
+    reverse: int = 0
     lags: list[float] = field(default_factory=list)
 
 
@@ -205,7 +221,7 @@ def learn_edges(
         # an event whose onsets were computed before as_of only knows that much
         known_until = min(as_of, event.onsets_until or as_of)
         known = event.onsets_known(known_until)
-        topic = topic_of(event.scopes_at(as_of), network.groups) if settings.topics else ""
+        topic = event.topic(network.groups, as_of) if settings.topics else ""
         topics = (ALL, topic) if topic else (ALL,)
 
         if span.end <= known_until:
@@ -226,7 +242,11 @@ def learn_edges(
                     continue
                 follows = known.get(follower.key)
                 if follows is not None and follows.at <= onset.at:
-                    continue  # it was there first
+                    # it was there first: not a chance to follow, but against the direction
+                    if follows.at < onset.at and onset.at - follows.at <= max_lag:
+                        for name in topics:
+                            pairs[name, scope, follower].reverse += 1
+                    continue
                 hit = follows is not None and follows.at <= onset.at + max_lag
                 if not hit and not window_over:
                     continue  # not known yet
@@ -254,12 +274,24 @@ def learn_edges(
         p_value = binomial_tail(pair.hits, pair.hits + pair.misses, base_rate)
         tested.append(((topic, leader, follower), pair, base_rate, p_value))
 
+    # association over every pair tested, then direction over the associated ones
     q_values = benjamini_hochberg([p for *_, p in tested])
+    associated = [
+        (item, float(q_value))
+        for item, q_value in zip(tested, q_values, strict=True)
+        if q_value <= settings.max_q and item[1].hits >= settings.min_hits
+    ]
+    direction_q = benjamini_hochberg(
+        [binomial_tail(pair.hits, pair.hits + pair.reverse, 0.5) for (_, pair, *_), _ in associated]
+    )
+    tested_topics = {topic for (topic, _, _), *_ in tested} - {ALL}
     edges = []
-    for ((topic, leader, follower), pair, base_rate, p_value), q_value in zip(
-        tested, q_values, strict=True
+    for (((topic, leader, follower), pair, base_rate, p_value), q_value), direction in zip(
+        associated, direction_q, strict=True
     ):
-        if q_value > settings.max_q or pair.hits < settings.min_hits:
+        max_q = settings.max_q if topic == ALL else settings.max_q / len(tested_topics)
+        lead_share = pair.hits / (pair.hits + pair.reverse)
+        if max(q_value, direction) > max_q or lead_share < settings.min_lead_share:
             continue
         mean, low, high = posterior(
             pair.hits, pair.misses, base_rate, settings.prior_events, settings.interval
@@ -286,7 +318,10 @@ def learn_edges(
                 probability_high=high,
                 lift=mean / base_rate,
                 p_value=p_value,
-                q_value=float(q_value),
+                q_value=q_value,
+                reverse=pair.reverse,
+                lead_share=lead_share,
+                direction_q=float(direction),
                 lag_median=median,
                 lag_q25=q25,
                 lag_q75=q75,
@@ -300,6 +335,7 @@ def learn_edges(
         training_events=training_events,
         closed_events=len(closed_starts.get(ALL, [])),
         tested=len(tested),
+        associated=len(associated),
         edges=edges,
     )
 

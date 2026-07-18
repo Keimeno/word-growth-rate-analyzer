@@ -13,9 +13,12 @@ CREATE TABLE IF NOT EXISTS lead_lag_events
     term          String,
     start         DateTime('UTC'),          -- the event's first trend
     last_seen     DateTime('UTC'),          -- its latest trend
-    topic         LowCardinality(String),   -- the configured group it trended in most, or ''
-    -- the scopes it trended in, with their highest score
+    -- the configured group it trended in most in its first hour, or '' (later trends
+    -- include the followers', the topic must not depend on who followed)
+    topic         LowCardinality(String),
+    -- the scopes it trended in, with their highest score, and those of its first hour
     scopes        Map(LowCardinality(String), Float32),
+    first_scopes  Map(LowCardinality(String), Float32),
     -- scope: "r/name", a group, or "sample" (reddit-wide). without: a group measured
     -- without one of its subreddits ("r/name"), to see whether the rest of the group follows
     -- that subreddit; '' otherwise. at: the hour the window ending with it crossed.
@@ -30,8 +33,10 @@ PARTITION BY toYYYYMM(start)
 ORDER BY (kind, term, start);
 
 -- Leader subreddit -> follower scope, learned every day from the events of the training
--- period. Only pairs that pass the edge gates are stored. A follower group the leader
--- belongs to is measured without the leader's own mentions (without_leader).
+-- period. Only pairs that pass the edge gates are stored: associated (the follower crosses
+-- after the leader more often than its base rate) and directed (the follower mostly comes
+-- second). A follower group the leader belongs to is measured without the leader's own
+-- mentions (without_leader).
 CREATE TABLE IF NOT EXISTS propagation_edges
 (
     day              Date,                    -- the UTC day of the run, rows are kept per day
@@ -52,6 +57,10 @@ CREATE TABLE IF NOT EXISTS propagation_edges
     lift             Float64,                 -- probability / base rate
     p_value          Float64,                 -- one-sided binomial test of hits vs base rate
     q_value          Float64,                 -- Benjamini–Hochberg over all pairs tested
+    reverse          UInt32,                  -- the follower crossed first, within the lag
+    lead_share       Float64,                 -- hits / (hits + reverse)
+    direction_q      Float64,                 -- binomial test of hits vs reverse at 1/2, BH
+                                              -- over the associated pairs
     lag_median       Float64,                 -- hours from the leader's onset to the follower's
     lag_q25          Float64,
     lag_q75          Float64,

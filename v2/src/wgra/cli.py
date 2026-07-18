@@ -261,6 +261,7 @@ def _print_edges(edges: Sequence[Edge]) -> None:
             "base",
             "p (80%)",
             "lift",
+            "first",
             "q",
         ),
         [
@@ -275,7 +276,8 @@ def _print_edges(edges: Sequence[Edge]) -> None:
                 f"{edge.base_rate:.0%}",
                 f"{edge.probability:.0%} ({edge.probability_low:.0%}–{edge.probability_high:.0%})",
                 f"{edge.lift:.1f}",
-                f"{edge.q_value:.0e}",
+                f"{edge.lead_share:.0%}",
+                f"{max(edge.q_value, edge.direction_q):.0e}",
             )
             for edge in edges
         ],
@@ -317,7 +319,7 @@ def cmd_lead_lag(args: argparse.Namespace) -> None:
         f"{learned.new_sightings} trend sightings, onsets of {learned.computed} open events, "
         f"{result.training_events} events since {result.training_start:%Y-%m-%d} "
         f"({result.closed_events} closed), {result.tested} pairs tested, "
-        f"{len(result.edges)} edges"
+        f"{result.associated} associated, {len(result.edges)} edges"
     )
     if result.edges:
         print()

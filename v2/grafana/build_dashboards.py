@@ -1407,7 +1407,9 @@ early_warning_dashboard = dashboard(
             4,
             table=True,
             description="Leader -> follower pairs that pass the gates in the selected topic: "
-            "at least 5 events, 3 hits and a q-value of at most 0.05.",
+            "at least 5 events and 3 hits, more hits than the base rate explains and the "
+            "leader first in at least 70% of the events where both crossed (q-values of at "
+            "most 0.05).",
         ),
         panel(
             "stat",
@@ -1478,7 +1480,8 @@ SELECT
     concat(toString(round(100 * probability_low)), '–',
            toString(round(100 * probability_high)), '%') AS interval,
     round(lift, 1) AS lift,
-    q_value AS q,
+    lead_share AS first,
+    greatest(q_value, direction_q) AS q,
     leader_onsets
 FROM propagation_edges FINAL
 WHERE {EDGE_ROWS}
@@ -1497,8 +1500,11 @@ LIMIT 500
                 "crossed before, with a known outcome. hit_rate: of those, followed within 7 "
                 "days. base_rate: the share of all events in which the follower crossed at all. "
                 "probability: the hit rate shrunk to the base rate by 4 pseudo-events, with its "
-                "80% interval. lift: probability / base rate. q: one-sided binomial test of the "
-                "hits against the base rate, Benjamini–Hochberg over all pairs. '(rest)': a "
+                "80% interval. lift: probability / base rate. first: of the events where both "
+                "crossed within 7 days of each other, the share the leader was first in. q: the "
+                "larger of two Benjamini–Hochberg q-values, the hits against the base rate "
+                "(over all pairs) and the leader coming first against chance (over the "
+                "associated pairs). '(rest)': a "
                 "group of the leader's, without the leader's own mentions. Edges need 4–6 weeks "
                 "of history to mean anything."
             ),
@@ -1506,7 +1512,7 @@ LIMIT 500
                 "defaults": {},
                 "overrides": [
                     hours_as_days("lead"),
-                    percent("hit_rate", "base_rate", "probability"),
+                    percent("hit_rate", "base_rate", "probability", "first"),
                     {
                         "matcher": {"id": "byName", "options": "q"},
                         "properties": [

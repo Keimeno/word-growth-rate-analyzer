@@ -29,8 +29,10 @@ from wgra.leadlag.forecasts import (
     resolve,
 )
 from wgra.leadlag.onsets import first_crossings
+from wgra.leadlag.stats import given_nothing_yet
 from wgra.notify.messages import ForecastSummary, forecast_message
 
+MINUTE = timedelta(minutes=1)
 HOUR = timedelta(hours=1)
 DAY = timedelta(days=1)
 T0 = datetime(2026, 3, 2, tzinfo=UTC)
@@ -154,12 +156,19 @@ def test_the_topic_is_the_group_it_trended_in_most():
     # r/apple is in tech and mac: the smaller group
     assert topic_of({"r/apple": 8}, groups) == "mac"
     assert topic_of({"sample": 8}, groups) == ""
-    # as of a time, from the sightings
+    # an event's topic is decided by its first hour: later trends include the followers'
     event = Event("word", "x", T0, T0)
-    for item in [sighting("x", "news", T0, 4), sighting("x", "r/linux", T0 + DAY, 9)]:
+    first_hour = [sighting("x", "news", T0, 4), sighting("x", "r/apple", T0 + 50 * MINUTE, 5)]
+    for item in [*first_hour, sighting("x", "r/linux", T0 + DAY, 9)]:
         event.add(item, keep=True)
-    assert topic_of(event.scopes_at(T0), groups) == "news"
-    assert topic_of(event.scopes_at(T0 + DAY), groups) == "tech"
+    assert event.topic(groups) == "mac"
+    assert event.topic(groups, T0 + DAY) == "mac"
+    assert event.scopes == {"news": 4, "r/apple": 5, "r/linux": 9}
+    # as of a time, from the sightings
+    assert event.topic(groups, T0) == "news"
+    # a stored event (no sightings) has its first hour's scopes
+    stored = Event("word", "x", T0, T0, first_scopes={"news": 4.0})
+    assert stored.topic(groups, T0 + DAY) == "news"
 
 
 def onset(scope: str, at: datetime, without: str = "") -> Onset:
@@ -183,7 +192,7 @@ NETWORK = Network(
     {"pair": ("a", "b"), "solo": ("c",)},
     {"a": T0 - 30 * DAY, "b": T0 - 30 * DAY, "c": T0 + 50 * DAY, "_sample": T0 - 30 * DAY},
 )
-LOOSE = LeadLagConfig(min_events=1, min_hits=1, max_q=1.0, topics=False)
+LOOSE = LeadLagConfig(min_events=1, min_hits=1, max_q=1.0, min_lead_share=0, topics=False)
 
 
 def pairs_of(edges: list[Edge]) -> dict[tuple[str, str], Edge]:
@@ -259,25 +268,27 @@ def test_edges_use_nothing_after_the_run():
     assert pairs_of(learn_edges(stale, NETWORK, T0 + 30 * DAY, LOOSE).edges) == {}
 
 
-def test_edges_need_significance():
-    # 6 hits of 6 for b, which crosses in few other events: an edge
+def test_edges_need_significance_and_direction():
+    # 10 hits of 10 for b, which crosses in few other events: an edge
     leading = [
         event(
             T0 + i * 15 * DAY,
             onset("r/a", T0 + i * 15 * DAY),
             onset("r/b", T0 + i * 15 * DAY + 3 * DAY),
         )
-        for i in range(6)
+        for i in range(10)
     ]
     # bursts in c only, followed by nothing
     others = [
-        event(T0 + i * 7 * DAY + HOUR, onset("r/c", T0 + i * 7 * DAY + HOUR)) for i in range(25)
+        event(T0 + i * 4 * DAY + HOUR, onset("r/c", T0 + i * 4 * DAY + HOUR)) for i in range(40)
     ]
     strict = LeadLagConfig(topics=False)
-    result = learn_edges(leading + others, NETWORK, T0 + 175 * DAY, strict)
+    as_of = T0 + 175 * DAY
+    result = learn_edges(leading + others, NETWORK, as_of, strict)
     assert [(e.leader, e.follower) for e in result.edges] == [("r/a", "r/b")]
     edge = result.edges[0]
-    assert edge.q_value <= strict.max_q
+    assert edge.q_value <= strict.max_q and edge.direction_q <= strict.max_q
+    assert (edge.reverse, edge.lead_share) == (0, 1.0)
     assert edge.lag_median == 72
     assert edge.probability_low < edge.probability < edge.probability_high
     # c's bursts were tested too, they're just never followed
@@ -285,8 +296,29 @@ def test_edges_need_significance():
 
     # with as few events, but b crossing in most events anyway, a's lead says nothing
     common = [event(e.start, *e.onsets, onset("r/b", e.start + 2 * HOUR)) for e in others]
-    result = learn_edges(leading + common, NETWORK, T0 + 175 * DAY, strict)
+    result = learn_edges(leading + common, NETWORK, as_of, strict)
     assert ("r/a", "r/b") not in pairs_of(result.edges)
+
+    # a and b picking up the same terms in either order: associated, but neither leads
+    either = [
+        event(
+            T0 + i * 15 * DAY,
+            onset("r/a", T0 + i * 15 * DAY + (0 if i % 2 else 2) * DAY),
+            onset("r/b", T0 + i * 15 * DAY + (2 if i % 2 else 0) * DAY),
+        )
+        for i in range(10)
+    ]
+    result = learn_edges(either + others, NETWORK, as_of, strict)
+    assert result.associated >= 2
+    assert pairs_of(result.edges) == {}
+    loose = learn_edges(
+        either + others, NETWORK, as_of, replace(strict, max_q=1.0, min_lead_share=0)
+    )
+    a_b = pairs_of(loose.edges)["r/a", "r/b"]
+    assert (a_b.hits, a_b.reverse, a_b.lead_share) == (5, 5, 0.5)
+    # first in half of them: below min_lead_share, whatever the q-values
+    halfway = replace(strict, max_q=1.0, min_lead_share=0.6)
+    assert ("r/a", "r/b") not in pairs_of(learn_edges(either, NETWORK, as_of, halfway).edges)
 
 
 EDGE = Edge(
@@ -306,6 +338,9 @@ EDGE = Edge(
     lift=4.0,
     p_value=1e-5,
     q_value=1e-4,
+    reverse=1,
+    lead_share=8 / 9,
+    direction_q=0.02,
     lag_median=48,
     lag_q25=24,
     lag_q75=72,
@@ -359,10 +394,22 @@ def test_a_forecast_for_a_follower_that_hasnt_started():
 def test_topic_edges_win_over_all():
     topical = replace(EDGE, topic="tech", probability=0.95, lift=5.0)
     index = EdgeIndex([EDGE, topical])
-    assert index.of("r/a", "tech") == [topical]
-    assert index.of("r/a", "news") == [EDGE]
-    assert index.of("r/a", "") == [EDGE]
+    assert index.of("r/a", "tech") == [[topical, EDGE]]
+    assert index.of("r/a", "news") == [[EDGE]]
+    assert index.of("r/a", "") == [[EDGE]]
     assert index.leaders == {"r/a"} and len(index) == 1
+    current = replace(event(T0, onset("r/a", T0)), first_scopes={"r/a": 6.0})
+    groups = {"tech": ["a"]}
+    settings, forecast_settings = LeadLagConfig(), ForecastConfig()
+    # an hour after the onset: every past hit took longer
+    still = 3.5 / 4
+    [made] = decide(current, {"r/a"}, index, T0 + HOUR, groups, settings, forecast_settings)
+    assert (made.topic, made.probability) == ("tech", given_nothing_yet(0.95, still))
+    # a topic edge that doesn't pass the gates: the one over all events
+    weak = replace(topical, lift=1.2)
+    index = EdgeIndex([EDGE, weak])
+    [made] = decide(current, {"r/a"}, index, T0 + HOUR, groups, settings, forecast_settings)
+    assert (made.topic, made.probability) == (ALL, given_nothing_yet(0.8, still))
 
 
 def forecast(term: str, probability: float, **values: object) -> Forecast:

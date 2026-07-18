@@ -212,13 +212,18 @@ class LeadLagConfig:
     min_events: int = 5
     min_hits: int = 3
     max_q: float = 0.05
+    # and the leader must be first in at least this share of the events where both crossed
+    # within max_lag_days of each other: scopes that pick up the same stories in either
+    # order are associated, but neither leads
+    min_lead_share: float = 0.7
     # the probability shrinks to the base rate by this many pseudo-events, so a handful of
     # events can't make a certainty
     prior_events: float = 4.0
     # the central probability interval stored with edges and forecasts: 0.8 is the 10th to
     # the 90th percentile
     interval: float = 0.8
-    # edges per topic (the group an event trended in most) besides those over all events
+    # edges per topic (the group an event trended in most) besides those over all events.
+    # Each topic is another look at the same data: their edges need max_q / topics.
     topics: bool = True
 
 
