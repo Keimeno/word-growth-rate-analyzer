@@ -93,6 +93,42 @@ detect:
   min_reference_days: 3
   max_per_scope: 50
 
+# Long-term trends: once a day, `wgra analyze` looks at weekly shares (comments and posts
+# mentioning a term per week, divided by all of them) over the last 13, 26 and 52 complete
+# weeks, Monday to Sunday UTC, and classifies the terms that grow or fade steadily. A
+# window starts once a scope's subreddits have that many weeks of history. See
+# docs/ARCHITECTURE-V2.md §4.3.
+long_term:
+  horizons: [13, 26, 52]   # weeks
+  run_at: "00:30"          # UTC, every day; the results change when a week completes
+  # the volume floor: mentions per week on average over the window, in all of a scope's
+  # subreddits together. Rarer terms are too noisy to tell a trend from chance.
+  min_mentions_per_week: 20
+  # a group's weekly share: macro averages its subreddits' shares (each counts the same,
+  # so r/technology doesn't drown out r/hardware), pooled divides all mentions by all
+  # comments and posts
+  group_rate: macro
+  # The first pass (least squares in ClickHouse, every term above the floor) picks at most
+  # this many terms per scope and window that grow or shrink by min_growth, the clearest
+  # first. They get the robust statistics: Theil–Sen growth, Mann–Kendall test, spike share.
+  max_candidates: 100
+  # a trend: Mann–Kendall p-value after Benjamini–Hochberg at most max_q, a false discovery
+  # rate over every term a run tests (all above the floor, in all scopes and windows), and
+  # growing or shrinking at least min_growth a month (1.05: 5%)
+  max_q: 0.05
+  min_growth: 1.05
+  # one-off instead: at least max_spike_share of the change between the first and second
+  # half of the window comes from its spike_weeks highest weeks, the highest of which is
+  # min_peak_ratio times the median week. One event, not a trend.
+  max_spike_share: 0.5
+  spike_weeks: 2
+  min_peak_ratio: 3
+  # emerging when the trend line starts at most this many per 1,000 comments and posts,
+  # mainstreaming above; fading when it shrinks
+  emerging_max_base: 1.0
+  # stored per scope, window and category, the fastest growing or fading first
+  max_per_category: 25
+
 # Push notifications through ntfy, where to is set in .env (NTFY_URL, NTFY_TOPIC).
 notify:
   # instant alerts only for the strongest trends, and at most this many per day
@@ -109,5 +145,11 @@ notify:
   digest_time: "08:00"
   timezone: Europe/Berlin
   digest_size: 10
-  # scored and shown in Grafana, but no alerts or digests
+  # one report of long-term trends per group every week: the fastest emerging,
+  # mainstreaming and fading terms of the group and its subreddits (none while there's
+  # less than 13 weeks of history)
+  report_day: monday
+  report_time: "08:00"
+  report_size: 5
+  # scored and shown in Grafana, but no alerts, digests or reports
   skip_scopes: [sample]

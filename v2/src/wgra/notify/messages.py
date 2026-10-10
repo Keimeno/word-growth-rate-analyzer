@@ -1,10 +1,10 @@
-"""What alerts and digests say, and where tapping them leads (Grafana)."""
+"""What alerts, digests and weekly reports say, and where tapping them leads (Grafana)."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from urllib.parse import urlencode
 
 from wgra.config import TRACKED_GROUP
@@ -12,6 +12,7 @@ from wgra.notify.ntfy import Message
 
 TERM_EXPLORER_UID = "wgra-terms"
 TRENDING_UID = "wgra-trending"
+LONG_TERM_UID = "wgra-long-term"
 
 
 @dataclass(frozen=True)
@@ -31,13 +32,17 @@ class TrendSummary:
     reference_days: int = 28
 
 
-def explorer_url(grafana_url: str, term: str, scope: str) -> str:
-    """The term explorer, showing the term in the scope over the last week."""
+def explorer_url(grafana_url: str, term: str, scope: str, weeks: int | None = None) -> str:
+    """The term explorer, showing the term in the scope over the last week, or weekly
+    shares over the last `weeks` weeks (a group's as the average of its subreddits')."""
     if scope.startswith("r/"):
         variables = {"var-group": TRACKED_GROUP, "var-subreddit": scope.removeprefix("r/")}
     else:
         variables = {"var-group": scope}
-    query = {"var-terms": term, **variables, "from": "now-7d", "to": "now"}
+    if weeks:
+        variables |= {"var-bucket": "week", "var-rate": "macro"}
+    since = f"now-{weeks}w" if weeks else "now-7d"
+    query = {"var-terms": term, **variables, "from": since, "to": "now"}
     return f"{grafana_url}/d/{TERM_EXPLORER_UID}?{urlencode(query)}"
 
 
@@ -45,6 +50,10 @@ def trending_url(grafana_url: str, scope: str, horizon: str = "24h") -> str:
     group = TRACKED_GROUP if scope.startswith("r/") else scope
     query = {"var-group": group, "var-horizon": horizon}
     return f"{grafana_url}/d/{TRENDING_UID}?{urlencode(query)}"
+
+
+def long_term_url(grafana_url: str, group: str) -> str:
+    return f"{grafana_url}/d/{LONG_TERM_UID}?{urlencode({'var-group': group})}"
 
 
 def _times(trend: TrendSummary) -> str:
@@ -111,4 +120,58 @@ def ping_message(grafana_url: str) -> Message:
         body="Notifications work. Alerts and daily digests will arrive here.",
         click=f"{grafana_url}/d/{TRENDING_UID}",
         tags=("white_check_mark",),
+    )
+
+
+@dataclass(frozen=True)
+class LongTermSummary:
+    """What the weekly report needs to know about a long-term trend."""
+
+    term: str
+    scope: str
+    category: str
+    # weeks in the window
+    weeks: int
+    # per month, 1.09 is +9%
+    growth: float
+    # per 1,000 comments and posts, the trend line at the start and end of the window
+    start_share: float
+    end_share: float
+
+
+REPORTED = ("emerging", "mainstreaming", "fading")
+
+
+def per_month_text(growth: float) -> str:
+    """+9% a month, −12% a month, or ×2.5 a month for fast growth."""
+    if growth >= 2:
+        return f"×{growth:.1f} a month"
+    change = round((growth - 1) * 100)
+    return f"{'+' if change >= 0 else '−'}{abs(change)}% a month"
+
+
+def weekly_report_message(
+    group: str, week: date, trends: Sequence[LongTermSummary], grafana_url: str
+) -> Message:
+    """`week` is the Monday the analyzed weeks end before."""
+    sections = []
+    for category in REPORTED:
+        lines = [f"**{category.capitalize()}**"]
+        for number, trend in enumerate(
+            (trend for trend in trends if trend.category == category), start=1
+        ):
+            url = explorer_url(grafana_url, trend.term, trend.scope, trend.weeks)
+            details = [per_month_text(trend.growth), f"{trend.weeks} weeks"]
+            if trend.scope != group:
+                details.append(trend.scope)
+            lines.append(f"{number}. [{trend.term}]({url}) · {' · '.join(details)}")
+        if len(lines) > 1:
+            sections.append("\n".join(lines))
+    last_day = week - timedelta(days=1)
+    return Message(
+        title=f"Long-term trends in {group}, weeks to {last_day:%a %d %b}",
+        body="\n\n".join(sections),
+        click=long_term_url(grafana_url, group),
+        tags=("chart_with_upwards_trend",),
+        priority=3,
     )

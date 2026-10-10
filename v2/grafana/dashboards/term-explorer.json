@@ -98,6 +98,64 @@
         },
         "multi": true,
         "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "bucket",
+        "label": "Bucket",
+        "query": "auto,hour,day,week",
+        "options": [
+          {
+            "text": "auto",
+            "value": "auto",
+            "selected": true
+          },
+          {
+            "text": "hour",
+            "value": "hour",
+            "selected": false
+          },
+          {
+            "text": "day",
+            "value": "day",
+            "selected": false
+          },
+          {
+            "text": "week",
+            "value": "week",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "auto",
+          "value": "auto"
+        },
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "rate",
+        "label": "Group rate",
+        "query": "pooled,macro",
+        "options": [
+          {
+            "text": "pooled",
+            "value": "pooled",
+            "selected": true
+          },
+          {
+            "text": "macro",
+            "value": "macro",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "pooled",
+          "value": "pooled"
+        },
+        "multi": false,
+        "includeAll": false
       }
     ]
   },
@@ -105,7 +163,7 @@
     {
       "type": "timeseries",
       "title": "Share of comments and posts mentioning the term (per 1,000)",
-      "description": "Comments and posts that contain the term, per 1,000 comments and posts in the selected subreddits. Dividing by the total removes the daily and weekly activity swings, so the line shows the share of the conversation. Separate several terms with commas.",
+      "description": "Comments and posts that contain the term, per 1,000 comments and posts in the selected subreddits. Dividing by the total removes the daily and weekly activity swings, so the line shows the share of the conversation. Separate several terms with commas. Bucket: week sums whole ISO weeks (Monday to Sunday, UTC), as the long-term trends do; days and weeks reach back further than hours (180 days). Group rate: pooled divides all mentions by all comments and posts; macro averages each subreddit's share, so a big subreddit doesn't drown out the small ones (the long-term trends of groups use it).",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -125,7 +183,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT t.time AS time, t.term AS term, 1000 * t.docs / s.docs AS per_1000\nFROM (\n    SELECT $__timeInterval(hour) AS time, term, sum(docs) AS docs\n    FROM term_hourly\n    WHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, term\n) AS t\nINNER JOIN (\n    SELECT $__timeInterval(hour) AS time, sum(docs) AS docs\n    FROM scope_hourly\n    WHERE $__timeFilter(hour) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time\n) AS s USING time\nORDER BY time",
+          "rawSql": "WITH totals AS (\n    SELECT multiIf(${bucket:sqlstring} = 'week', toDateTime(toMonday(hour), 'UTC'), ${bucket:sqlstring} = 'day', toStartOfDay(hour), ${bucket:sqlstring} = 'hour', hour, $__timeInterval(hour)) AS time, subreddit, sum(docs) AS n\n    FROM scope_hourly\n    WHERE if(${bucket:sqlstring} IN ('day', 'week'), hour >= toStartOfDay($__fromTime) AND hour < toStartOfDay($__toTime) + INTERVAL 1 DAY, $__timeFilter(hour)) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, subreddit\n)\nSELECT t.time AS time, t.term AS term,\n       if(${rate:sqlstring} = 'macro', 1000 * t.share_sum / s.members, 1000 * t.docs / s.n)\n           AS per_1000\nFROM (\n    SELECT time, term, sum(c.docs) AS docs, sum(c.docs / totals.n) AS share_sum\n    FROM (\n    SELECT if(${bucket:sqlstring} = 'hour', hour, $__timeInterval(hour)) AS time, subreddit, term, sum(docs) AS docs\n    FROM term_hourly\n    WHERE NOT ${bucket:sqlstring} IN ('day', 'week') AND $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, subreddit, term\n    UNION ALL\n    SELECT if(${bucket:sqlstring} = 'week', toDateTime(toMonday(day), 'UTC'), toDateTime(day, 'UTC')) AS time, subreddit, term, sum(docs) AS docs\n    FROM term_daily\n    WHERE ${bucket:sqlstring} IN ('day', 'week') AND day >= toDate($__fromTime) AND day <= toDate($__toTime) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, subreddit, term\n    ) AS c\n    INNER JOIN totals USING (time, subreddit)\n    GROUP BY time, term\n) AS t\nINNER JOIN (SELECT time, sum(n) AS n, count() AS members FROM totals GROUP BY time) AS s\n    USING time\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -180,7 +238,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(hour) AS time, term, sum(docs) AS mentions\nFROM term_hourly\nWHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\nGROUP BY time, term\nORDER BY time",
+          "rawSql": "SELECT time, term, sum(docs) AS mentions\nFROM (\n    SELECT if(${bucket:sqlstring} = 'hour', hour, $__timeInterval(hour)) AS time, subreddit, term, sum(docs) AS docs\n    FROM term_hourly\n    WHERE NOT ${bucket:sqlstring} IN ('day', 'week') AND $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, subreddit, term\n    UNION ALL\n    SELECT if(${bucket:sqlstring} = 'week', toDateTime(toMonday(day), 'UTC'), toDateTime(day, 'UTC')) AS time, subreddit, term, sum(docs) AS docs\n    FROM term_daily\n    WHERE ${bucket:sqlstring} IN ('day', 'week') AND day >= toDate($__fromTime) AND day <= toDate($__toTime) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, subreddit, term\n)\nGROUP BY time, term\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -235,7 +293,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(hour) AS time, term, uniqCombinedMerge(12)(authors) AS authors\nFROM term_hourly\nWHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\nGROUP BY time, term\nORDER BY time",
+          "rawSql": "SELECT * FROM (\n    SELECT if(${bucket:sqlstring} = 'hour', hour, $__timeInterval(hour)) AS time, term, uniqCombinedMerge(12)(authors) AS authors\n    FROM term_hourly\n    WHERE NOT ${bucket:sqlstring} IN ('day', 'week') AND $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, term\n    UNION ALL\n    SELECT if(${bucket:sqlstring} = 'week', toDateTime(toMonday(day), 'UTC'), toDateTime(day, 'UTC')) AS time, term, uniqCombinedMerge(12)(authors) AS authors\n    FROM term_daily\n    WHERE ${bucket:sqlstring} IN ('day', 'week') AND day >= toDate($__fromTime) AND day <= toDate($__toTime) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, term\n)\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -290,7 +348,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT t.term AS term, t.subreddit AS subreddit, t.docs AS mentions, t.authors AS authors,\n       round(1000 * t.docs / s.docs, 2) AS per_1000\nFROM (\n    SELECT term, subreddit, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors\n    FROM term_hourly\n    WHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY term, subreddit\n) AS t\nINNER JOIN (\n    SELECT subreddit, sum(docs) AS docs\n    FROM scope_hourly\n    WHERE $__timeFilter(hour) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY subreddit\n) AS s USING subreddit\nORDER BY mentions DESC\nLIMIT 100",
+          "rawSql": "SELECT t.term AS term, t.subreddit AS subreddit, t.docs AS mentions, t.authors AS authors,\n       round(1000 * t.docs / s.docs, 2) AS per_1000\nFROM (\n    SELECT term, subreddit, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors\n    FROM (\n    SELECT term, subreddit, sum(docs) AS docs, uniqCombinedMergeState(12)(authors) AS authors\n    FROM term_hourly\n    WHERE NOT ${bucket:sqlstring} IN ('day', 'week') AND $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY term, subreddit\n    UNION ALL\n    SELECT term, subreddit, sum(docs) AS docs, uniqCombinedMergeState(12)(authors) AS authors\n    FROM term_daily\n    WHERE ${bucket:sqlstring} IN ('day', 'week') AND day >= toDate($__fromTime) AND day <= toDate($__toTime) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY term, subreddit\n    )\n    GROUP BY term, subreddit\n) AS t\nINNER JOIN (\n    SELECT subreddit, sum(docs) AS docs\n    FROM scope_hourly\n    WHERE if(${bucket:sqlstring} IN ('day', 'week'), hour >= toStartOfDay($__fromTime) AND hour < toStartOfDay($__toTime) + INTERVAL 1 DAY, $__timeFilter(hour)) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY subreddit\n) AS s USING subreddit\nORDER BY mentions DESC\nLIMIT 100",
           "refId": "A"
         }
       ],

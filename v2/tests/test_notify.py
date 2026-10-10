@@ -6,11 +6,14 @@ import httpx
 import pytest
 
 from wgra.notify.messages import (
+    LongTermSummary,
     TrendSummary,
     alert_message,
     digest_message,
     explorer_url,
+    per_month_text,
     trending_url,
+    weekly_report_message,
 )
 from wgra.notify.ntfy import Message, Ntfy, NtfyError
 
@@ -140,3 +143,46 @@ def test_digest_lists_terms_with_links():
     assert first.endswith(" · 14× · 312 mentions · r/technology")
     assert second.endswith(" · new · 312 mentions · in 4 subreddits")
     assert message.click == trending_url(GRAFANA, "tech")
+
+
+def test_long_term_links_show_weekly_shares():
+    url = query(explorer_url(GRAFANA, "local llm", "tech", weeks=26))
+    assert url["from"] == ["now-26w"]
+    assert url["var-bucket"] == ["week"]
+    assert url["var-rate"] == ["macro"]
+
+
+def test_growth_per_month_text():
+    assert per_month_text(1.094) == "+9% a month"
+    assert per_month_text(0.88) == "−12% a month"
+    assert per_month_text(2.53) == "×2.5 a month"
+
+
+def test_weekly_report_lists_terms_per_category():
+    def trend(term: str, category: str, growth: float, scope: str = "tech") -> LongTermSummary:
+        return LongTermSummary(term, scope, category, 26, growth, 0.2, 0.9)
+
+    message = weekly_report_message(
+        "tech",
+        date(2026, 10, 12),
+        [
+            trend("local llm", "emerging", 1.094, "r/programming"),
+            trend("mcp", "emerging", 1.3),
+            trend("crypto", "fading", 0.9),
+        ],
+        GRAFANA,
+    )
+    assert message.title == "Long-term trends in tech, weeks to Sun 11 Oct"
+    emerging, fading = message.body.split("\n\n")
+    lines = emerging.splitlines()
+    assert lines[0] == "**Emerging**"
+    assert lines[1].startswith("1. [local llm](https://grafana.example/d/wgra-terms?")
+    assert lines[1].endswith(" · +9% a month · 26 weeks · r/programming")
+    assert lines[2].endswith(" · +30% a month · 26 weeks")
+    # no mainstreaming terms: no section
+    assert fading.splitlines() == [
+        "**Fading**",
+        fading.splitlines()[1],
+    ]
+    assert "−10% a month" in fading
+    assert message.click == "https://grafana.example/d/wgra-long-term?var-group=tech"

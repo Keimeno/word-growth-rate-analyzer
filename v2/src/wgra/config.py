@@ -107,6 +107,53 @@ class DetectConfig:
         return self.scope_thresholds.get(scope, self.thresholds)
 
 
+MACRO = "macro"
+POOLED = "pooled"
+
+
+@dataclass(frozen=True)
+class LongTermConfig:
+    """Long-term trends on weekly shares, see docs/ARCHITECTURE-V2.md §4.3."""
+
+    # windows in weeks, each runs once every scope's subreddits have that many complete
+    # weeks of history (Monday to Sunday, UTC)
+    horizons: tuple[int, ...] = (13, 26, 52)
+    # when `wgra analyze` runs it every day, UTC. Posts are polled every 15 minutes, so
+    # the last ones of Sunday are in by then.
+    run_at: str = "00:30"
+    # the volume floor: comments and posts mentioning the term per week, on average over
+    # the window and in all of the scope's subreddits together
+    min_mentions_per_week: float = 20
+    # a group's weekly share: "macro" averages its subreddits' shares, so a big subreddit
+    # doesn't drown out the small ones; "pooled" divides all mentions by all comments
+    group_rate: str = MACRO
+    # a group is analyzed over its subreddits with history for the whole window, if at
+    # least this share of them have it
+    min_member_share: float = 0.5
+    # the first pass (least squares in ClickHouse) picks the terms growing or shrinking by
+    # at least min_growth, the strongest this many per scope and window get the robust
+    # statistics and are tested
+    max_candidates: int = 100
+    # added to the mentions of every week, so weeks without one have a finite log share
+    pseudo_mentions: float = 0.5
+    # a trend: Mann–Kendall p-value after Benjamini–Hochberg at most this (false discovery
+    # rate across all terms tested in a run), and growing or shrinking by at least
+    # min_growth per month (Theil–Sen)
+    max_q: float = 0.05
+    min_growth: float = 1.05
+    # one-off: this share of the change comes from its spike_weeks highest weeks, and the
+    # highest week is at least min_peak_ratio times the median week
+    max_spike_share: float = 0.5
+    spike_weeks: int = 2
+    min_peak_ratio: float = 3.0
+    # emerging when the trend line starts at most this many per 1,000 comments and posts,
+    # mainstreaming above
+    emerging_max_base: float = 1.0
+    # stored per scope, window and category, by growth
+    max_per_category: int = 25
+    exclude_scopes: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True)
 class NotifyConfig:
     # instant alerts, only for the strongest trends
@@ -125,6 +172,14 @@ class NotifyConfig:
     digest_time: str = "08:00"
     timezone: str = "UTC"
     digest_size: int = 10
+    # one report of long-term trends per group every week, on this day at this local time
+    report_day: str = "monday"
+    report_time: str = "08:00"
+    # terms per category (emerging, mainstreaming, fading)
+    report_size: int = 5
+
+
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
 @dataclass(frozen=True)
@@ -135,6 +190,7 @@ class Config:
     background: BackgroundConfig = field(default_factory=BackgroundConfig)
     ingest: IngestConfig = field(default_factory=IngestConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
+    long_term: LongTermConfig = field(default_factory=LongTermConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
 
     @cached_property
@@ -187,8 +243,15 @@ def parse_config(raw: dict[str, Any]) -> Config:
         background=BackgroundConfig(**(raw.get("background") or {})),
         ingest=IngestConfig(**(raw.get("ingest") or {})),
         detect=parse_detect(raw.get("detect") or {}),
+        long_term=parse_long_term(raw.get("long_term") or {}),
         notify=parse_notify(raw.get("notify") or {}),
     )
+
+
+def _check_time(name: str, value: str) -> None:
+    hours, _, minutes = value.partition(":")
+    if not (hours.isdigit() and minutes.isdigit() and int(hours) < 24 and int(minutes) < 60):
+        raise ValueError(f"config: {name} must look like 08:00: {value}")
 
 
 def _normalize_scope(scope: str) -> str:
@@ -222,14 +285,34 @@ def parse_detect(raw: dict[str, Any]) -> DetectConfig:
     return replace(detect, **raw)
 
 
+def parse_long_term(raw: dict[str, Any]) -> LongTermConfig:
+    raw = dict(raw)
+    if "horizons" in raw:
+        raw["horizons"] = tuple(sorted({int(weeks) for weeks in raw["horizons"] or ()}))
+        if any(weeks < 4 for weeks in raw["horizons"]):
+            raise ValueError("config: long_term.horizons are weeks, at least 4")
+    if "exclude_scopes" in raw:
+        raw["exclude_scopes"] = tuple(map(_normalize_scope, raw["exclude_scopes"] or ()))
+    long_term = LongTermConfig(**raw)
+    _check_time("long_term.run_at", long_term.run_at)
+    if long_term.group_rate not in (MACRO, POOLED):
+        raise ValueError(f"config: long_term.group_rate is macro or pooled: {long_term.group_rate}")
+    if long_term.min_growth <= 1:
+        raise ValueError("config: long_term.min_growth is a factor above 1, like 1.05 for 5%")
+    return long_term
+
+
 def parse_notify(raw: dict[str, Any]) -> NotifyConfig:
     raw = dict(raw)
     if "skip_scopes" in raw:
         raw["skip_scopes"] = tuple(map(_normalize_scope, raw["skip_scopes"] or ()))
+    if "report_day" in raw:
+        raw["report_day"] = str(raw["report_day"]).lower()
     notify = NotifyConfig(**raw)
-    hours, _, minutes = notify.digest_time.partition(":")
-    if not (hours.isdigit() and minutes.isdigit() and int(hours) < 24 and int(minutes) < 60):
-        raise ValueError(f"config: notify.digest_time must look like 08:00: {notify.digest_time}")
+    _check_time("notify.digest_time", notify.digest_time)
+    _check_time("notify.report_time", notify.report_time)
+    if notify.report_day not in WEEKDAYS:
+        raise ValueError(f"config: notify.report_day is a weekday: {notify.report_day}")
     ZoneInfo(notify.timezone)  # raises for unknown time zones
     return notify
 
