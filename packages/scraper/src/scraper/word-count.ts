@@ -1,29 +1,31 @@
 import {config} from '@keimeno/wgra-common';
 import {Comment} from 'snoowrap';
-import {client} from '../infrastructure';
+import {getClient} from '../infrastructure';
 import {incrementScrapedWordCount} from '../publisher';
 import {CommentStream} from './comment-stream';
 
+// reddit never returns more than 100 items per listing request, a higher
+// limit makes snoowrap paginate and burns through the rate limit
+const LISTING_LIMIT = 100;
+
 const retrieveWords = (item: Comment) => {
   const {body} = item;
-  const unprocessedWords = body.split(' ');
+
+  // urls would otherwise turn into long garbage words
+  const text = body.replace(/https?:\/\/\S+/g, ' ').toLowerCase();
+
+  // words are sequences of unicode letters and digits, apostrophes are
+  // only kept inside of a word (e.g. "don't", but not "'quoted'")
+  const words = text.match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu) ?? [];
 
   // if the length of the word is longer than 64 we don't accept it
-  const filteredWords = unprocessedWords
-    .map(word => word.replace(/[^\w\s]/gi, ''))
-    .filter(word => word.length <= 64);
-
-  // only allow words that are alphabetical, and may have apostrophes
-  const words = filteredWords.filter(word => /^[a-zA-Z0-9']+$/.test(word));
-
-  // turn all words into lowercase
-  return words.map(word => word.toLowerCase());
+  return words.filter(word => word.length <= 64);
 };
 
 config.subreddits.forEach(subreddit => {
-  const stream = new CommentStream(client, {
+  const stream = new CommentStream(getClient, {
     subreddit: subreddit.name,
-    limit: 100000,
+    limit: LISTING_LIMIT,
     pollTime: subreddit.pollFrequency,
   });
 

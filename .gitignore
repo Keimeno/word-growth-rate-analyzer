@@ -4,3 +4,6 @@ dist
 .env
 package-lock.json
 config.json
+
+# git worktrees created by Claude Code
+.claude/worktrees/

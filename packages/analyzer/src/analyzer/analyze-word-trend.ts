@@ -1,154 +1,110 @@
-import {flattenDate, ScrapedWordCount} from '@keimeno/wgra-common';
-import {startOfDay, endOfDay} from 'date-fns';
+import {config} from '@keimeno/wgra-common';
+import {addDays, endOfDay, startOfDay, subDays} from 'date-fns';
 import {DailyScrapedWordCount} from '../models';
 
-const getFirstOccurrence = async (
-  word: string,
-  subreddit?: string
-): Promise<ScrapedWordCount | null> => {
-  const firstOccurrence = await DailyScrapedWordCount.findOne(
-    {word, ...(subreddit !== undefined ? {subreddit} : {})},
-    {},
-    {sort: {createdAt: 1}}
-  );
+export interface DailyWordFrequency {
+  date: Date;
+  count: number;
+  baselineCount: number;
 
-  return firstOccurrence;
-};
-
-const getFirstCreatedAt = async (
-  word: string,
-  subreddit?: string
-): Promise<Date> => {
-  const firstOccurrence = await getFirstOccurrence(word, subreddit);
-
-  if (!firstOccurrence) {
-    throw new Error('No first occurrence found.');
-  }
-
-  return firstOccurrence.createdAt;
-};
-
-const getScrapedWordCount = async (
-  word: string,
-  date: Date,
-  subreddit?: string
-): Promise<ScrapedWordCount | null> => {
-  const scrapedWordCount = await DailyScrapedWordCount.findOne({
-    word,
-    createdAt: {$gte: startOfDay(date), $lt: endOfDay(date)},
-    ...(subreddit !== undefined ? {subreddit} : {}),
-  });
-
-  return scrapedWordCount;
-};
-
-interface BaselineAdjustedCountsOptions {
-  from: Date;
-  to: Date;
-  baseline: string;
-  subreddit?: string;
-  previousWordCounts?: number[];
-  previousBaselineCount?: number;
+  /**
+   * Occurrences of the word per occurrence of the baseline word. Since the
+   * baseline grows and shrinks with the user activity of the subreddit,
+   * this removes fluctuations between peak hours and week days.
+   */
+  relativeFrequency: number;
 }
 
-const getBaselineAdjustedCounts = async (
-  word: string,
-  {
-    from,
-    to,
-    baseline,
-    subreddit = undefined,
-    previousBaselineCount = undefined,
-    previousWordCounts = [],
-  }: BaselineAdjustedCountsOptions
-): Promise<number[]> => {
-  if (from.getTime() === to.getTime()) {
-    // get relative growth rate of word counts
-    return previousWordCounts;
-  }
+export interface WordTrend {
+  word: string;
+  subreddit: string;
+  baseline: string;
+  days: DailyWordFrequency[];
 
-  const scrapedWordCount = await getScrapedWordCount(word, from, subreddit);
-  const baselineScrapedWordCount = await getScrapedWordCount(
-    baseline,
-    from,
-    subreddit
-  );
+  /**
+   * Day to day growth rates of the relative frequency, 1.2 means +20%.
+   */
+  growthRates: number[];
 
-  const baselineScrapedWordCountCount =
-    baselineScrapedWordCount === null ? 50 : baselineScrapedWordCount.count;
+  /**
+   * Growth of the relative frequency between the first and the last day.
+   */
+  sustainableGrowthRate: number;
+}
 
-  const scrapedWordCountCount =
-    scrapedWordCount === null ? 50 : scrapedWordCount.count;
-
-  const userActivityMultiplier =
-    baselineScrapedWordCountCount /
-    (previousBaselineCount ?? baselineScrapedWordCountCount);
-
-  const nextDay = new Date(from);
-  nextDay.setDate(nextDay.getDate() + 1);
-
-  return await getBaselineAdjustedCounts(word, {
-    from: flattenDate(nextDay),
-    to,
+const getCount = async (word: string, subreddit: string, date: Date) => {
+  const scrapedWordCount = await DailyScrapedWordCount.findOne({
+    word,
     subreddit,
-    baseline,
-    previousBaselineCount: baselineScrapedWordCountCount,
-    previousWordCounts: [
-      ...previousWordCounts,
-      scrapedWordCountCount * userActivityMultiplier,
-    ],
+    createdAt: {$gte: startOfDay(date), $lte: endOfDay(date)},
   });
-};
 
-const calculateGrowthRates = (counts: number[]): number[] => {
-  // calculate growth rates in a functional way
-  return counts.reduce<number[]>(
-    (growthRates, count, index, originalCounts) => {
-      if (index === 0) {
-        return growthRates;
-      }
-
-      return [...growthRates, count / originalCounts[index - 1]];
-    },
-    []
-  );
+  return scrapedWordCount?.count ?? null;
 };
 
 interface AnalyzeDayToDayWordTrendOptions {
-  from?: Date;
+  from: Date;
   to?: Date;
-  subreddit?: string;
+  subreddit: string;
 }
 
 export const analyzeDayToDayWordTrend = async (
   word: string,
-  {from, to, subreddit}: AnalyzeDayToDayWordTrendOptions = {}
-) => {
-  const startDate =
-    from !== undefined
-      ? flattenDate(from)
-      : await getFirstCreatedAt(word, subreddit);
-  const endDate = flattenDate(to ?? new Date());
+  {from, to = new Date(), subreddit}: AnalyzeDayToDayWordTrendOptions
+): Promise<WordTrend> => {
+  const subredditConfig = config.subreddits.find(
+    ({name}) => name === subreddit
+  );
+  const baseline = subredditConfig?.baseline ?? 'the';
 
-  const baselineAdjustedCounts = await getBaselineAdjustedCounts(word, {
-    from: startDate,
-    to: endDate,
-    subreddit,
-    baseline: 'the',
-  });
+  // counts at or below the threshold are deleted by the free storage job,
+  // so a missing count means the word occurred at most `threshold` times
+  const missingCount = subredditConfig?.threshold ?? 0;
 
-  const growthRates = calculateGrowthRates(baselineAdjustedCounts);
+  const days: DailyWordFrequency[] = [];
 
-  const sustainableGrowthRate = growthRates.reduce<number>(
+  for (
+    let date = startOfDay(from);
+    date <= startOfDay(to);
+    date = addDays(date, 1)
+  ) {
+    const [count, baselineCount] = await Promise.all([
+      getCount(word, subreddit, date),
+      getCount(baseline, subreddit, date),
+    ]);
+
+    // without the baseline we didn't scrape on that day
+    if (baselineCount === null) {
+      continue;
+    }
+
+    const wordCount = count ?? missingCount;
+    days.push({
+      date,
+      count: wordCount,
+      baselineCount,
+      relativeFrequency: wordCount / baselineCount,
+    });
+  }
+
+  const growthRates = days
+    .slice(1)
+    .map((day, index) => day.relativeFrequency / days[index].relativeFrequency);
+
+  const sustainableGrowthRate = growthRates.reduce(
     (sustainableGrowthRate, growthRate) => sustainableGrowthRate * growthRate,
     1
   );
 
-  return sustainableGrowthRate;
+  return {word, subreddit, baseline, days, growthRates, sustainableGrowthRate};
 };
 
-analyzeDayToDayWordTrend('christmas', {
-  subreddit: 'news',
-  from: new Date('2022-12-09'),
-  to: new Date('2022-12-26'),
-});
+export const analyzeRecentWordTrend = (
+  word: string,
+  subreddit: string,
+  numberOfDays: number
+) =>
+  analyzeDayToDayWordTrend(word, {
+    subreddit,
+    from: subDays(new Date(), numberOfDays - 1),
+  });

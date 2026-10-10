@@ -21,7 +21,7 @@ services:
       - .env
     volumes:
       - ./init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh
-      - mongo_volume:/db/data
+      - mongo_volume:/data/db
     ports:
       - 3605:27017
 
