@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cached_property
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -47,12 +48,94 @@ class BackgroundConfig:
 
 
 @dataclass(frozen=True)
+class Horizon:
+    """A window compared with the reference period before it."""
+
+    name: str
+    window_hours: int
+    reference_days: int = 28
+    # compare with the same hours of the day only, so a 6h window in the morning isn't
+    # compared with nights ("breakfast" is always up in the morning)
+    same_hours: bool = False
+
+
+@dataclass(frozen=True)
+class Thresholds:
+    """What a term needs in the window to count as trending."""
+
+    # comments and posts mentioning it
+    min_mentions: int = 10
+    # different people mentioning it, so one spammer or one thread can't make a trend
+    min_authors: int = 5
+    # times its usual share, exp(log odds)
+    min_ratio: float = 2.0
+    # strength of the evidence, the log odds divided by their standard error
+    min_z: float = 3.0
+
+
+@dataclass(frozen=True)
+class DetectConfig:
+    interval_minutes: int = 15
+    horizons: tuple[Horizon, ...] = (
+        Horizon("24h", 24),
+        Horizon("6h", 6, same_hours=True),
+    )
+    thresholds: Thresholds = field(default_factory=Thresholds)
+    # per scope ("tech", "r/de_EDV"), only the thresholds that differ
+    scope_thresholds: dict[str, Thresholds] = field(default_factory=dict)
+    sources: tuple[str, ...] = ("comment", "post")
+    kinds: tuple[str, ...] = ("word", "phrase", "domain", "subreddit")
+    # the prior: every term's share in the r/all sample over this many days
+    prior_days: int = 90
+    # how many documents the prior is worth, as a share of the window's documents
+    prior_weight: float = 0.05
+    # pseudo-mentions every term gets on top, so brand-new terms get finite scores
+    prior_floor: float = 1.0
+    # a term with at most this many mentions in the reference period is "new"
+    new_max_reference: int = 2
+    # breadth of a group trend: member subreddits where the term has z above this
+    breadth_min_z: float = 3.0
+    breadth_min_mentions: int = 3
+    # stored per scope and horizon on every run, by score
+    max_per_scope: int = 50
+    # no alerts until the reference period has data from this many days
+    min_reference_days: int = 3
+    # scopes that aren't scored at all
+    exclude_scopes: tuple[str, ...] = ()
+
+    def thresholds_for(self, scope: str) -> Thresholds:
+        return self.scope_thresholds.get(scope, self.thresholds)
+
+
+@dataclass(frozen=True)
+class NotifyConfig:
+    # instant alerts, only for the strongest trends
+    alert_min_z: float = 10.0
+    alert_min_authors: int = 20
+    # or for a group, when the term trends in this many of its subreddits at once, and in
+    # this share of those mentioning it
+    alert_min_breadth: int = 3
+    alert_min_breadth_share: float = 0.3
+    max_alerts_per_day: int = 5
+    # a term isn't alerted again within this time unless its score doubles
+    cooldown_hours: int = 72
+    # scopes that never alert and get no digest (they're still scored and shown)
+    skip_scopes: tuple[str, ...] = ("sample",)
+    # one digest per group every day at this local time
+    digest_time: str = "08:00"
+    timezone: str = "UTC"
+    digest_size: int = 10
+
+
+@dataclass(frozen=True)
 class Config:
     groups: dict[str, tuple[str, ...]]
     # subreddit -> language code, subreddits without an entry are english
     languages: dict[str, str] = field(default_factory=dict)
     background: BackgroundConfig = field(default_factory=BackgroundConfig)
     ingest: IngestConfig = field(default_factory=IngestConfig)
+    detect: DetectConfig = field(default_factory=DetectConfig)
+    notify: NotifyConfig = field(default_factory=NotifyConfig)
 
     @cached_property
     def subreddits(self) -> tuple[str, ...]:
@@ -103,7 +186,52 @@ def parse_config(raw: dict[str, Any]) -> Config:
         languages=languages,
         background=BackgroundConfig(**(raw.get("background") or {})),
         ingest=IngestConfig(**(raw.get("ingest") or {})),
+        detect=parse_detect(raw.get("detect") or {}),
+        notify=parse_notify(raw.get("notify") or {}),
     )
+
+
+def _normalize_scope(scope: str) -> str:
+    """Groups by name, subreddits as "r/name" (lowercase, like everywhere else)."""
+    scope = scope.strip().removeprefix("/")
+    return f"r/{_normalize_subreddit(scope)}" if scope.lower().startswith("r/") else scope
+
+
+def parse_detect(raw: dict[str, Any]) -> DetectConfig:
+    raw = dict(raw)
+    threshold_names = set(Thresholds.__dataclass_fields__)
+    thresholds = Thresholds(**{key: raw.pop(key) for key in list(raw) if key in threshold_names})
+    scope_thresholds = {
+        _normalize_scope(str(scope)): replace(thresholds, **overrides)
+        for scope, overrides in (raw.pop("scopes", None) or {}).items()
+    }
+    detect = DetectConfig(thresholds=thresholds, scope_thresholds=scope_thresholds)
+    if "horizons" in raw:
+        horizons = tuple(
+            Horizon(name=str(name), **(options or {}))
+            for name, options in (raw.pop("horizons") or {}).items()
+        )
+        if not horizons:
+            raise ValueError("config: detect.horizons needs at least one horizon")
+        detect = replace(detect, horizons=horizons)
+    for name in ("sources", "kinds"):
+        if name in raw:
+            raw[name] = tuple(raw[name] or ())
+    if "exclude_scopes" in raw:
+        raw["exclude_scopes"] = tuple(map(_normalize_scope, raw["exclude_scopes"] or ()))
+    return replace(detect, **raw)
+
+
+def parse_notify(raw: dict[str, Any]) -> NotifyConfig:
+    raw = dict(raw)
+    if "skip_scopes" in raw:
+        raw["skip_scopes"] = tuple(map(_normalize_scope, raw["skip_scopes"] or ()))
+    notify = NotifyConfig(**raw)
+    hours, _, minutes = notify.digest_time.partition(":")
+    if not (hours.isdigit() and minutes.isdigit() and int(hours) < 24 and int(minutes) < 60):
+        raise ValueError(f"config: notify.digest_time must look like 08:00: {notify.digest_time}")
+    ZoneInfo(notify.timezone)  # raises for unknown time zones
+    return notify
 
 
 def load_config(path: Path) -> Config:
@@ -122,6 +250,13 @@ class Env:
     clickhouse_user: str
     clickhouse_password: str
     clickhouse_database: str
+    # where alerts go: a self-hosted ntfy (see docker-compose.yml) or https://ntfy.sh
+    ntfy_url: str = "http://localhost:3609"
+    ntfy_topic: str = "wgra"
+    # only for ntfy servers with access control
+    ntfy_token: str = ""
+    # how the phone reaches grafana, for the links in alerts
+    grafana_url: str = "http://localhost:3608"
 
     @classmethod
     def from_environ(cls, require_reddit: bool = True) -> Env:
@@ -147,4 +282,9 @@ class Env:
             clickhouse_user=os.environ.get("CLICKHOUSE_USER", "wgra"),
             clickhouse_password=os.environ["CLICKHOUSE_PASSWORD"],
             clickhouse_database=os.environ.get("CLICKHOUSE_DB", "wgra"),
+            # empty counts as unset, .env.example lists them empty
+            ntfy_url=(os.environ.get("NTFY_URL") or "http://localhost:3609").rstrip("/"),
+            ntfy_topic=os.environ.get("NTFY_TOPIC") or "wgra",
+            ntfy_token=os.environ.get("NTFY_TOKEN", ""),
+            grafana_url=(os.environ.get("GRAFANA_URL") or "http://localhost:3608").rstrip("/"),
         )

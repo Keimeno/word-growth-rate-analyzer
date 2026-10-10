@@ -1,0 +1,794 @@
+{
+  "uid": "wgra-trending",
+  "title": "Trending now",
+  "description": "Terms mentioned far more than usual, scored every 15 minutes by wgra analyze.",
+  "tags": [
+    "wgra"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "5m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "group",
+        "label": "Group",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "definition": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "sort": 0,
+        "current": {
+          "text": "tracked",
+          "value": "tracked"
+        }
+      },
+      {
+        "type": "query",
+        "name": "scope",
+        "label": "Scopes",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+        "definition": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "type": "custom",
+        "name": "horizon",
+        "label": "Horizon",
+        "query": "24h,6h",
+        "options": [
+          {
+            "text": "24h",
+            "value": "24h",
+            "selected": true
+          },
+          {
+            "text": "6h",
+            "value": "6h",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "24h",
+          "value": "24h"
+        },
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "kind",
+        "label": "Kind",
+        "query": "word,phrase,domain,subreddit",
+        "options": [
+          {
+            "text": "word",
+            "value": "word",
+            "selected": true
+          },
+          {
+            "text": "phrase",
+            "value": "phrase",
+            "selected": true
+          },
+          {
+            "text": "domain",
+            "value": "domain",
+            "selected": true
+          },
+          {
+            "text": "subreddit",
+            "value": "subreddit",
+            "selected": true
+          }
+        ],
+        "current": {
+          "text": [
+            "word",
+            "phrase",
+            "domain",
+            "subreddit"
+          ],
+          "value": [
+            "word",
+            "phrase",
+            "domain",
+            "subreddit"
+          ]
+        },
+        "multi": true,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "subsumed",
+        "label": "Subsumed",
+        "query": "hide,show",
+        "options": [
+          {
+            "text": "hide",
+            "value": "hide",
+            "selected": true
+          },
+          {
+            "text": "show",
+            "value": "show",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "hide",
+          "value": "hide"
+        },
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Last run",
+      "description": "When wgra analyze last scored this horizon. It runs every 15 minutes.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT toUnixTimestamp(max(detected_at)) * 1000 FROM trends WHERE horizon = ${horizon:sqlstring}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Days of history",
+      "description": "Days of data the window is compared with, up to 28. With less than 3 days there are no alerts, and on the first day the window is compared with the share of the term on all of reddit (the r/all sample): what's distinctive, not what's rising.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT max(reference_days)\nFROM trends\nWHERE horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote})\n  AND detected_at = (SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Trending terms",
+      "description": "Distinct terms trending in the selected scopes in the latest run.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run\nSELECT uniqExact(term) FROM trends WHERE horizon = ${horizon:sqlstring} AND detected_at = latest_run AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND (subsumed_by = '' OR ${subsumed:sqlstring} = 'show')",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Alerts sent, last 24h",
+      "description": "Instant alerts to ntfy, in all scopes. At most 5 a day by default.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() FROM trends WHERE alert = 'sent' AND detected_at > now() - INTERVAL 24 HOUR",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Trending now",
+      "description": "The latest run. score: strength of the evidence (z of the weighted log odds, see docs/ARCHITECTURE-V2.md §4.2), what trends are ranked by. times_usual: the share of comments and posts mentioning the term in the window, divided by its share in the 28 days before. new: barely mentioned before. breadth: for a group, in how many of its subreddits the term trends, of those mentioning it. subsumed_by: a phrase that explains this burst ('pro' because of 'vision pro'), shown when Subsumed is set to show. Click a term to open it in the term explorer.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 14
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH (SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run\nSELECT\n    scope,\n    term,\n    kind,\n    round(z, 1) AS score,\n    if(is_new, 'new', toString(round(ratio, 1))) AS times_usual,\n    mentions,\n    authors,\n    if(scope_type = 'group', concat(toString(breadth), '/', toString(members)), '')\n        AS breadth,\n    reference_mentions AS mentions_before,\n    alert,\n    subsumed_by,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&from=now-7d&to=now') AS explore\nFROM trends FINAL\nWHERE horizon = ${horizon:sqlstring} AND detected_at = latest_run AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND (subsumed_by = '' OR ${subsumed:sqlstring} = 'show')\nORDER BY z DESC\nLIMIT 200",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH (SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run\nSELECT hour AS time, term, sum(docs) AS mentions\nFROM term_hourly\nWHERE hour > latest_run - INTERVAL 7 DAY AND hour <= latest_run\n  AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring})\n  AND (kind, term) IN (SELECT kind, term FROM trends WHERE horizon = ${horizon:sqlstring} AND detected_at = latest_run AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND (subsumed_by = '' OR ${subsumed:sqlstring} = 'show'))\nGROUP BY time, term\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "scope"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "score"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "times_usual"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "authors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "breadth"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions_before"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alert"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last 7 days"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "score",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "term",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "term A": "term",
+              "scope A": "scope",
+              "score A": "score",
+              "times_usual A": "times_usual",
+              "mentions A": "mentions",
+              "authors A": "authors",
+              "Trend #B A": "Trend #B",
+              "breadth A": "breadth",
+              "kind A": "kind",
+              "mentions_before A": "mentions_before",
+              "alert A": "alert",
+              "subsumed_by A": "subsumed_by",
+              "explore A": "explore",
+              "Trend #B": "last 7 days"
+            },
+            "indexByName": {
+              "term": 0,
+              "term A": 0,
+              "scope": 1,
+              "scope A": 1,
+              "score": 2,
+              "score A": 2,
+              "times_usual": 3,
+              "times_usual A": 3,
+              "mentions": 4,
+              "mentions A": 4,
+              "authors": 5,
+              "authors A": 5,
+              "Trend #B": 6,
+              "Trend #B A": 6,
+              "breadth": 7,
+              "breadth A": 7,
+              "kind": 8,
+              "kind A": 8,
+              "mentions_before": 9,
+              "mentions_before A": 9,
+              "alert": 10,
+              "alert A": 10,
+              "subsumed_by": 11,
+              "subsumed_by A": 11,
+              "explore": 12,
+              "explore A": 12
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "The top trends over time (per 1,000 comments and posts in the group)",
+      "description": "The 8 strongest trends of the latest run, as a share of all comments and posts in the group's subreddits.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH (SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run\nSELECT t.time AS time, t.term AS term, 1000 * t.docs / s.docs AS per_1000\nFROM (\n    SELECT $__timeInterval(hour) AS time, term, sum(docs) AS docs\n    FROM term_hourly\n    WHERE $__timeFilter(hour)\n      AND subreddit IN (SELECT subreddit FROM subreddit_groups\n                        WHERE group_name = ${group:sqlstring})\n      AND (kind, term) IN (\n          SELECT kind, term FROM trends\n          WHERE horizon = ${horizon:sqlstring} AND detected_at = latest_run AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND (subsumed_by = '' OR ${subsumed:sqlstring} = 'show') AND subsumed_by = ''\n          GROUP BY kind, term ORDER BY max(z) DESC LIMIT 8\n      )\n    GROUP BY time, term\n) AS t\nINNER JOIN (\n    SELECT $__timeInterval(hour) AS time, sum(docs) AS docs\n    FROM scope_hourly\n    WHERE $__timeFilter(hour)\n      AND subreddit IN (SELECT subreddit FROM subreddit_groups\n                        WHERE group_name = ${group:sqlstring})\n    GROUP BY time\n) AS s USING time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.term}",
+          "custom": {
+            "spanNulls": true,
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "table",
+      "title": "Strongest trends of the last 24 hours (the daily digest)",
+      "description": "Each term at its strongest, in any of the selected scopes and either horizon. The daily digest sends the top 10 of each group.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    term,\n    argMax(scope, z) AS strongest_in,\n    round(max(z), 1) AS score,\n    if(argMax(is_new, z), 'new', toString(round(argMax(ratio, z), 1))) AS times_usual,\n    argMax(mentions, z) AS mentions,\n    min(detected_at) AS first_seen,\n    max(detected_at) AS last_seen,\n    arrayStringConcat(arraySort(groupUniqArray(horizon)), ', ') AS horizons,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(strongest_in, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(strongest_in, 3))), concat('&var-group=', encodeURLFormComponent(strongest_in))), '&from=now-7d&to=now') AS explore\nFROM trends\nWHERE detected_at > now() - INTERVAL 24 HOUR AND scope IN (${scope:singlequote})\n  AND kind IN (${kind:singlequote}) AND subsumed_by = ''\nGROUP BY term\nORDER BY max(z) DESC\nLIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "type": "table",
+      "title": "Alerts, last 14 days",
+      "description": "Trends strong enough for an instant alert, and what happened: sent, failed, capped (daily limit reached), cooldown (alerted in the last 72h), warmup (less than 3 days of history), skipped (scope never alerts), muted (a run without notifications). Only one scope per term and run gets a status.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT detected_at AS time, horizon, scope, term, alert, round(z, 1) AS score,\n       if(is_new, 'new', toString(round(ratio, 1))) AS times_usual, mentions, authors,\n       concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&from=now-7d&to=now') AS explore\nFROM trends FINAL\nWHERE alert != '' AND detected_at > now() - INTERVAL 14 DAY AND scope IN (${scope:singlequote})\nORDER BY detected_at DESC\nLIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "time"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    }
+  ]
+}
