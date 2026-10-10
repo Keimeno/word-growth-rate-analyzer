@@ -1,0 +1,396 @@
+{
+  "uid": "wgra-terms",
+  "title": "Term explorer",
+  "description": "How often terms are mentioned in a group or subreddits, relative to all comments and posts.",
+  "tags": [
+    "wgra"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "",
+  "time": {
+    "from": "now-2d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "textbox",
+        "name": "terms",
+        "label": "Terms (comma separated)",
+        "query": "ai, claude, gpt",
+        "current": {
+          "text": "ai, claude, gpt",
+          "value": "ai, claude, gpt"
+        }
+      },
+      {
+        "type": "query",
+        "name": "group",
+        "label": "Group",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "definition": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "sort": 0,
+        "current": {
+          "text": "tracked",
+          "value": "tracked"
+        }
+      },
+      {
+        "type": "query",
+        "name": "subreddit",
+        "label": "Subreddits",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
+        "definition": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "allValue": "$__all",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "type": "custom",
+        "name": "source",
+        "label": "Source",
+        "query": "comment,post",
+        "options": [
+          {
+            "text": "comment",
+            "value": "comment",
+            "selected": true
+          },
+          {
+            "text": "post",
+            "value": "post",
+            "selected": true
+          }
+        ],
+        "current": {
+          "text": [
+            "comment",
+            "post"
+          ],
+          "value": [
+            "comment",
+            "post"
+          ]
+        },
+        "multi": true,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Share of comments and posts mentioning the term (per 1,000)",
+      "description": "Comments and posts that contain the term, per 1,000 comments and posts in the selected subreddits. Dividing by the total removes the daily and weekly activity swings, so the line shows the share of the conversation. Separate several terms with commas.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 11
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT t.time AS time, t.term AS term, 1000 * t.docs / s.docs AS per_1000\nFROM (\n    SELECT $__timeInterval(hour) AS time, term, sum(docs) AS docs\n    FROM term_hourly\n    WHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time, term\n) AS t\nINNER JOIN (\n    SELECT $__timeInterval(hour) AS time, sum(docs) AS docs\n    FROM scope_hourly\n    WHERE $__timeFilter(hour) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY time\n) AS s USING time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.term}",
+          "custom": {
+            "spanNulls": true,
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "timeseries",
+      "title": "Mentions",
+      "description": "Comments and posts containing the term (each counts once).",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT $__timeInterval(hour) AS time, term, sum(docs) AS mentions\nFROM term_hourly\nWHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\nGROUP BY time, term\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.term}",
+          "custom": {
+            "spanNulls": true,
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "timeseries",
+      "title": "Distinct authors",
+      "description": "Different people mentioning the term. Few authors and many mentions usually means spam or one heated thread.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT $__timeInterval(hour) AS time, term, uniqCombinedMerge(12)(authors) AS authors\nFROM term_hourly\nWHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\nGROUP BY time, term\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.term}",
+          "custom": {
+            "spanNulls": true,
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "table",
+      "title": "Where it is discussed",
+      "description": "Within the selected time range.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 9,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT t.term AS term, t.subreddit AS subreddit, t.docs AS mentions, t.authors AS authors,\n       round(1000 * t.docs / s.docs, 2) AS per_1000\nFROM (\n    SELECT term, subreddit, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors\n    FROM term_hourly\n    WHERE $__timeFilter(hour) AND term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring})) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY term, subreddit\n) AS t\nINNER JOIN (\n    SELECT subreddit, sum(docs) AS docs\n    FROM scope_hourly\n    WHERE $__timeFilter(hour) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n    GROUP BY subreddit\n) AS s USING subreddit\nORDER BY mentions DESC\nLIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "type": "table",
+      "title": "Recent mentions",
+      "description": "Raw text is only kept for 48 hours.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 20,
+        "w": 15,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT created_at AS time, subreddit, source, substring(text, 1, 400) AS text,\n       concat('https://www.reddit.com', permalink) AS link\nFROM items\nWHERE $__timeFilter(created_at) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND arrayExists(t -> position(concat(' ', arrayStringConcat(splitByNonAlpha(lower(text)), ' '), ' '), concat(' ', arrayStringConcat(splitByNonAlpha(lower(t)), ' '), ' ')) > 0, splitByChar(',', ${terms:sqlstring}))\nORDER BY created_at DESC\nLIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "link"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on reddit",
+                    "url": "${__value.raw}",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "time"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "subreddit"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    }
+  ]
+}

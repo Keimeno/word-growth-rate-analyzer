@@ -1,0 +1,26 @@
+<clickhouse>
+    <!-- Settings for a small single server. -->
+    <logger>
+        <level>warning</level>
+    </logger>
+
+    <!-- System tables that log continuously would otherwise grow forever and cost
+         more disk and cpu than our own data. The query log is kept for a week. -->
+    <trace_log remove="1"/>
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <text_log remove="1"/>
+    <part_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <query_views_log remove="1"/>
+    <query_metric_log remove="1"/>
+    <latency_log remove="1"/>
+    <error_log remove="1"/>
+    <query_log replace="1">
+        <database>system</database>
+        <table>query_log</table>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </query_log>
+</clickhouse>

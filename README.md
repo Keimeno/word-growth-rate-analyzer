@@ -8,7 +8,7 @@ The objective of this project is, to automatically analyse, store and 
 
 ![WGRA Architecture](WGRA-Architecture.png)
 
-A proposal for the next version of the architecture lives in [docs/ARCHITECTURE-V2.md](docs/ARCHITECTURE-V2.md).
+A proposal for the next version of the architecture lives in [docs/ARCHITECTURE-V2.md](docs/ARCHITECTURE-V2.md). Version 2 is being built in [v2/](v2/README.md) and already collects data, v1 below keeps working until the cutover.
 
 ## Running locally
 

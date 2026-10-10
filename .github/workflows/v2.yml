@@ -1,0 +1,42 @@
+name: v2
+
+on:
+  push:
+    paths: ["v2/**", ".github/workflows/v2.yml"]
+  pull_request:
+    paths: ["v2/**", ".github/workflows/v2.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.8
+        env:
+          CLICKHOUSE_DB: wgra
+          CLICKHOUSE_USER: wgra
+          CLICKHOUSE_PASSWORD: ci-password
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "wget -qO- http://127.0.0.1:8123/ping || exit 1"
+          --health-interval 5s
+          --health-retries 30
+    env:
+      CLICKHOUSE_HOST: localhost
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: wgra
+      CLICKHOUSE_PASSWORD: ci-password
+      CLICKHOUSE_DB: wgra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+      - run: docker build .
