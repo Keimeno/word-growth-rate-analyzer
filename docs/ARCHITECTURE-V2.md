@@ -1,6 +1,6 @@
 # WGRA v2: Architecture and Plan
 
-Status: phases 1, 2 and 4 built, collecting history · October 2026
+Status: phases 1, 2 and 4 and the lead-lag early warning built, collecting history · October 2026
 
 ## 1. What the system is for
 
@@ -144,6 +144,10 @@ The schema as built is in
 | `trends` | ReplacingMergeTree | (horizon, scope, term, detected_at) | 90 days, alerts forever | Detector output, alert state |
 | `long_term_trends` | ReplacingMergeTree | (horizon, scope, term, week) | forever | Long-term detector output, one set per week |
 | `notifications` | MergeTree | (kind, sent_at) | forever | Every message sent to ntfy; makes the daily digest go out once |
+| `lead_lag_events` | ReplacingMergeTree | (kind, term, start) | forever | Every term that trended, with every scope's onset (§4.6) |
+| `propagation_edges` | ReplacingMergeTree | (day, topic, leader, follower) | 180 days | Leader → follower edges, learned daily |
+| `forecasts` | ReplacingMergeTree | (kind, term, event_start, follower, leader) | forever | Forecasts and how they turned out |
+| `wiki_articles`, `wiki_pageviews`, `wiki_leads` | ReplacingMergeTree | (project, …) | forever | Optional: Wikipedia articles, daily views, onsets compared |
 
 Each term row carries `occurrences` (sum), `docs` (number of comments
 containing the term) and `authors` (`uniqCombined` state, a mergeable
@@ -179,6 +183,8 @@ and a plain loop that runs on the clock (:00, :15, :30, :45):
   once a day the digests (built, phase 2)
 * daily after 00:30 UTC: long-term scoring on weekly series → `long_term_trends`,
   and a weekly report per group on Mondays (built, phase 4)
+* daily after 01:00 UTC: new trends → events and onsets, leader → follower edges →
+  `propagation_edges`; after every 15-minute run: forecasts → `forecasts` (built, §4.6)
 * hourly: LLM explanation for newly alerted trends (phase 3)
 
 ### 3.4 Grafana
@@ -192,11 +198,15 @@ datasource. None of the dashboards need custom front-end code:
    mainstreaming, fading and one-off terms of the latest week for a 13-, 26- or
    52-week window, with growth per month, q-value, start and end share, spike
    share and the weekly share as a sparkline, linking to the explorer.
-3. **Term explorer:** pick terms and scopes, see the relative-frequency time
+3. **Early warning** (§4.6): the leader → follower edges as a table (lead time, hit rate,
+   base rate, probability with its interval, lift, n, q) and a node graph, recent
+   cascades (every scope's onset in order), the current forecasts, and the track record:
+   resolved forecasts, calibration, forecasts per day, and Reddit vs Wikipedia.
+4. **Term explorer:** pick terms and scopes, see the relative-frequency time
    series with an auto/hourly/daily/weekly toggle (days and weeks from
    `term_daily`, so beyond the 180 days of `term_hourly`) and a pooled/macro
    group rate toggle, plus example comments.
-4. **Ingestion health:** requests/min vs budget, items/min per stream,
+5. **Ingestion health:** requests/min vs budget, items/min per stream,
    coverage, gaps, error rate. A Grafana alert sends to ntfy when ingestion
    stalls.
 
@@ -215,6 +225,9 @@ There are two notification types:
 
 * **Instant alerts** for very high scores, capped at about 5/day.
 * A **daily digest** with the top items per group.
+
+A third, forecast alerts (§4.6), is built but off by default until replays show the
+forecasts are worth it; switched on, it shares the cap of 5 a day with trend alerts.
 
 As built (phase 2): ntfy v2.28.0 runs in the compose file on `localhost:3609`.
 The analyzer publishes JSON (so terms and titles can be any unicode), with
@@ -241,6 +254,7 @@ Nothing is sent while there are no results (less than 13 weeks of history).
 | ntfy | Free (Apache 2.0 / GPL), self-hosted |
 | Python, uv and all libraries | Free, open source |
 | Trend explanations (§4.5) | Optional and off by default. Free with a local model through Ollama; a paid API is an opt-in alternative. |
+| Wikipedia pageviews (§4.6) | Optional and off by default. Free, no key: Wikimedia's REST API, with a descriptive user agent and rate limited |
 | CI (GitHub Actions), images (GHCR) | Free for public repositories, and within the free minutes for private ones |
 
 The only bill is the server. A small VPS with 4 vCPU, 8 GB RAM and 80–160 GB
@@ -445,9 +459,9 @@ background: [all]           # sampled, used for priors and "distinctive terms"
   background* instead of *now vs. before*. You get the terms that make a
   community what it is, which is useful for picking topic keywords and for
   explaining what a group cares about.
-* **Finding subs for a topic:** start from a hand-picked list. Later, suggest
-  candidates from subs that show up a lot in `subreddit` terms within a
-  group.
+* **Finding subs for a topic:** start from a hand-picked list. As built,
+  `wgra suggest-subreddits` lists untracked subreddits that mention the terms rising now
+  early or far more than their size explains, from the r/all sample's raw items (§4.6).
 
 ### 4.5 Explaining trends with an LLM (optional)
 
@@ -472,6 +486,205 @@ Only the handful of daily alerts are sent, never the stream. Raw text is kept
 for only 48h (§7). That's enough for short-term alerts. For long-term trends,
 fetch fresh examples from Reddit search when generating the explanation. The
 explanation goes into the alert and the dashboard.
+
+### 4.6 Lead-lag early warning
+
+As built ([`v2/src/wgra/leadlag/`](../v2/src/wgra/leadlag/)), in `wgra analyze`: the
+edges once a day after 01:00 UTC (`lead_lag.run_at`), forecasts after every 15-minute
+run. The question: which subreddits pick up terms before other scopes, and so which of
+today's bursts will reach other subreddits, groups or reddit as a whole? Detection says
+what is rising; this says where it goes next.
+
+**Events.** A term trending in any scope with `z ≥ 5` (`event_min_z`, not subsumed)
+starts an event. Its trends within the event's span belong to it, a trend after the span
+starts the next event, so "iphone" every September is one event a year. The span runs
+from 72 hours before the first trend (a scope can cross the onset gates, which are lower
+than the detector's, before anything trends) to 14 days after it (leaders count up to 7
+days in, and each gets 7 days for its followers). The trends of an hour are one sighting.
+Each event gets a topic: the configured group it trended in most, the group itself or one
+of its subreddits with the highest score.
+
+**Onsets.** For every hour of the span, each scope's last 24 hours are scored against its
+own 28 days before them with phase 2's weighted log odds (§4.2). `score_arrays` is
+`Counts.score` over arrays, tested element by element against it. A scope's onset is the
+first hour that passes all of these:
+
+* at least 5 mentions
+* at least 2× its usual share
+* `z ≥ 3`
+* at least 3 days of the scope's own data before the window
+
+That is the hour a detector running then could have seen the term rise in the scope.
+There's no author gate: the hourly author sketches can't be summed over rolling windows
+cheaply, and the event's trend already passed one. The prior is the term's sample share
+over the 90 days before the span, so nothing later goes into it.
+
+The scopes are every tracked subreddit, the r/all sample ("sample", reddit-wide), every
+configured group (pooled counts, like short-term detection), and **every group without
+each of its subreddits**. Without that last kind, a burst in r/LocalLLaMA would carry
+"tech" past the gates on its own mentions, and "r/LocalLLaMA leads tech" would be true by
+construction. The question that makes sense is whether the rest of the group follows.
+
+Events are stored with their onsets in `lead_lag_events`, kept forever because `trends`
+expires after 90 days. An event's onsets are recomputed daily until its span is over.
+
+**Edges.** Every day, for every leader subreddit L and follower F, over the events of the
+last 180 days (`training_days`). The followers are:
+
+* the other tracked subreddits
+* the configured groups, without L when L is one of their subreddits
+* the sample
+
+For each pair:
+
+| Statistic | Definition |
+| --- | --- |
+| leader onsets | events where L crossed, up to 7 days after the first trend |
+| n (`events`) | of those, the ones F hadn't crossed at or before L, with a known outcome: F crossed since (a hit) or 7 days passed (a miss) |
+| hits, hit rate | F crossed within 7 days after L (`max_lag_days`) |
+| lead time | median and IQR of the hits' lags, from L's onset to F's |
+| base rate b | the share of all closed events (span over, and F collecting by then) in which F crossed at all: how often F picks up a term that trends somewhere |
+| probability | the mean of Beta(hits + k·b, misses + k·(1 − b)) with k = 4 pseudo-events (`prior_events`), and its 10th–90th percentile. 3 hits of 3 against b = 0.2 is 54% (27–80%), not 100% |
+| lift | probability / b |
+| p, q (association) | one-sided binomial test of the hits against b; Benjamini–Hochberg over every pair with n ≥ 5, in every topic |
+| reverse, lead share | events where F crossed first, at most 7 days before L; hits / (hits + reverse) |
+| direction q | one-sided binomial test of the hits against the reverse at ½; Benjamini–Hochberg over the associated pairs |
+
+A pair is an edge, stored in `propagation_edges` (per day, 180 days), when all of these
+hold:
+
+* n ≥ 5 and hits ≥ 3
+* both q ≤ 0.05
+* lead share ≥ 0.7 (`min_lead_share`)
+
+Edges are learned over all events (topic "all") and per topic, since a subreddit can lead
+reddit on tech terms and follow on everything else. Each topic is another look at the same
+data, so a topic's edges need q ≤ 0.05 divided by the number of topics.
+
+**Why direction is tested separately.** The first version only tested association, the
+hits against the base rate. On the production-scale benchmark it found the 5 planted
+leader pairs and about 240 random ones at lift 1.3. The random pairs came from big
+events: when a story hits many subreddits, any two of them co-occur, so a leader's onset
+makes every follower more likely without anyone leading. Testing whether the leader comes
+first among the events where both crossed removes the symmetric pairs: down to 29.
+
+A lead share of at least 0.7 then removes what's left in topic "all" (shares of 0.60–0.66).
+These come from volume: a bigger subreddit passes the gates sooner on the same burst.
+Dividing `max_q` by the number of topics removes the noise of testing every pair in 6
+topics. What remained was 14 edges:
+
+* the 5 planted pairs, with lag medians of 67–73 hours (the planted lags are 48–96 hours)
+* 8 of their group and topic versions
+* 1 other, a topic edge with n = 56
+
+**Why the topic comes from the first hour.** The first replays were badly calibrated at the
+top: forecasts at 75% came true 24% of the time. A topic decided by all of an event's trends
+includes the followers' trends. Events the follower picked up got the follower's topic more
+often, which made the per-topic hit rates look like 68% where the forecast, knowing only the
+leader, could expect 31%. Decided by the first hour, there are no such forecasts, and the
+bins are within 8 points of what came true (below).
+
+Three choices behind these definitions:
+
+* The base rate is the share of events with any crossing, not the chance of crossing
+  within 7 days of a random time. An event spans 17 days, so lift comes out
+  conservative.
+* A follower that crossed first doesn't count against a leader, since it couldn't follow.
+  When the roles are swapped, it counts for it.
+* Correcting over every pair keeps random coincidences out: on the synthetic history, a
+  random subreddit's 2 hits of 11 against a base rate of 0.45 are nowhere near an edge.
+* The association test is anti-conservative when events differ in size, because a
+  leader's onset makes a big event more likely. The direction test and the lead-share
+  gate carry the weight, and `wgra replay --forecast` is the arbiter.
+
+**No lookahead.** An onset only uses the hours up to its own. Edges learned as of time T
+only count:
+
+* onsets whose hour was over by T,
+* misses whose 7 days were over by T,
+* base rates from events whose span was over by T,
+* events from trends detected by T.
+
+So onsets computed once with all the data agree with those a run at T would have
+computed, and replays compute them once. Tested both ways: on hand-built events, and on
+the synthetic history, where edges as of day 40 from onsets computed with all the data
+equal those from onsets computed with the data up to day 40.
+
+**Forecasts.** After every detection run, for each term trending (`z ≥ 5`) in a
+subreddit L that has edges, all of these must hold:
+
+* L's onset in the term's current event is known (its hour is over)
+* 7 days haven't passed since it
+* F hasn't crossed
+* there is an edge L → F with lift ≥ 1.5, the event's topic's edge if there is one,
+  else the one over all events
+
+For each such F, the forecast probability is
+
+```
+P(F crosses | nothing yet, e hours after L's onset) = p · S(e) / (1 − p + p · S(e))
+S(e) = (past hits with a lag above e + 0.5) / (hits + 1)
+```
+
+A forecast at 0.3 or more (`forecast.min_probability`) is stored in `forecasts` with:
+
+* its interval (the edge's, adjusted the same way)
+* the base rate
+* the expected time: the onset plus the median of the past lags still to come
+* the due time: the onset plus 7 days
+
+Later runs resolve it: a hit when F crosses by the due time, a miss after. The
+probability is the one it was made with and is never updated, so the track record is what
+was said when it was said.
+
+Forecast alerts are optional and off by default (`forecast.alert`). Switched on, they
+take a forecast at 0.6 or more on an edge with at least 10 events, one per term (its most
+likely follower). They count against `notify.max_alerts_per_day` together with trend
+alerts, each counting the other's, at most 2 a day.
+
+**Evaluation** (`wgra replay --forecast`). The replay's detector runs (or with
+`--events stored`, the stored trends, much faster but with the live settings) give the
+sightings of every step. Events come from them, onsets are computed once, edges are
+learned once a day as of the first step after `run_at`, and forecasts are made by the same
+`decide` as the live loop. Each event and follower is scored once, by its first forecast
+(of several leaders the likeliest):
+
+* precision: the share that came true
+* recall: of the followers that crossed within 7 days after some subreddit's onset, the
+  share forecast before they crossed
+* lead time: from the forecast to the follower's onset, for the hits
+* calibration: per probability bin, the share that came true, and the Brier score
+  against always forecasting the base rate
+
+**Community suggestions** (`wgra suggest-subreddits`). The sample pools every untracked
+subreddit, but the raw items (48 hours) still name the real subreddit in their permalink.
+For the terms trending now, words and phrases past the detector's warmup, ClickHouse
+finds the sampled items mentioning them (words of the text and of the term matched like
+the term explorer's examples, one pass with `multiSearchAllPositionsUTF8`).
+
+A subreddit counts for a term only if it over-indexes on it: at least 2 mentions, and 3×
+what its share of the sampled items would give it. Without that, r/AskReddit tops every
+list. Candidates are ranked by how many terms they mentioned before the terms trended,
+how many they mentioned first, then how many in all. The command prints lines to paste
+into a group, and never changes the config. On the live data of the first day it takes
+0.4 s over 136k sampled items.
+
+**External validation** (optional, `wikipedia.enabled` or `wgra wikipedia`). This checks
+whether Reddit onsets lead Wikipedia interest. For closed events whose term names an
+article:
+
+* The action API resolves the term, as written and in title case, through redirects.
+  "vision pro" becomes Apple Vision Pro. Missing pages and disambiguation pages don't
+  count.
+* Daily human pageviews come from the Wikimedia REST API: free, no key, a descriptive
+  user agent, at most 5 requests a second.
+* Articles and views are cached in ClickHouse, so each is fetched once.
+* Interest starts on the first day of the span with at least 100 views and 3× the median
+  of the 28 days before.
+* The lead is that day minus the day of the event's first Reddit onset.
+
+`wgra wikipedia` prints how often Reddit was first, the median lead, and a two-sided sign
+test.
 
 ## 5. Tech stack
 
@@ -524,9 +737,12 @@ v2/
     detect/                 # scoring.py, short_term.py, alerts.py, run.py, replay.py,
                             # long_term.py, trend_stats.py
     notify/                 # ntfy.py, messages.py
+    leadlag/                # events.py, onsets.py, edges.py, stats.py, forecasts.py,
+                            # run.py, evaluate.py, suggest.py, wikipedia.py (§4.6)
     explain/                # phase 3: optional LLM explanations
   tests/
-  bench/                    # production-scale synthetic history, long-term benchmark
+  bench/                    # production-scale synthetic history, long-term and
+                            # lead-lag benchmarks
 ```
 
 ## 6. Delivery plan
@@ -750,6 +966,104 @@ Still open:
   write `term_daily` rows marked `source = 'backfill'`. Read the caveats in
   §7 first. That would make long-term results available right away.
 
+### Lead-lag early warning (built 2026-10-11, waiting for history)
+
+Built, in `v2/` (see §4.6 for the method as built):
+
+* `lead_lag_events`, `propagation_edges`, `forecasts`, and the optional Wikipedia cache
+  ([`004_lead_lag.sql`](../v2/src/wgra/migrations/004_lead_lag.sql)). The `lead_lag:`,
+  `forecast:` and `wikipedia:` sections of `config.yaml`.
+* In `wgra analyze`: daily events, onsets and edges after 01:00 UTC (`--no-lead-lag` turns
+  it off), and forecasts after every run. Forecast alerts through ntfy are optional and
+  off, and inside the daily alert cap.
+* CLI:
+  * `wgra lead-lag --once [--as-of] [--dry-run]`, `wgra edges`, `wgra forecasts`
+  * `wgra replay --forecast [--events stored]` with overrides for the gates
+  * `wgra suggest-subreddits`
+  * `wgra wikipedia`
+* Grafana: the Early warning dashboard, checked in a throwaway Grafana on demo data (the
+  synthetic history run through the live loop day by day).
+* 208 tests (from 153). They cover:
+  * the statistics against scipy, and `score_arrays` against `Counts.score`
+  * onsets on arrays, events and topics
+  * edges on hand-built events: censoring, eligibility, base rates, direction, no
+    lookahead
+  * forecasts, their resolution, the alert cap, the evaluation metrics, config and messages
+  * `suggest-subreddits` and the Wikipedia check, with a mocked Wikimedia and the
+    ClickHouse cache
+  * end to end in a throwaway ClickHouse database on 10 weeks of synthetic history: r/a
+    leads r/b by 3 days on 18 terms, the sample follows r/a by 5 days on 12 of them, and
+    r/c bursts at random on 14 terms (5 of them also in r/b at independent times)
+
+What the synthetic end-to-end test shows, with the detector run daily and then the daily
+lead-lag run:
+
+* **r/a → r/b recovered:** 18 hits of 18, lag median 73 hours (IQR 70–75), base rate
+  0.45, probability 0.90 (0.81–0.97), q 4·10⁻⁵.
+* **The sample follows:** r/a → sample at 119 hours, r/b → sample at 46 hours.
+* **Nothing for r/c:** no edge involving it in any topic. Its 2 hits of 11 on r/b against
+  a base rate of 0.45 are nowhere near an edge.
+* **Replay with daily steps:** precision 87% (13 of 15), recall 23% (the first weeks are
+  spent learning), warning median 2.5 days, Brier 0.099 against 0.330 for the base rate
+  alone.
+
+Measured on 2026-10-11:
+
+* **Live:** a read-only probe built 132 events from the live trends and computed their
+  onsets in 0.1 s. With a day of history no window has 3 days of reference yet, so there
+  are no onsets for real. Migration 004 isn't applied to the live database yet; the
+  analyzer applies it when it's deployed.
+* **Production scale, synthetic** (`v2/bench/lead_lag.py`):
+  * The data: 60 days of hourly counts for the 37 subreddits and the sample, calibrated to
+    the term rows per hour measured in the first live hour, 245M `term_hourly` rows
+    (1.4 GiB). In the last 30 days, 400 events a day of log-uniform rank (a quarter are
+    words used every hour in most subreddits), merging into 8,923 events and 626k trend
+    rows. Five leaders pass 60% of their terms on to a fixed follower 2–4 days later.
+  * The hardware: a ClickHouse limited to 4 CPUs and 8 GB, the planned VPS.
+
+  | Run | Time | Python peak | ClickHouse |
+  | --- | --- | --- | --- |
+  | first daily run (backfill, 30 days of events) | 55 s | 728 MiB | 156 queries, 34 s in all, slowest 1.3 s, at most 235 MiB, 2.5 billion rows read |
+  | daily run (onsets of the 6,423 open events, edges) | 43 s | 945 MiB | 117 queries, 26 s in all, slowest 1.5 s, at most 558 MiB |
+  | forecast step of one analyze run (30 leading terms, 300 pending) | 2.4 s | 214 MiB | 21 queries, 1.6 s, at most 113 MiB |
+  | learning the edges from 180 days of events (53,538 events, 1.2M onsets) | 3.1 s | 351 MiB | — |
+  | `wgra replay --forecast --events stored`, 30 days of hourly steps | 71 s | 782 MiB | 35 s in all, at most 221 MiB |
+
+  * The first live run reads up to 90 days of trends, about 3 minutes at this rate.
+  * Most rows read are whole granules of common words, which are in every subreddit every
+    hour. Read in chunks of 500 events, one query took 880 MiB; at 250 it's half.
+* **Quality on that data:**
+  * The 5 planted pairs are found at the right lags, plus 8 of their group and topic
+    versions and 1 other edge.
+  * Replay: precision 43%, calibrated. Forecasts at 38% came true 46% of the time, at 47%
+    came true 42%. The planted followers follow about 40% of their leaders' bursts, the
+    rest are random.
+  * Brier 0.249 against 0.276, recall on edges 67%, warning median 2.7 days.
+  * Overall recall is 2%: most followers in this data follow by chance, and no edge can
+    forecast them.
+
+Still open, the limitation that matters: **edges need about 4–6 weeks of real history
+before they mean anything.**
+
+* An event takes 17 days to close, and only closed events give base rates.
+* A pair needs at least 5 resolved leader onsets, a significant excess over the base rate
+  after correcting over thousands of pairs, and the leader first in at least 70% of
+  shared events. Topic edges need even more.
+* At live rates, the first edges should show up after 3–4 weeks for the most active
+  pairs. Precision and calibration numbers from `wgra replay --forecast --events stored`
+  start to be worth reading after 6 weeks.
+* Until then the dashboard shows few or no edges, and that's the honest answer.
+
+Next:
+
+* Review the first edges and replay numbers (from about 2026-11-15) and tune
+  `event_min_z`, `min_events`, `min_lead_share` and `forecast.min_probability`. Turn
+  forecast alerts on once calibration holds.
+* Turn `wikipedia.enabled` on once there are closed events. It's free, and tells whether
+  Reddit leads public interest.
+* Consider volume: big subreddits cross sooner on the same relative rise (§7). If the
+  edges are mostly big → small, compare onsets at matched mention counts.
+
 ### Phase 5: hardening and cutover
 
 * GHCR images, deploy over SSH (`docker compose pull && up -d`), nightly
@@ -791,7 +1105,17 @@ Facts below were checked against primary sources on 2026-10-10.
   * Use only for private exploration, if at all.
 * **Coordinated campaigns or bots** can look like trends. Distinct authors
   helps. Account age would help more but costs extra API calls, so it's left
-  out for now.
+  out for now. A campaign that posts in one subreddit first and others later
+  would also look like a lead-lag edge.
+* **Lead-lag edges are associations, not causes** (§4.6). Three known biases:
+  * Big subreddits pass the onset gates sooner on the same relative rise, since z grows
+    with volume. They partly look like leaders for being big. The 2× share gate limits
+    this but doesn't remove it.
+  * Events are only terms that trended somewhere.
+  * The binomial test assumes independent events, while terms of one story are not
+    independent.
+
+  Forecasts stay off as alerts until `wgra replay --forecast` shows they're calibrated.
 * **r/all is a sample.** It's good for priors and for "what's big
   everywhere". It can't support per-sub conclusions for subs you don't track
   explicitly.

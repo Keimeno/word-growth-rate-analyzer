@@ -109,7 +109,7 @@
     {
       "type": "stat",
       "title": "Edges",
-      "description": "Leader -> follower pairs that pass the gates in the selected topic: at least 5 events, 3 hits and a q-value of at most 0.05.",
+      "description": "Leader -> follower pairs that pass the gates in the selected topic: at least 5 events and 3 hits, more hits than the base rate explains and the leader first in at least 70% of the events where both crossed (q-values of at most 0.05).",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -326,7 +326,7 @@
     {
       "type": "table",
       "title": "Leader -> follower edges",
-      "description": "Learned daily from the events of the last 180 days. lead: median time from the leader's onset (the first hour its last 24h crossed 2x its usual share, z 3) to the follower's, IQR in days. n: the leader's onsets the follower hadn't crossed before, with a known outcome. hit_rate: of those, followed within 7 days. base_rate: the share of all events in which the follower crossed at all. probability: the hit rate shrunk to the base rate by 4 pseudo-events, with its 80% interval. lift: probability / base rate. q: one-sided binomial test of the hits against the base rate, Benjamini–Hochberg over all pairs. '(rest)': a group of the leader's, without the leader's own mentions. Edges need 4–6 weeks of history to mean anything.",
+      "description": "Learned daily from the events of the last 180 days. lead: median time from the leader's onset (the first hour its last 24h crossed 2x its usual share, z 3) to the follower's, IQR in days. n: the leader's onsets the follower hadn't crossed before, with a known outcome. hit_rate: of those, followed within 7 days. base_rate: the share of all events in which the follower crossed at all. probability: the hit rate shrunk to the base rate by 4 pseudo-events, with its 80% interval. lift: probability / base rate. first: of the events where both crossed within 7 days of each other, the share the leader was first in. q: the larger of two Benjamini–Hochberg q-values, the hits against the base rate (over all pairs) and the leader coming first against chance (over the associated pairs). '(rest)': a group of the leader's, without the leader's own mentions. Edges need 4–6 weeks of history to mean anything.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -346,7 +346,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    follower_type AS type,\n    lag_median AS lead,\n    concat(toString(round(lag_q25 / 24, 1)), '–', toString(round(lag_q75 / 24, 1)), 'd')\n        AS lead_iqr,\n    events AS n,\n    hits,\n    hit_rate,\n    base_rate,\n    probability,\n    concat(toString(round(100 * probability_low)), '–',\n           toString(round(100 * probability_high)), '%') AS interval,\n    round(lift, 1) AS lift,\n    q_value AS q,\n    leader_onsets\nFROM propagation_edges FINAL\nWHERE day = (SELECT max(day) FROM propagation_edges) AND topic = ${topic:sqlstring} AND leader IN (${leader:singlequote})\nORDER BY lift DESC\nLIMIT 500",
+          "rawSql": "SELECT\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    follower_type AS type,\n    lag_median AS lead,\n    concat(toString(round(lag_q25 / 24, 1)), '–', toString(round(lag_q75 / 24, 1)), 'd')\n        AS lead_iqr,\n    events AS n,\n    hits,\n    hit_rate,\n    base_rate,\n    probability,\n    concat(toString(round(100 * probability_low)), '–',\n           toString(round(100 * probability_high)), '%') AS interval,\n    round(lift, 1) AS lift,\n    lead_share AS first,\n    greatest(q_value, direction_q) AS q,\n    leader_onsets\nFROM propagation_edges FINAL\nWHERE day = (SELECT max(day) FROM propagation_edges) AND topic = ${topic:sqlstring} AND leader IN (${leader:singlequote})\nORDER BY lift DESC\nLIMIT 500",
           "refId": "A"
         }
       ],
@@ -372,7 +372,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": "^(hit_rate|base_rate|probability)$"
+              "options": "^(hit_rate|base_rate|probability|first)$"
             },
             "properties": [
               {

@@ -17,7 +17,8 @@ Scored per event and follower, the first forecast (of several leaders the most l
 
 * precision: the share that came true
 * recall: of the followers that did follow a subreddit's onset within `max_lag_days`, the
-  share forecast before they crossed
+  share forecast before they crossed. Over all of them, most of which no edge could
+  forecast, and over those that followed a leader with an edge at the time (on edges)
 * lead time: from the forecast to the follower's onset, for the hits
 * calibration: per probability bin, the forecasts and the share that came true; the Brier
   score against that of always forecasting the follower's base rate
@@ -25,6 +26,7 @@ Scored per event and follower, the first forecast (of several leaders the most l
 
 from __future__ import annotations
 
+import bisect
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -71,9 +73,12 @@ class Evaluation:
     # the first per event and follower, with a known outcome, and those still pending
     scored: list[Forecast] = field(default_factory=list)
     pending: int = 0
-    # (event, follower) pairs that followed a subreddit, and those forecast before
+    # (event, follower) pairs that followed a subreddit, and those forecast before; the same
+    # for those that followed a leader with an edge to them at the time
     followed: int = 0
     forecast_in_time: int = 0
+    followed_on_edges: int = 0
+    forecast_in_time_on_edges: int = 0
 
     @property
     def hits(self) -> list[Forecast]:
@@ -86,6 +91,12 @@ class Evaluation:
     @property
     def recall(self) -> float | None:
         return self.forecast_in_time / self.followed if self.followed else None
+
+    @property
+    def recall_on_edges(self) -> float | None:
+        if not self.followed_on_edges:
+            return None
+        return self.forecast_in_time_on_edges / self.followed_on_edges
 
     def lead_hours(self) -> list[float]:
         """From each hit's forecast to the follower's onset."""
@@ -172,6 +183,8 @@ def evaluate(
 
     edges = EdgeIndex([])
     learned_at: datetime | None = None
+    # the edges of every daily run, to tell which followers had an edge when they followed
+    snapshots: list[tuple[datetime, EdgeIndex]] = []
     steps_with_edges = 0
     made: dict[tuple[str, str, datetime, str, str], Forecast] = {}
     for step in steps:
@@ -181,6 +194,7 @@ def evaluate(
             known = [event for event in events if event.start <= at]
             edges = EdgeIndex(learn_edges(known, network, at, settings).edges)
             learned_at = at
+            snapshots.append((at, edges))
         if len(edges):
             steps_with_edges += 1
         leading: dict[tuple[str, str], set[str]] = defaultdict(set)
@@ -212,6 +226,13 @@ def evaluate(
     start, end = steps[0].at, steps[-1].at
     max_lag = timedelta(days=settings.max_lag_days)
     followed: dict[tuple[tuple[str, str, datetime], str], datetime] = {}
+    on_edges: set[tuple[tuple[str, str, datetime], str]] = set()
+    learned = [at for at, _ in snapshots]
+
+    def edges_at(moment: datetime) -> EdgeIndex | None:
+        position = bisect.bisect_right(learned, moment)
+        return snapshots[position - 1][1] if position else None
+
     for event in events:
         if not start <= event.start <= end:
             continue
@@ -225,14 +246,17 @@ def evaluate(
                 if follows is not None and onset.at < follows.at <= onset.at + max_lag:
                     key = (event.key, follower.scope)
                     followed[key] = min(followed.get(key, follows.at), follows.at)
-    in_time = sum(
-        1
+                    index = edges_at(onset.at + HOUR)
+                    if index is not None and index.has(scope, follower.key):
+                        on_edges.add(key)
+    in_time = [
+        (forecast.event_key, forecast.follower)
         for forecast in firsts
         if forecast.outcome == HIT
         and (forecast.event_key, forecast.follower) in followed
         and forecast.follower_onset is not None
         and forecast.created_at <= forecast.follower_onset
-    )
+    ]
     return Evaluation(
         start=start,
         end=end,
@@ -244,7 +268,9 @@ def evaluate(
         scored=scored,
         pending=len(firsts) - len(scored),
         followed=len(followed),
-        forecast_in_time=in_time,
+        forecast_in_time=len(in_time),
+        followed_on_edges=len(on_edges),
+        forecast_in_time_on_edges=sum(1 for key in in_time if key in on_edges),
     )
 
 
@@ -277,6 +303,11 @@ def report(evaluation: Evaluation) -> str:
         else "- (no follower followed)"
     )
     lines.append(f"  precision {scored} | recall {found}")
+    if (on_edges := evaluation.recall_on_edges) is not None:
+        lines.append(
+            f"  recall on edges {on_edges:.0%}: {evaluation.forecast_in_time_on_edges} of "
+            f"{evaluation.followed_on_edges} that followed a leader with an edge to them"
+        )
     leads = evaluation.lead_hours()
     if leads:
         q25, median, q75 = np.percentile(leads, [25, 50, 75])

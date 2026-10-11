@@ -143,7 +143,6 @@ FROM term_hourly
 WHERE subreddit IN {{columns:Array(String)}} AND source IN {{sources:Array(String)}}
   AND (kind, term) IN {{terms:Array(Tuple(String, String))}} AND {_GRID}
 GROUP BY key, column, hour_index
-ORDER BY key, hour_index
 """
 
 TOTALS_SQL = f"""
@@ -172,8 +171,10 @@ WHERE subreddit = {sample:String} AND source IN {sources:Array(String)}
 GROUP BY day_index
 """
 
-# events processed together: their grids are read in one query
-CHUNK_EVENTS = 500
+# events processed together: their grids are read in one query. A chunk of common words
+# returns millions of rows; at 500 a query took up to 880 MiB on the production-scale
+# benchmark (bench/lead_lag.py)
+CHUNK_EVENTS = 250
 CHUNK_DAYS = 7
 
 
@@ -263,6 +264,8 @@ class OnsetFinder:
             rows = self._client.query_np(
                 MENTIONS_SQL, parameters=grid, settings={"log_comment": "lead-lag mentions"}
             )
+            # by term, to slice each event's rows (sorting here costs ClickHouse no memory)
+            rows = rows[np.argsort(rows["key"], kind="stable")] if len(rows) else rows
         priors = self._priors(events, index, common)
 
         key_column = rows["key"] if rows is not None and len(rows) else np.zeros(0, np.uint32)

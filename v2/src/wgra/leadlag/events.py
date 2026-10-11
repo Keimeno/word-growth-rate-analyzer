@@ -10,8 +10,11 @@ gates, which are lower than the detector's, before anything trends) to 2 × `max
 after it: leaders' onsets count up to `max_lag_days` after the first trend, and each gets
 `max_lag_days` for its followers.
 
-Each event gets a topic, the configured group it trended in most: the group itself or one
-of its subreddits with the highest score. Edges are learned per topic too, since a
+Each event gets a topic, the configured group it trended in most in its first hour: the
+group itself or one of its subreddits with the highest score. Only the first hour, because
+later trends include the followers': an event the follower picked up would get the
+follower's topic more often, and the topic's edges would look better than a forecast,
+which only knows the leader, can be. Edges are learned per topic too, since a
 subreddit can lead reddit on tech terms and follow on everything else.
 """
 
@@ -96,11 +99,13 @@ class Event:
     last_seen: datetime
     # scope -> its highest score in the event
     scopes: dict[str, float] = field(default_factory=dict)
+    # the same for the event's first hour, what its topic is decided by
+    first_scopes: dict[str, float] = field(default_factory=dict)
     onsets: list[Onset] = field(default_factory=list)
     # the data the onsets were computed from ends here (exclusive), None: not yet
     onsets_until: datetime | None = None
     closed: bool = False
-    # in replays: every sighting, so the topic can be known as of a time
+    # in replays: every sighting, so the first hour's scopes can be known as of a time
     sightings: list[Sighting] = field(default_factory=list, repr=False)
 
     @property
@@ -109,23 +114,35 @@ class Event:
 
     def add(self, sighting: Sighting, keep: bool = False) -> None:
         self.last_seen = max(self.last_seen, sighting.at)
-        self.scopes[sighting.scope] = max(self.scopes.get(sighting.scope, sighting.z), sighting.z)
+        _keep_max(self.scopes, sighting)
+        if sighting.at < self.start + HOUR:
+            _keep_max(self.first_scopes, sighting)
         if keep:
             self.sightings.append(sighting)
 
-    def scopes_at(self, moment: datetime) -> dict[str, float]:
-        """The scopes it trended in up to `moment`, from the sightings when there are."""
+    def first_scopes_at(self, moment: datetime) -> dict[str, float]:
+        """The scopes it trended in during its first hour, up to `moment` (from the
+        sightings when there are, a replay's events know them as of any time)."""
         if not self.sightings:
-            return self.scopes
+            return self.first_scopes
         scopes: dict[str, float] = {}
         for sighting in self.sightings:
-            if sighting.at <= moment:
-                scopes[sighting.scope] = max(scopes.get(sighting.scope, sighting.z), sighting.z)
+            if sighting.at <= moment and sighting.at < self.start + HOUR:
+                _keep_max(scopes, sighting)
         return scopes
+
+    def topic(self, groups: Mapping[str, Sequence[str]], moment: datetime | None = None) -> str:
+        """Its topic, from its first hour (as of `moment`)."""
+        scopes = self.first_scopes if moment is None else self.first_scopes_at(moment)
+        return topic_of(scopes, groups)
 
     def onsets_known(self, moment: datetime) -> dict[tuple[str, str], Onset]:
         """The onsets that are known at `moment`: their hour is over."""
         return {onset.key: onset for onset in self.onsets if onset.at + HOUR <= moment}
+
+
+def _keep_max(scopes: dict[str, float], sighting: Sighting) -> None:
+    scopes[sighting.scope] = max(scopes.get(sighting.scope, sighting.z), sighting.z)
 
 
 def topic_of(scopes: Mapping[str, float], groups: Mapping[str, Sequence[str]]) -> str:
@@ -216,6 +233,7 @@ EVENT_COLUMNS = (
     "last_seen",
     "topic",
     "scopes",
+    "first_scopes",
     "onsets",
     "onsets_until",
     "closed",
@@ -235,8 +253,9 @@ def write_events(
                 event.term,
                 event.start,
                 event.last_seen,
-                topic_of(event.scopes, groups),
+                event.topic(groups),
                 event.scopes,
+                event.first_scopes,
                 [
                     (onset.scope, onset.without, onset.at, onset.mentions, onset.ratio, onset.z)
                     for onset in event.onsets
@@ -259,12 +278,16 @@ def _onset(value: Any) -> Onset:
 
 
 EVENTS_SQL = """
-SELECT kind, term, start, last_seen, scopes, onsets, onsets_until, closed
+SELECT kind, term, start, last_seen, scopes, first_scopes, onsets, onsets_until, closed
 FROM lead_lag_events FINAL
 WHERE start >= toDateTime({since:UInt32}, 'UTC') AND start <= toDateTime({until:UInt32}, 'UTC')
   {condition}
 ORDER BY start
 """
+
+
+# ClickHouse takes query parameters up to 128 KiB (http_max_field_value_size)
+TERMS_PER_QUERY = 2000
 
 
 def load_events(
@@ -275,15 +298,30 @@ def load_events(
     open_only: bool = False,
 ) -> list[Event]:
     """Stored events starting in [since, until], only of `terms` when given."""
+    if terms is not None:
+        keys = sorted(set(terms))
+        events = []
+        for first in range(0, len(keys), TERMS_PER_QUERY):
+            events += _load_events(
+                client, since, until, keys[first : first + TERMS_PER_QUERY], open_only
+            )
+        return sorted(events, key=lambda event: event.start)
+    return _load_events(client, since, until, None, open_only)
+
+
+def _load_events(
+    client: Client,
+    since: datetime,
+    until: datetime,
+    keys: list[tuple[str, str]] | None,
+    open_only: bool,
+) -> list[Event]:
     conditions = []
     parameters: dict[str, Any] = {
         "since": int(since.timestamp()),
         "until": int(until.timestamp()),
     }
-    if terms is not None:
-        keys = sorted(set(terms))
-        if not keys:
-            return []
+    if keys is not None:
         conditions.append("AND (kind, term) IN {terms:Array(Tuple(String, String))}")
         parameters["terms"] = keys
     if open_only:
@@ -292,7 +330,7 @@ def load_events(
         EVENTS_SQL.replace("{condition}", " ".join(conditions)), parameters=parameters
     ).result_rows
     events = []
-    for kind, term, start, last_seen, scopes, onsets, onsets_until, closed in rows:
+    for kind, term, start, last_seen, scopes, first_scopes, onsets, onsets_until, closed in rows:
         until_at = as_utc(onsets_until)
         events.append(
             Event(
@@ -301,6 +339,7 @@ def load_events(
                 start=as_utc(start),
                 last_seen=as_utc(last_seen),
                 scopes={scope: float(z) for scope, z in scopes.items()},
+                first_scopes={scope: float(z) for scope, z in first_scopes.items()},
                 onsets=[_onset(onset) for onset in onsets],
                 onsets_until=until_at if until_at.timestamp() > 0 else None,
                 closed=bool(closed),

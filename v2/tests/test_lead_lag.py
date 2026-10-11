@@ -153,6 +153,8 @@ def test_replay_measures_forecast_precision(history_db):
     assert len(evaluation.scored) >= 8
     assert evaluation.precision is not None and evaluation.precision >= 0.8
     assert evaluation.recall is not None and evaluation.recall > 0.15
+    # once an edge exists, most of the followers that follow it are forecast in time
+    assert evaluation.recall_on_edges is not None and evaluation.recall_on_edges >= 0.6
     assert not [f for f in evaluation.forecasts if "r/c" in (f.leader, f.follower)]
     # b follows a after 3 days, the forecasts come a day after a: about 2 days of warning
     leads = evaluation.lead_hours()
@@ -160,7 +162,7 @@ def test_replay_measures_forecast_precision(history_db):
     brier = evaluation.brier()
     assert brier is not None and brier[0] < brier[1]
     text = report(evaluation)
-    assert "precision" in text and "recall" in text and "calibration" in text
+    assert "precision" in text and "recall on edges" in text and "calibration" in text
     # replays write nothing
     (count,) = client.query("SELECT count() FROM forecasts").result_rows[0]
     assert count == 0

@@ -106,12 +106,8 @@ class LeadLag:
         if latest and as_utc(latest).timestamp() > 0:
             since = max(since, as_utc(latest) - self.span())
         sightings = load_sightings(self._client, since, now, self.settings.event_min_z)
-        existing = load_events(
-            self._client,
-            since - self.span(),
-            now,
-            terms={(sighting.kind, sighting.term) for sighting in sightings},
-        )
+        # every event a sighting since then can belong to
+        existing = load_events(self._client, since - self.span(), now)
         touched = assign_events(sightings, existing, self.settings)
         events = {
             event.key: event

@@ -129,6 +129,66 @@ long_term:
   # stored per scope, window and category, the fastest growing or fading first
   max_per_category: 25
 
+# Lead–lag early warning: which subreddits pick up terms before others, and forecasts of
+# which current bursts will reach other subreddits, groups or all of reddit (the sample).
+# Once a day `wgra analyze` turns new trends into events, finds every scope's onset (the
+# first hour its last 24h crossed the gates below against its own 28 days before) and
+# learns the leader -> follower edges; after every detection run it makes forecasts. Edges
+# need about 4–6 weeks of history to mean anything. See docs/ARCHITECTURE-V2.md §4.6.
+lead_lag:
+  enabled: true
+  run_at: "01:00"            # UTC, every day
+  event_min_z: 5             # a trend at least this strong (not subsumed) is an event
+  # a scope's onset: its last window_hours against the reference_days before them
+  window_hours: 24
+  reference_days: 28
+  onset_min_mentions: 5
+  onset_min_ratio: 2         # times its usual share
+  onset_min_z: 3
+  min_reference_days: 3      # no onsets in a scope with less history
+  lookback_hours: 72         # onsets are looked for from this long before the first trend
+  max_lag_days: 7            # a follower follows within this long after the leader
+  training_days: 180         # the events edges are learned from
+  # an edge: at least min_events leader onsets the follower hadn't crossed before (with a
+  # known outcome), min_hits followed, and q-values of at most max_q: the hits against the
+  # follower's base rate (Benjamini–Hochberg over all pairs), and the leader coming first
+  # against chance (over the associated pairs)
+  min_events: 5
+  min_hits: 3
+  max_q: 0.05
+  # and the leader first in this share of the events where both crossed within
+  # max_lag_days of each other (scopes picking up the same stories in either order are
+  # associated, but neither leads)
+  min_lead_share: 0.7
+  prior_events: 4            # pseudo-events at the base rate, so few events can't be certain
+  interval: 0.8              # the probability interval shown: 10th to 90th percentile
+  topics: true               # also per topic (the group an event trended in most), with
+                             # max_q divided by the number of topics
+
+forecast:
+  enabled: true              # forecasts are stored and shown in Grafana
+  min_probability: 0.3
+  min_lift: 1.5
+  # ntfy alerts for forecasts: off until `wgra replay --forecast` shows they're worth it.
+  # They count against notify.max_alerts_per_day, at most alert_max_per_day of it.
+  alert: false
+  alert_min_probability: 0.6
+  alert_min_events: 10
+  alert_max_per_day: 2
+
+# Optional: do reddit onsets come before interest on Wikipedia? Compares the daily
+# pageviews (Wikimedia's free API, no key, cached in ClickHouse) of the articles that
+# events' terms name with the onsets. `wgra wikipedia` runs it on demand.
+wikipedia:
+  enabled: false
+  project: en.wikipedia
+  # Wikimedia asks for a descriptive user agent with a way to contact you
+  user_agent: "wgra/2.0 (https://github.com/Keimeno/word-growth-rate-analyzer)"
+  requests_per_second: 5
+  min_views: 100             # interest starts on a day with this many views
+  min_ratio: 3               # and 3 times the median of the 28 days before
+  max_events_per_day: 200
+
 # Push notifications through ntfy, where to is set in .env (NTFY_URL, NTFY_TOPIC).
 notify:
   # instant alerts only for the strongest trends, and at most this many per day
