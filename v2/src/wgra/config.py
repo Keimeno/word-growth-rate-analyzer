@@ -179,6 +179,85 @@ class NotifyConfig:
     report_size: int = 5
 
 
+@dataclass(frozen=True)
+class LeadLagConfig:
+    """Which subreddits pick up terms before others, see docs/ARCHITECTURE-V2.md §4.6."""
+
+    enabled: bool = True
+    # when `wgra analyze` relearns the edges every day, UTC
+    run_at: str = "01:00"
+    # an event: a term trending (not subsumed) with at least this score in any scope; its
+    # trends within the event's span belong to it, later ones start the next event
+    event_min_z: float = 5.0
+    # a scope's onset: the first hour in which its last window_hours, against the
+    # reference_days before them (phase 2's scoring), pass these gates
+    window_hours: int = 24
+    reference_days: int = 28
+    onset_min_mentions: int = 5
+    onset_min_ratio: float = 2.0
+    onset_min_z: float = 3.0
+    # no onsets in a scope with less history than this
+    min_reference_days: int = 3
+    # onsets are looked for from this many hours before an event's first trend
+    lookback_hours: int = 72
+    # a follower follows when its onset comes after the leader's, at most this many days
+    # later. An event spans lookback_hours before its first trend to 2 × max_lag_days after.
+    max_lag_days: int = 7
+    # edges are learned from the events of this many days
+    training_days: int = 180
+    # an edge: at least min_events leader onsets the follower hadn't started before (and
+    # whose outcome is known), min_hits of them followed, and a q-value of at most max_q:
+    # a one-sided binomial test against the follower's base rate, Benjamini–Hochberg over
+    # every pair with min_events
+    min_events: int = 5
+    min_hits: int = 3
+    max_q: float = 0.05
+    # the probability shrinks to the base rate by this many pseudo-events, so a handful of
+    # events can't make a certainty
+    prior_events: float = 4.0
+    # the central probability interval stored with edges and forecasts: 0.8 is the 10th to
+    # the 90th percentile
+    interval: float = 0.8
+    # edges per topic (the group an event trended in most) besides those over all events
+    topics: bool = True
+
+
+@dataclass(frozen=True)
+class ForecastConfig:
+    """Forecasts: a leader's burst that its followers haven't picked up yet."""
+
+    enabled: bool = True
+    # a forecast needs an edge with at least this lift and, after the time since the
+    # leader's onset, at least this probability
+    min_probability: float = 0.3
+    min_lift: float = 1.5
+    # ntfy alerts for forecasts, off until `wgra replay --forecast` shows they're worth it.
+    # They count against notify.max_alerts_per_day like trend alerts, and get at most
+    # alert_max_per_day of it.
+    alert: bool = False
+    alert_min_probability: float = 0.6
+    alert_min_events: int = 10
+    alert_max_per_day: int = 2
+
+
+@dataclass(frozen=True)
+class WikipediaConfig:
+    """Optional: do reddit onsets come before interest on Wikipedia? Free, no key."""
+
+    enabled: bool = False
+    project: str = "en.wikipedia"
+    # Wikimedia asks for a descriptive user agent with a way to contact you
+    user_agent: str = "wgra/2.0 (https://github.com/Keimeno/word-growth-rate-analyzer)"
+    # far below the API's limits
+    requests_per_second: float = 5.0
+    # interest on Wikipedia starts on the first day with at least min_views views and
+    # min_ratio times the median of the 28 days before
+    min_views: int = 100
+    min_ratio: float = 3.0
+    # events looked up per daily run
+    max_events_per_day: int = 200
+
+
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
@@ -192,6 +271,9 @@ class Config:
     detect: DetectConfig = field(default_factory=DetectConfig)
     long_term: LongTermConfig = field(default_factory=LongTermConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
+    lead_lag: LeadLagConfig = field(default_factory=LeadLagConfig)
+    forecast: ForecastConfig = field(default_factory=ForecastConfig)
+    wikipedia: WikipediaConfig = field(default_factory=WikipediaConfig)
 
     @cached_property
     def subreddits(self) -> tuple[str, ...]:
@@ -245,6 +327,9 @@ def parse_config(raw: dict[str, Any]) -> Config:
         detect=parse_detect(raw.get("detect") or {}),
         long_term=parse_long_term(raw.get("long_term") or {}),
         notify=parse_notify(raw.get("notify") or {}),
+        lead_lag=parse_lead_lag(raw.get("lead_lag") or {}),
+        forecast=parse_forecast(raw.get("forecast") or {}),
+        wikipedia=WikipediaConfig(**(raw.get("wikipedia") or {})),
     )
 
 
@@ -315,6 +400,24 @@ def parse_notify(raw: dict[str, Any]) -> NotifyConfig:
         raise ValueError(f"config: notify.report_day is a weekday: {notify.report_day}")
     ZoneInfo(notify.timezone)  # raises for unknown time zones
     return notify
+
+
+def parse_lead_lag(raw: dict[str, Any]) -> LeadLagConfig:
+    lead_lag = LeadLagConfig(**raw)
+    _check_time("lead_lag.run_at", lead_lag.run_at)
+    if not 0 < lead_lag.interval < 1:
+        raise ValueError(f"config: lead_lag.interval is between 0 and 1: {lead_lag.interval}")
+    if lead_lag.max_lag_days < 1 or lead_lag.window_hours < 1:
+        raise ValueError("config: lead_lag.max_lag_days and window_hours must be positive")
+    return lead_lag
+
+
+def parse_forecast(raw: dict[str, Any]) -> ForecastConfig:
+    forecast = ForecastConfig(**raw)
+    for name in ("min_probability", "alert_min_probability"):
+        if not 0 <= getattr(forecast, name) <= 1:
+            raise ValueError(f"config: forecast.{name} is a probability, between 0 and 1")
+    return forecast
 
 
 def load_config(path: Path) -> Config:

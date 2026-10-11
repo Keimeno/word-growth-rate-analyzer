@@ -4,6 +4,9 @@ Every step runs the detector as if it were that time: only the hours before it a
 used (the window ends on the step). The alert rules (warmup, cooldown, daily cap) are
 simulated in memory. Nothing is written to the trends table and nothing is sent, so a
 replay can run next to the live loop with any settings.
+
+With `forecast_min_z`, the trends of every step are kept for the lead–lag forecasts'
+evaluation (leadlag/evaluate.py, `wgra replay --forecast`).
 """
 
 from __future__ import annotations
@@ -31,6 +34,8 @@ from wgra.detect.short_term import (
     load_scopes,
     subreddit_scope,
 )
+from wgra.leadlag.evaluate import Step
+from wgra.leadlag.events import Sighting, load_sightings
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +47,8 @@ class ReplayResult:
     trending: Counter[tuple[datetime, str]] = field(default_factory=Counter)
     # every alert-worthy trend with what the alert rules decided
     decisions: list[Trend] = field(default_factory=list)
+    # the trends of every step as lead–lag sightings, with forecast_min_z
+    sighting_steps: list[Step] = field(default_factory=list)
 
     @property
     def alerts(self) -> list[Trend]:
@@ -62,8 +69,10 @@ def replay(
     horizons: Sequence[Horizon] | None = None,
     out: TextIO | None = None,
     progress: Callable[[datetime, list[Trend]], None] | None = None,
+    forecast_min_z: float | None = None,
 ) -> ReplayResult:
-    """Runs the detector at every step from start to end. `out` gets every trend as csv."""
+    """Runs the detector at every step from start to end. `out` gets every trend as csv,
+    with `forecast_min_z` the result keeps the trends at least that strong (lead–lag)."""
     if step < timedelta(hours=1) or step % timedelta(hours=1):
         raise ValueError("the step must be whole hours, the data is hourly")
     detector = Detector(client, config)
@@ -88,12 +97,43 @@ def replay(
                 result.trending[at, trend.horizon] += 1
             if alert_worthy(trend, config.notify):
                 result.decisions.append(trend)
+        if forecast_min_z is not None:
+            result.sighting_steps.append(
+                Step(
+                    at,
+                    [
+                        Sighting(trend.kind, trend.term, trend.scope, at, trend.z)
+                        for trend in trends
+                        if not trend.subsumed_by and trend.z >= forecast_min_z
+                    ],
+                )
+            )
         if writer:
             writer.writerows(trend.row() for trend in trends)
         if progress:
             progress(at, trends)
         at += step
     return result
+
+
+def stored_steps(
+    client: Client, start: datetime, end: datetime, step: timedelta, min_z: float
+) -> list[Step]:
+    """The trends the live analyzer stored, as replay steps: each step gets those detected
+    since the step before. Much faster than re-running the detector, but only with the
+    settings the trends were detected with."""
+    sightings = load_sightings(client, hour_floor(start) - step, end, min_z)
+    steps = []
+    at = hour_floor(start)
+    index = 0
+    while at <= end:
+        current = []
+        while index < len(sightings) and sightings[index].at <= at:
+            current.append(sightings[index])
+            index += 1
+        steps.append(Step(at, current))
+        at += step
+    return steps
 
 
 def groups_of(scope: str, scopes: Sequence[Scope]) -> list[str]:

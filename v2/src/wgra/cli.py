@@ -1,5 +1,5 @@
-"""wgra command line: ``wgra ingest | analyze | long-term | replay | trends | notify-test |
-migrate | status | term``."""
+"""wgra command line: ``wgra ingest | analyze | long-term | lead-lag | replay | trends |
+edges | forecasts | suggest-subreddits | wikipedia | notify-test | migrate | status | term``."""
 
 from __future__ import annotations
 
@@ -26,8 +26,14 @@ from wgra.query import ingestion_status, latest_long_term, latest_trends, term_s
 from wgra.store import connect, migrate
 
 if TYPE_CHECKING:
+    from clickhouse_connect.driver.client import Client
+
+    from wgra.config import Config
     from wgra.detect.long_term import LongTermResult, LongTermTrend
     from wgra.detect.run import Analyzer
+    from wgra.leadlag.edges import Edge
+    from wgra.leadlag.evaluate import Step
+    from wgra.leadlag.forecasts import Forecast
 
 
 def _print_table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> None:
@@ -77,8 +83,12 @@ def _until_stopped() -> threading.Event:
 
 def cmd_analyze(args: argparse.Namespace) -> None:
     analyzer = _analyzer(args, notify=not args.no_notify)
+    if args.no_lead_lag:
+        analyzer.lead_lag = None
     if not args.once:
-        analyzer.run_forever(_until_stopped(), long_term=not args.no_long_term)
+        analyzer.run_forever(
+            _until_stopped(), long_term=not args.no_long_term, lead_lag=not args.no_lead_lag
+        )
         return
 
     result = analyzer.run_once()
@@ -98,6 +108,9 @@ def cmd_analyze(args: argparse.Namespace) -> None:
     if top:
         print()
         _print_trends(top[: args.top])
+    if result.forecasts and result.forecasts.new:
+        print(f"\nnew forecasts ({len(result.forecasts.resolved)} resolved)")
+        _print_forecasts(result.forecasts.new)
 
 
 def _print_trends(trends: Sequence[Trend]) -> None:
@@ -231,6 +244,202 @@ def cmd_trends(args: argparse.Namespace) -> None:
     _print_trends(trends)
 
 
+def _hours(value: float) -> str:
+    return f"{value / 24:.1f}d" if value >= 48 else f"{value:.0f}h"
+
+
+def _print_edges(edges: Sequence[Edge]) -> None:
+    _print_table(
+        (
+            "topic",
+            "leader",
+            "follower",
+            "lead (IQR)",
+            "n",
+            "hits",
+            "hit rate",
+            "base",
+            "p (80%)",
+            "lift",
+            "q",
+        ),
+        [
+            (
+                edge.topic,
+                edge.leader,
+                edge.follower + (" (rest)" if edge.without_leader else ""),
+                f"{_hours(edge.lag_median)} ({_hours(edge.lag_q25)}–{_hours(edge.lag_q75)})",
+                edge.events,
+                edge.hits,
+                f"{edge.hit_rate:.0%}",
+                f"{edge.base_rate:.0%}",
+                f"{edge.probability:.0%} ({edge.probability_low:.0%}–{edge.probability_high:.0%})",
+                f"{edge.lift:.1f}",
+                f"{edge.q_value:.0e}",
+            )
+            for edge in edges
+        ],
+    )
+
+
+def _print_forecasts(forecasts: Sequence[Forecast]) -> None:
+    _print_table(
+        ("created", "term", "leader", "follower", "chance", "expected", "due", "outcome", "alert"),
+        [
+            (
+                f"{forecast.created_at:%m-%d %H:%M}",
+                forecast.term,
+                forecast.leader,
+                forecast.follower,
+                f"{forecast.probability:.0%} ({forecast.probability_low:.0%}–"
+                f"{forecast.probability_high:.0%})",
+                f"{forecast.expected_at:%m-%d %H:00}",
+                f"{forecast.due_by:%m-%d %H:00}",
+                forecast.outcome,
+                forecast.alert,
+            )
+            for forecast in forecasts
+        ],
+    )
+
+
+def cmd_lead_lag(args: argparse.Namespace) -> None:
+    analyzer = _analyzer(args, notify=False)
+    if analyzer.lead_lag is None:
+        raise SystemExit("lead_lag.enabled is false in config.yaml")
+    if not args.once:
+        analyzer.run_forever(_until_stopped(), short_term=False, long_term=False)
+        return
+    learned = analyzer.run_lead_lag(args.as_of or datetime.now(UTC), write=not args.dry_run)
+    result = learned.edges
+    print(
+        f"Lead–lag as of {learned.as_of:%Y-%m-%d %H:%M} UTC, {learned.seconds:.1f}s: "
+        f"{learned.new_sightings} trend sightings, onsets of {learned.computed} open events, "
+        f"{result.training_events} events since {result.training_start:%Y-%m-%d} "
+        f"({result.closed_events} closed), {result.tested} pairs tested, "
+        f"{len(result.edges)} edges"
+    )
+    if result.edges:
+        print()
+        _print_edges(result.edges[: args.top])
+    elif result.closed_events < 50:
+        print(
+            "Edges need history: every event takes 2 × max_lag_days to close, and a pair "
+            "needs lead_lag.min_events. Expect the first after 4–6 weeks of collection."
+        )
+    if args.dry_run:
+        print("\ndry run, nothing stored")
+
+
+def cmd_edges(args: argparse.Namespace) -> None:
+    from wgra.leadlag.edges import load_edges
+
+    client = connect(Env.from_environ(require_reddit=False))
+    day, edges = load_edges(client)
+    if day is None:
+        print("no edges yet, see `wgra lead-lag --once`")
+        return
+    edges = [
+        edge
+        for edge in edges
+        if (args.topic is None or edge.topic == args.topic)
+        and (args.leader is None or edge.leader == args.leader)
+        and (args.follower is None or edge.follower == args.follower)
+    ]
+    print(f"edges learned on {day:%Y-%m-%d}")
+    _print_edges(sorted(edges, key=lambda edge: -edge.lift)[: args.limit])
+
+
+def cmd_forecasts(args: argparse.Namespace) -> None:
+    from wgra.leadlag.forecasts import HIT, MISS, PENDING, load_forecasts
+
+    client = connect(Env.from_environ(require_reddit=False))
+    forecasts = load_forecasts(client, since=datetime.now(UTC) - timedelta(days=args.days))
+    pending = [f for f in forecasts if f.outcome == PENDING]
+    resolved = [f for f in forecasts if f.outcome in (HIT, MISS)]
+    hits = sum(f.outcome == HIT for f in resolved)
+    print(
+        f"forecasts of the last {args.days} days: {len(pending)} pending, {len(resolved)} "
+        "resolved" + (f", {hits} came true ({hits / len(resolved):.0%})" if resolved else "")
+    )
+    shown = pending if args.pending else forecasts
+    if shown:
+        print()
+        _print_forecasts(sorted(shown, key=lambda f: f.created_at, reverse=True)[: args.limit])
+
+
+def cmd_suggest_subreddits(args: argparse.Namespace) -> None:
+    from wgra.leadlag.suggest import suggest, yaml_snippet
+
+    config = load_config(args.config)
+    client = connect(Env.from_environ(require_reddit=False))
+    result = suggest(
+        client,
+        config.subreddits,
+        datetime.now(UTC),
+        hours=args.hours,
+        terms=args.terms,
+        min_terms=args.min_terms,
+        min_reference_days=0 if args.include_warmup else config.detect.min_reference_days,
+        limit=args.limit,
+    )
+    print(
+        f"{result.rising} rising terms, {result.sampled_items:,} sampled comments and posts "
+        f"from untracked subreddits since {result.since:%Y-%m-%d %H:%M} UTC"
+    )
+    if not result.candidates:
+        print("no candidates" + ("" if result.rising else ": nothing rising past the warmup"))
+        return
+    print()
+    _print_table(
+        (
+            "subreddit",
+            "rising terms",
+            "first",
+            "before trending",
+            "mentions",
+            "sampled",
+            "examples",
+        ),
+        [
+            (c.subreddit, c.terms, c.first, c.early, c.mentions, c.items, ", ".join(c.examples[:4]))
+            for c in result.candidates
+        ],
+    )
+    print(
+        "\nCandidates for config.yaml (nothing was changed). Add the ones you want to a group "
+        "and restart the ingester:\n"
+    )
+    print(yaml_snippet(result.candidates))
+
+
+def cmd_wikipedia(args: argparse.Namespace) -> None:
+    from wgra.leadlag.wikipedia import (
+        Wikimedia,
+        WikipediaCheck,
+        load_leads,
+        summarize,
+        summary_text,
+    )
+
+    config = load_config(args.config)
+    client = connect(Env.from_environ(require_reddit=False))
+    migrate(client)
+    now = datetime.now(UTC)
+    if args.fetch:
+        wikimedia = Wikimedia(config.wikipedia)
+        try:
+            WikipediaCheck(client, config, wikimedia).run(now, args.days, args.max_events)
+        finally:
+            wikimedia.close()
+    leads = load_leads(client, config.wikipedia.project, now - timedelta(days=args.days))
+    print(
+        f"Reddit onsets vs Wikipedia interest ({config.wikipedia.project}), last {args.days} days"
+    )
+    for line in summary_text(summarize(leads)):
+        print(line)
+
+
 def cmd_replay(args: argparse.Namespace) -> None:
     from wgra.detect.replay import open_csv, replay, report
     from wgra.detect.short_term import load_scopes
@@ -257,7 +466,23 @@ def cmd_replay(args: argparse.Namespace) -> None:
     notify = config.notify
     if args.alert_min_z is not None:
         notify = replace(notify, alert_min_z=args.alert_min_z)
-    config = replace(config, detect=detect, notify=notify)
+    lead_lag = replace(
+        config.lead_lag,
+        **{
+            name: getattr(args, name)
+            for name in ("event_min_z", "max_lag_days", "min_events", "max_q")
+            if getattr(args, name) is not None
+        },
+    )
+    forecast = replace(
+        config.forecast,
+        **{
+            name: getattr(args, f"forecast_{name}")
+            for name in ("min_probability", "min_lift")
+            if getattr(args, f"forecast_{name}") is not None
+        },
+    )
+    config = replace(config, detect=detect, notify=notify, lead_lag=lead_lag, forecast=forecast)
 
     client = connect(Env.from_environ(require_reddit=False))
     scopes = load_scopes(client, config.detect.exclude_scopes)
@@ -269,6 +494,16 @@ def cmd_replay(args: argparse.Namespace) -> None:
 
     def progress(at: datetime, trends: list[Trend]) -> None:
         print(f"  {at:%Y-%m-%d %H:%M}  {len(trends)} trends", file=sys.stderr)
+
+    if args.forecast and args.events == "stored":
+        # the stored trends instead of the detector: fast, with the live settings
+        from wgra.detect.replay import stored_steps
+
+        steps = stored_steps(
+            client, start, end, timedelta(hours=args.step), config.lead_lag.event_min_z
+        )
+        _print_forecast_evaluation(client, config, steps)
+        return
 
     out = open_csv(args.csv)
     try:
@@ -282,11 +517,26 @@ def cmd_replay(args: argparse.Namespace) -> None:
             horizons=horizons,
             out=out,
             progress=progress,
+            forecast_min_z=config.lead_lag.event_min_z if args.forecast else None,
         )
     finally:
         if out:
             out.close()
     print(report(result, scopes))
+    if args.forecast:
+        print()
+        _print_forecast_evaluation(client, config, result.sighting_steps)
+
+
+def _print_forecast_evaluation(client: Client, config: Config, steps: Sequence[Step]) -> None:
+    from wgra.leadlag.evaluate import evaluate
+    from wgra.leadlag.evaluate import report as forecast_report
+
+    if not steps:
+        print("forecasts: nothing replayed")
+        return
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    print(forecast_report(evaluate(client, config, steps, now)))
 
 
 def cmd_notify_test(args: argparse.Namespace) -> None:
@@ -355,6 +605,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     analyze.add_argument(
         "--no-long-term", action="store_true", help="no daily long-term run and weekly reports"
     )
+    analyze.add_argument(
+        "--no-lead-lag", action="store_true", help="no lead–lag edges and forecasts"
+    )
     analyze.set_defaults(func=cmd_analyze)
 
     long_term = commands.add_parser(
@@ -375,6 +628,62 @@ def main(argv: Sequence[str] | None = None) -> None:
     long_term.add_argument("--no-notify", action="store_true", help="no weekly reports")
     long_term.add_argument("--top", type=int, default=30, help="trends to print with --once")
     long_term.set_defaults(func=cmd_long_term)
+
+    lead_lag = commands.add_parser(
+        "lead-lag",
+        help="learn which subreddits lead others (wgra analyze also runs it once a day)",
+        description="Turns new trends into events, computes every scope's onset for them "
+        "and learns the leader -> follower edges. Without --once, runs it every day after "
+        "lead_lag.run_at.",
+    )
+    lead_lag.add_argument("--once", action="store_true", help="run once and print the edges")
+    lead_lag.add_argument("--as-of", type=_utc, help="UTC time to run as of (default: now)")
+    lead_lag.add_argument("--dry-run", action="store_true", help="store nothing")
+    lead_lag.add_argument("--top", type=int, default=40, help="edges to print")
+    lead_lag.set_defaults(func=cmd_lead_lag)
+
+    edges = commands.add_parser("edges", help="the latest leader -> follower edges")
+    edges.add_argument("--topic", help="all, or a group (default: every topic)")
+    edges.add_argument("--leader", help="r/subreddit")
+    edges.add_argument("--follower", help="r/subreddit, a group or sample")
+    edges.add_argument("--limit", type=int, default=50)
+    edges.set_defaults(func=cmd_edges)
+
+    forecasts = commands.add_parser("forecasts", help="forecasts and how they turned out")
+    forecasts.add_argument("--days", type=int, default=14)
+    forecasts.add_argument("--pending", action="store_true", help="only those still open")
+    forecasts.add_argument("--limit", type=int, default=50)
+    forecasts.set_defaults(func=cmd_forecasts)
+
+    suggest = commands.add_parser(
+        "suggest-subreddits",
+        help="untracked subreddits where rising terms show up early or often",
+        description="From the r/all sample's comments and posts of the last 48 hours: the "
+        "untracked subreddits that mention the terms trending now early or more than their "
+        "size explains. Prints candidates for config.yaml, never changes it.",
+    )
+    suggest.add_argument("--hours", type=int, default=48, help="at most 48 (default)")
+    suggest.add_argument("--terms", type=int, default=100, help="rising terms to look for")
+    suggest.add_argument("--min-terms", type=int, default=2)
+    suggest.add_argument("--limit", type=int, default=25)
+    suggest.add_argument(
+        "--include-warmup", action="store_true", help="count trends of scopes without history"
+    )
+    suggest.set_defaults(func=cmd_suggest_subreddits)
+
+    wikipedia = commands.add_parser(
+        "wikipedia",
+        help="do reddit onsets come before interest on Wikipedia?",
+        description="Looks up the Wikipedia articles of closed events' terms and their daily "
+        "pageviews (cached), and compares when interest started there with the reddit onsets. "
+        "Free, no key. wgra analyze does it daily with wikipedia.enabled.",
+    )
+    wikipedia.add_argument("--days", type=int, default=90)
+    wikipedia.add_argument("--max-events", type=int, default=200)
+    wikipedia.add_argument(
+        "--no-fetch", dest="fetch", action="store_false", help="only summarize what's stored"
+    )
+    wikipedia.set_defaults(func=cmd_wikipedia)
 
     trends = commands.add_parser("trends", help="the latest trends the analyzer found")
     trends.add_argument("--scope", help="a group or r/subreddit (default: all)")
@@ -405,6 +714,26 @@ def main(argv: Sequence[str] | None = None) -> None:
     ]:
         replay.add_argument(f"--{name}", type=kind, help="override config.yaml")
     replay.add_argument("--csv", type=Path, help="write every trend of every step to a csv file")
+    replay.add_argument(
+        "--forecast",
+        action="store_true",
+        help="also evaluate lead–lag forecasts: precision, recall, lead time, calibration",
+    )
+    replay.add_argument(
+        "--events",
+        choices=["detector", "stored"],
+        default="detector",
+        help="with --forecast: re-run the detector (default), or use the stored trends (fast)",
+    )
+    for name, kind in [
+        ("event-min-z", float),
+        ("max-lag-days", int),
+        ("min-events", int),
+        ("max-q", float),
+        ("forecast-min-probability", float),
+        ("forecast-min-lift", float),
+    ]:
+        replay.add_argument(f"--{name}", type=kind, help="override config.yaml (lead–lag)")
     replay.set_defaults(func=cmd_replay)
 
     commands.add_parser("notify-test", help="send a test notification").set_defaults(

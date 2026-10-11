@@ -61,10 +61,13 @@ def decide_alerts(
     now: datetime,
     detect: DetectConfig,
     notify: NotifyConfig,
+    other_alerts_today: int = 0,
 ) -> list[Trend]:
     """Sets `alert` on every alert-worthy trend, returns those that should be sent now.
 
     `recent` are the alerts sent before, at least those of the last `cooldown_hours`.
+    `other_alerts_today`: other alerts of the last 24 hours (forecasts) that count against
+    the daily cap.
     """
     recent = list(recent)
     last_alert: dict[str, SentAlert] = {}
@@ -72,7 +75,9 @@ def decide_alerts(
     for alert in sorted(recent, key=lambda alert: alert.detected_at):
         if alert.detected_at > cooldown_start:
             last_alert[alert.term] = alert
-    sent_today = sum(alert.detected_at > now - timedelta(hours=24) for alert in recent)
+    sent_today = other_alerts_today + sum(
+        alert.detected_at > now - timedelta(hours=24) for alert in recent
+    )
 
     to_send: list[Trend] = []
     seen_terms: set[str] = set()

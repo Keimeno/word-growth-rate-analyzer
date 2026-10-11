@@ -1,5 +1,6 @@
 """`wgra analyze`: detection every 15 minutes, instant alerts and the daily digests, and
-once a day long-term detection with a weekly report."""
+once a day long-term detection with a weekly report. With the lead–lag layer (leadlag/),
+forecasts after every detection run and the edges once a day."""
 
 from __future__ import annotations
 
@@ -29,10 +30,14 @@ from wgra.detect.short_term import (
     subreddit_scope,
     write_trends,
 )
+from wgra.leadlag.forecasts import Forecast, decide_forecast_alerts, write_forecasts
+from wgra.leadlag.run import ForecastStep, LeadLag, LearnResult
 from wgra.notify.messages import (
+    ForecastSummary,
     TrendSummary,
     alert_message,
     digest_message,
+    forecast_message,
     weekly_report_message,
 )
 from wgra.notify.ntfy import Message, Ntfy, NtfyError
@@ -58,12 +63,31 @@ def summary(trend: Trend) -> TrendSummary:
     )
 
 
+def forecast_summary(forecast: Forecast) -> ForecastSummary:
+    return ForecastSummary(
+        term=forecast.term,
+        leader=forecast.leader,
+        follower=forecast.follower,
+        leader_onset=forecast.leader_onset,
+        expected_at=forecast.expected_at,
+        due_by=forecast.due_by,
+        probability=forecast.probability,
+        probability_low=forecast.probability_low,
+        probability_high=forecast.probability_high,
+        base_rate=forecast.base_rate,
+        edge_events=forecast.edge_events,
+        edge_hits=forecast.edge_hits,
+        lag_median=forecast.lag_median,
+    )
+
+
 @dataclass
 class RunResult:
     detected_at: datetime
     trends: list[Trend]
     seconds: float
     digests: list[str] = field(default_factory=list)
+    forecasts: ForecastStep | None = None
 
     @property
     def alerts(self) -> Counter[str]:
@@ -109,6 +133,7 @@ class Analyzer:
         # the UTC day of this process's last long-term run. After a restart it runs again
         # (the same week's results replace each other), so reports find fresh results.
         self._long_term_day: date | None = None
+        self.lead_lag = LeadLag(client, config) if config.lead_lag.enabled else None
 
     def run_once(self, now: datetime | None = None) -> RunResult:
         now = as_utc(now or datetime.now(UTC)).replace(microsecond=0)
@@ -120,7 +145,10 @@ class Analyzer:
 
         notify = self._config.notify
         recent = recent_alerts(self._client, now, notify.cooldown_hours)
-        for trend in decide_alerts(trends, recent, now, self._config.detect, notify):
+        forecast_alerts = self._forecast_alerts_today(now)
+        for trend in decide_alerts(
+            trends, recent, now, self._config.detect, notify, other_alerts_today=forecast_alerts
+        ):
             if self._ntfy is None:
                 trend.alert = MUTED
                 continue
@@ -129,17 +157,61 @@ class Analyzer:
             trend.alert = SENT if ok else FAILED
         write_trends(self._client, trends)
 
+        forecasts = None
+        if self.lead_lag is not None and self._config.forecast.enabled:
+            try:
+                forecasts = self.run_forecasts(now, trends)
+            except Exception:
+                # the trends are stored, alerts and digests shouldn't wait for this
+                log.exception("forecasts failed, trying again at the next run")
+
         digests = self.send_digests(now, scopes) if self._ntfy else []
-        result = RunResult(now, trends, time.monotonic() - started, digests)
+        result = RunResult(now, trends, time.monotonic() - started, digests, forecasts)
         log.info(
-            "%d trends in %d scopes, %.1fs | alerts %s | digests %s",
+            "%d trends in %d scopes, %.1fs | alerts %s | digests %s | forecasts %s",
             len(trends),
             len({trend.scope for trend in trends}),
             result.seconds,
             dict(result.alerts) or "none",
             ", ".join(digests) or "none",
+            f"{len(forecasts.new)} new, {len(forecasts.resolved)} resolved" if forecasts else "off",
         )
         return result
+
+    def _forecast_alerts_today(self, now: datetime) -> int:
+        """Forecast alerts sent in the last 24 hours, they share the daily cap."""
+        if self.lead_lag is None or not self._config.forecast.alert:
+            return 0
+        (count,) = self._client.query(
+            "SELECT count() FROM notifications WHERE kind = 'forecast' AND ok "
+            "AND sent_at > toDateTime64({since:UInt32}, 3, 'UTC')",
+            parameters={"since": int((now - timedelta(hours=24)).timestamp())},
+        ).result_rows[0]
+        return int(count)
+
+    def run_forecasts(self, now: datetime, trends: Sequence[Trend]) -> ForecastStep:
+        """Forecasts for this run's trends, alerts for the likeliest (if switched on), and
+        the outcomes of pending forecasts."""
+        assert self.lead_lag is not None
+        step = self.lead_lag.forecast(now, trends)
+        if step.new:
+            forecast_alerts = self._forecast_alerts_today(now)
+            trend_alerts = len(recent_alerts(self._client, now, self._config.notify.cooldown_hours))
+            for forecast in decide_forecast_alerts(
+                step.new,
+                trend_alerts + forecast_alerts,
+                forecast_alerts,
+                self._config.notify,
+                self._config.forecast,
+            ):
+                if self._ntfy is None:
+                    forecast.alert = MUTED
+                    continue
+                message = forecast_message(forecast_summary(forecast), self._env.grafana_url)
+                ok = self._send("forecast", forecast.follower, forecast.term, message)
+                forecast.alert = SENT if ok else FAILED
+        write_forecasts(self._client, step.new + step.resolved)
+        return step
 
     def digest_day(self, now: datetime) -> date | None:
         """The local day whose digest is due, None before the digest time."""
@@ -216,6 +288,11 @@ class Analyzer:
             result.seconds,
         )
         return result
+
+    def run_lead_lag(self, now: datetime | None = None, write: bool = True) -> LearnResult:
+        """The daily lead–lag run: events and onsets from the new trends, the edges."""
+        assert self.lead_lag is not None
+        return self.lead_lag.learn(now, write=write)
 
     def report_day(self, now: datetime) -> date | None:
         """The local day whose weekly report is due, None on other days and before the time."""
@@ -294,9 +371,15 @@ class Analyzer:
         )
 
     def run_forever(
-        self, stop: threading.Event, short_term: bool = True, long_term: bool = True
+        self,
+        stop: threading.Event,
+        short_term: bool = True,
+        long_term: bool = True,
+        lead_lag: bool = True,
     ) -> None:
         interval = self._config.detect.interval_minutes * 60
+        if not lead_lag:
+            self.lead_lag = None
         while not stop.is_set():
             if short_term:
                 try:
@@ -304,6 +387,12 @@ class Analyzer:
                 except Exception:
                     # ClickHouse restarting or ntfy down shouldn't end the loop
                     log.exception("analysis run failed, trying again at the next interval")
+            if self.lead_lag is not None:
+                try:
+                    if self.lead_lag.due(datetime.now(UTC)):
+                        self.run_lead_lag()
+                except Exception:
+                    log.exception("lead-lag run failed, trying again at the next interval")
             if long_term:
                 try:
                     if self.long_term_due(datetime.now(UTC)):

@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
-from wgra.config import TRACKED_GROUP
+from wgra.config import SAMPLE_GROUP, TRACKED_GROUP
 from wgra.notify.ntfy import Message
 
 TERM_EXPLORER_UID = "wgra-terms"
 TRENDING_UID = "wgra-trending"
 LONG_TERM_UID = "wgra-long-term"
+EARLY_WARNING_UID = "wgra-early-warning"
 
 
 @dataclass(frozen=True)
@@ -174,4 +175,61 @@ def weekly_report_message(
         click=long_term_url(grafana_url, group),
         tags=("chart_with_upwards_trend",),
         priority=3,
+    )
+
+
+@dataclass(frozen=True)
+class ForecastSummary:
+    """What a forecast alert needs to know."""
+
+    term: str
+    leader: str
+    follower: str
+    leader_onset: datetime
+    expected_at: datetime
+    due_by: datetime
+    probability: float
+    probability_low: float
+    probability_high: float
+    base_rate: float
+    # the edge: leader onsets the follower hadn't started before, and those it followed
+    edge_events: int
+    edge_hits: int
+    # hours
+    lag_median: float
+
+
+def scope_text(scope: str) -> str:
+    """How a scope reads in a message: the sample is reddit-wide."""
+    return "reddit-wide (the r/all sample)" if scope == SAMPLE_GROUP else scope
+
+
+def early_warning_url(grafana_url: str) -> str:
+    return f"{grafana_url}/d/{EARLY_WARNING_UID}"
+
+
+def _duration(hours: float) -> str:
+    return f"{hours / 24:.1f} days" if hours >= 36 else f"{hours:.0f} hours"
+
+
+def forecast_message(forecast: ForecastSummary, grafana_url: str) -> Message:
+    follower = scope_text(forecast.follower)
+    window = (forecast.due_by - forecast.leader_onset).total_seconds() / 3600
+    lines = [
+        f"Rising in {forecast.leader} since {forecast.leader_onset:%a %H:%M} UTC.",
+        f"Of {forecast.edge_events} terms that rose in {forecast.leader} before {follower}, "
+        f"{forecast.edge_hits} reached it within {_duration(window)}, "
+        f"after {_duration(forecast.lag_median)} (median).",
+        f"Chance this time: {forecast.probability:.0%} ({forecast.probability_low:.0%}–"
+        f"{forecast.probability_high:.0%}), against {forecast.base_rate:.0%} for any trending "
+        f"term. Expected around {forecast.expected_at:%a %d %b %H:00} UTC.",
+    ]
+    explorer = explorer_url(grafana_url, forecast.term, forecast.leader)
+    return Message(
+        title=f"{forecast.term}: {forecast.leader} → {forecast.follower}?",
+        body="\n\n".join(lines),
+        click=explorer,
+        tags=("crystal_ball",),
+        priority=3,
+        links=(("Explore", explorer), ("Early warning", early_warning_url(grafana_url))),
     )

@@ -1350,10 +1350,435 @@ ORDER BY time
 )
 
 
+# The lead–lag layer (wgra analyze, leadlag/): which subreddits pick up terms before
+# others (edges, learned daily), and forecasts of which current bursts will reach which
+# scopes, with how they turned out.
+LATEST_EDGES = "day = (SELECT max(day) FROM propagation_edges)"
+EDGE_ROWS = (
+    f"{LATEST_EDGES} AND topic = ${{topic:sqlstring}} AND leader IN (${{leader:singlequote}})"
+)
+# a follower group measured without the leader, it's "the rest of" the group
+FOLLOWER = "if(without_leader, concat(follower, ' (rest)'), follower)"
+RESOLVED = "outcome IN ('hit', 'miss')"
+
+
+def percent(*columns: str) -> dict:
+    return {
+        "matcher": {"id": "byRegexp", "options": "^(" + "|".join(columns) + ")$"},
+        "properties": [{"id": "unit", "value": "percentunit"}, {"id": "decimals", "value": 0}],
+    }
+
+
+def hours_as_days(*columns: str) -> dict:
+    return {
+        "matcher": {"id": "byRegexp", "options": "^(" + "|".join(columns) + ")$"},
+        "properties": [{"id": "unit", "value": "h"}, {"id": "decimals", "value": 0}],
+    }
+
+
+early_warning_dashboard = dashboard(
+    "wgra-early-warning",
+    "Early warning",
+    "Which subreddits pick up terms before others, and forecasts of which current bursts "
+    "will reach other subreddits, groups or all of reddit. Learned from at least 4–6 weeks of "
+    "history.",
+    [
+        panel(
+            "stat",
+            "Edges learned",
+            "SELECT toUnixTimestamp(max(computed_at)) * 1000 FROM propagation_edges",
+            0,
+            0,
+            4,
+            4,
+            table=True,
+            unit="dateTimeFromNow",
+            description="When wgra analyze last learned the edges. It does once a day, after "
+            "lead_lag.run_at (01:00 UTC).",
+        ),
+        panel(
+            "stat",
+            "Edges",
+            f"SELECT count() FROM propagation_edges FINAL WHERE {LATEST_EDGES} "
+            "AND topic = ${topic:sqlstring}",
+            4,
+            0,
+            4,
+            4,
+            table=True,
+            description="Leader -> follower pairs that pass the gates in the selected topic: "
+            "at least 5 events, 3 hits and a q-value of at most 0.05.",
+        ),
+        panel(
+            "stat",
+            "Events, closed",
+            "SELECT count() AS events, countIf(closed) AS closed FROM lead_lag_events FINAL",
+            8,
+            0,
+            4,
+            4,
+            table=True,
+            description="Terms that trended somewhere, the unit edges are learned from. An "
+            "event is closed when its span (3 days before its first trend to 14 days after) is "
+            "over; only closed events count for base rates.",
+        ),
+        panel(
+            "stat",
+            "Pending forecasts",
+            "SELECT count() FROM forecasts FINAL WHERE outcome = 'pending'",
+            12,
+            0,
+            4,
+            4,
+            table=True,
+        ),
+        panel(
+            "stat",
+            "Forecasts that came true, 30 days",
+            f"SELECT if(count() = 0, NULL, countIf(outcome = 'hit') / count()) "
+            f"FROM forecasts FINAL WHERE {RESOLVED} AND created_at > now() - INTERVAL 30 DAY",
+            16,
+            0,
+            4,
+            4,
+            table=True,
+            unit="percentunit",
+            description="Precision of the forecasts resolved in the last 30 days. "
+            "`wgra replay --forecast` measures it on past data, with recall and calibration.",
+        ),
+        panel(
+            "stat",
+            "Forecast alerts, 24h",
+            "SELECT count() FROM notifications WHERE kind = 'forecast' AND ok "
+            "AND sent_at > now() - INTERVAL 24 HOUR",
+            20,
+            0,
+            4,
+            4,
+            table=True,
+            description="Forecast alerts are off by default (forecast.alert in config.yaml). "
+            "They share the daily alert cap with trend alerts.",
+        ),
+        panel(
+            "table",
+            "Leader -> follower edges",
+            f"""
+SELECT
+    leader,
+    {FOLLOWER} AS follower,
+    follower_type AS type,
+    lag_median AS lead,
+    concat(toString(round(lag_q25 / 24, 1)), '–', toString(round(lag_q75 / 24, 1)), 'd')
+        AS lead_iqr,
+    events AS n,
+    hits,
+    hit_rate,
+    base_rate,
+    probability,
+    concat(toString(round(100 * probability_low)), '–',
+           toString(round(100 * probability_high)), '%') AS interval,
+    round(lift, 1) AS lift,
+    q_value AS q,
+    leader_onsets
+FROM propagation_edges FINAL
+WHERE {EDGE_ROWS}
+ORDER BY lift DESC
+LIMIT 500
+""",
+            0,
+            4,
+            24,
+            11,
+            table=True,
+            description=(
+                "Learned daily from the events of the last 180 days. lead: median time from the "
+                "leader's onset (the first hour its last 24h crossed 2x its usual share, z 3) to "
+                "the follower's, IQR in days. n: the leader's onsets the follower hadn't "
+                "crossed before, with a known outcome. hit_rate: of those, followed within 7 "
+                "days. base_rate: the share of all events in which the follower crossed at all. "
+                "probability: the hit rate shrunk to the base rate by 4 pseudo-events, with its "
+                "80% interval. lift: probability / base rate. q: one-sided binomial test of the "
+                "hits against the base rate, Benjamini–Hochberg over all pairs. '(rest)': a "
+                "group of the leader's, without the leader's own mentions. Edges need 4–6 weeks "
+                "of history to mean anything."
+            ),
+            fieldConfig={
+                "defaults": {},
+                "overrides": [
+                    hours_as_days("lead"),
+                    percent("hit_rate", "base_rate", "probability"),
+                    {
+                        "matcher": {"id": "byName", "options": "q"},
+                        "properties": [
+                            {"id": "unit", "value": "sci"},
+                            {"id": "decimals", "value": 1},
+                        ],
+                    },
+                    width("leader", 170),
+                    width("follower", 190),
+                    width("type", 90),
+                    width("n", 60),
+                    width("hits", 60),
+                ],
+            },
+            options={"sortBy": [{"displayName": "lift", "desc": True}]},
+        ),
+        panel(
+            "nodeGraph",
+            "Who leads whom",
+            f"""
+SELECT scope AS id, scope AS title, toFloat64(count()) AS mainstat
+FROM (
+    SELECT leader AS scope FROM propagation_edges FINAL WHERE {EDGE_ROWS}
+    UNION ALL
+    SELECT {FOLLOWER} FROM propagation_edges FINAL WHERE {EDGE_ROWS}
+)
+GROUP BY scope
+""",
+            0,
+            15,
+            12,
+            12,
+            table=True,
+            description="The edges of the table above as a graph: arrows from leaders to "
+            "followers, labeled with the median lead in days and the lift. A node's number is "
+            "the edges it's part of.",
+        ),
+        panel(
+            "table",
+            "Recent cascades",
+            """
+SELECT
+    term,
+    start AS first_trend,
+    topic,
+    arrayStringConcat(
+        arrayMap(o -> concat(o.1, ' ', formatDateTime(o.3, '%d %b %H:00')),
+                 arraySort(o -> o.3, arrayFilter(o -> o.2 = '', onsets))),
+        ' → ') AS cascade,
+    length(arrayFilter(o -> o.2 = '', onsets)) AS reached,
+    closed
+FROM lead_lag_events FINAL
+WHERE start > now() - INTERVAL 14 DAY AND length(onsets) > 1
+ORDER BY start DESC
+LIMIT 200
+""",
+            12,
+            15,
+            12,
+            12,
+            table=True,
+            description="Events of the last 14 days that reached more than one scope, with every "
+            "scope's onset in the order they crossed (UTC). This is what the edges are learned "
+            "from. reached: the scopes that crossed.",
+            fieldConfig={
+                "defaults": {},
+                "overrides": [width("term", 140), width("first_trend", 160), width("topic", 90)],
+            },
+        ),
+        panel(
+            "table",
+            "Current forecasts",
+            f"""
+SELECT
+    term,
+    leader,
+    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,
+    probability AS chance,
+    concat(toString(round(100 * probability_low)), '–',
+           toString(round(100 * probability_high)), '%') AS interval,
+    base_rate,
+    expected_at,
+    due_by,
+    leader_onset,
+    created_at,
+    edge_events AS n,
+    round(lift, 1) AS lift,
+    alert,
+    {explore_url("leader")} AS explore
+FROM forecasts FINAL
+WHERE outcome = 'pending'
+ORDER BY probability DESC
+LIMIT 200
+""",
+            0,
+            27,
+            24,
+            9,
+            table=True,
+            description="A term rising in a leader that the follower hasn't picked up yet: the "
+            "chance it will within 7 days of the leader's onset (the edge's probability, "
+            "lowered for the time that already passed), against the follower's base rate, and "
+            "when it's expected (the leader's onset plus the edge's median lead). Click a term "
+            "to see it in the leader.",
+            fieldConfig={
+                "defaults": {},
+                "overrides": [
+                    link_to_explorer("term"),
+                    hidden("explore"),
+                    percent("chance", "base_rate"),
+                    width("term", 160),
+                    width("leader", 160),
+                    width("follower", 170),
+                ],
+            },
+        ),
+        panel(
+            "table",
+            "Track record, last 30 days",
+            f"""
+SELECT
+    created_at,
+    term,
+    leader,
+    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,
+    probability AS chance,
+    outcome,
+    dateDiff('hour', created_at, follower_onset) AS warning,
+    dateDiff('hour', leader_onset, follower_onset) AS lag,
+    round(lag_median) AS expected_lag,
+    {explore_url("follower")} AS explore
+FROM forecasts FINAL
+WHERE {RESOLVED} AND created_at > now() - INTERVAL 30 DAY
+ORDER BY created_at DESC
+LIMIT 500
+""",
+            0,
+            36,
+            14,
+            10,
+            table=True,
+            description="Resolved forecasts: hit when the follower crossed by the due time, "
+            "miss otherwise. warning: hours from the forecast to the follower's onset. lag: from "
+            "the leader's onset to the follower's, against the lag the edge expected.",
+            fieldConfig={
+                "defaults": {},
+                "overrides": [
+                    link_to_explorer("term"),
+                    hidden("explore"),
+                    percent("chance"),
+                    hours_as_days("warning", "lag", "expected_lag"),
+                    width("created_at", 160),
+                ],
+            },
+        ),
+        panel(
+            "table",
+            "Calibration, last 90 days",
+            f"""
+SELECT
+    toUInt8(floor(least(probability, 0.999) * 5)) AS bin,
+    concat(toString(bin * 20), '–', toString(bin * 20 + 20), '%') AS predicted_bin,
+    count() AS forecasts,
+    avg(probability) AS predicted,
+    countIf(outcome = 'hit') / count() AS came_true,
+    avg(base_rate) AS base_rate
+FROM forecasts FINAL
+WHERE {RESOLVED} AND created_at > now() - INTERVAL 90 DAY
+GROUP BY bin
+ORDER BY bin
+""",
+            14,
+            36,
+            10,
+            10,
+            table=True,
+            description="Well calibrated forecasts come true about as often as they say. The "
+            "base rate column is what always forecasting the follower's usual rate would say.",
+            fieldConfig={
+                "defaults": {},
+                "overrides": [percent("predicted", "came_true", "base_rate"), hidden("bin")],
+            },
+        ),
+        panel(
+            "timeseries",
+            "Forecasts per day, and how many came true",
+            """
+SELECT toStartOfDay(created_at) AS time,
+       countIf(outcome = 'hit') AS came_true,
+       countIf(outcome = 'miss') AS missed,
+       countIf(outcome = 'pending') AS pending
+FROM forecasts FINAL
+WHERE $__timeFilter(created_at)
+GROUP BY time
+ORDER BY time
+""",
+            0,
+            46,
+            14,
+            8,
+            draw_style="bars",
+            stacking="normal",
+        ),
+        panel(
+            "table",
+            "Reddit vs Wikipedia (optional)",
+            """
+SELECT
+    count() AS events,
+    countIf(wiki_onset IS NOT NULL) AS with_interest,
+    countIf(lead_days > 0) AS reddit_first,
+    countIf(lead_days = 0) AS same_day,
+    countIf(lead_days < 0) AS wikipedia_first,
+    quantileExactIf(0.5)(lead_days, lead_days IS NOT NULL) AS median_lead_days
+FROM wiki_leads FINAL
+WHERE start > now() - INTERVAL 90 DAY
+""",
+            14,
+            46,
+            10,
+            8,
+            table=True,
+            description="With wikipedia.enabled: for events whose term names a Wikipedia "
+            "article, did daily pageviews rise (3x their 28-day median, at least 100) after "
+            "the term's first onset on reddit? `wgra wikipedia` prints a sign test.",
+        ),
+    ],
+    [
+        query_variable(
+            "topic",
+            "Topic",
+            "SELECT DISTINCT topic FROM propagation_edges "
+            "WHERE day = (SELECT max(day) FROM propagation_edges) "
+            "ORDER BY topic = 'all' DESC, topic",
+            default="all",
+        ),
+        query_variable(
+            "leader",
+            "Leaders",
+            "SELECT DISTINCT leader FROM propagation_edges "
+            "WHERE day = (SELECT max(day) FROM propagation_edges) ORDER BY leader",
+            multi=True,
+            include_all=True,
+            all_value=None,
+        ),
+    ],
+    "now-30d",
+    refresh="5m",
+)
+# the node graph's second frame: the edges, from leader to follower
+next(p for p in early_warning_dashboard["panels"] if p["type"] == "nodeGraph")["targets"].append(
+    {
+        **target(
+            f"""
+SELECT concat(leader, ' -> ', {FOLLOWER}) AS id, leader AS source, {FOLLOWER} AS target,
+       concat(toString(round(lag_median / 24, 1)), 'd') AS mainstat,
+       concat('lift ', toString(round(lift, 1))) AS secondarystat
+FROM propagation_edges FINAL
+WHERE {EDGE_ROWS}
+""",
+            table=True,
+        ),
+        "refId": "B",
+    }
+)
+
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, board in [
     ("trending", trending_dashboard),
     ("long-term", long_term_dashboard),
+    ("early-warning", early_warning_dashboard),
     ("term-explorer", terms_dashboard),
     ("rising", rising_dashboard),
     ("ingestion", ingestion_dashboard),

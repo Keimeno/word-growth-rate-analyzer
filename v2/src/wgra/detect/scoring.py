@@ -43,6 +43,9 @@ import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+import numpy as np
+from numpy.typing import NDArray
+
 from wgra.config import Thresholds
 
 WORD = "word"
@@ -133,6 +136,35 @@ class Counts:
                 self.sample_mentions, prior.weight * self.reference_total + missing_history
             ),
         )
+
+
+def score_arrays(
+    mentions: NDArray[np.float64],
+    total: NDArray[np.float64],
+    reference_mentions: NDArray[np.float64],
+    reference_total: NDArray[np.float64],
+    sample_mentions: float,
+    prior: Prior,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """(δ, z) of `Counts.score` for many windows at once, for example every hour of a term's
+    series (the onsets in leadlag/onsets.py). The same formula, element by element."""
+    share = min(sample_mentions / prior.total, 1.0) if prior.total else 0.0
+    window_documents = prior.weight * total
+    reference_documents = prior.weight * reference_total + np.maximum(total - reference_total, 0)
+    alpha = window_documents * share + prior.floor
+    beta = window_documents * (1 - share) + prior.floor
+    reference_alpha = reference_documents * share + prior.floor
+    reference_beta = reference_documents * (1 - share) + prior.floor
+    if prior.floor <= 0:
+        raise ValueError("the pseudo-counts must be positive, use a prior floor")
+    mentions = np.minimum(mentions, total)
+    reference_mentions = np.minimum(reference_mentions, reference_total)
+    log_odds = np.log((mentions + alpha) / (total - mentions + beta)) - np.log(
+        (reference_mentions + reference_alpha)
+        / (reference_total - reference_mentions + reference_beta)
+    )
+    sigma = np.sqrt(1 / (mentions + alpha) + 1 / (reference_mentions + reference_alpha))
+    return log_odds, log_odds / sigma
 
 
 def passes(score: Score, mentions: int, authors: int | None, thresholds: Thresholds) -> bool:
