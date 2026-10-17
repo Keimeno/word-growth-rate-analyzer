@@ -381,7 +381,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT created_at AS time, subreddit, source, substring(text, 1, 400) AS text,\n       concat('https://www.reddit.com', permalink) AS link\nFROM items\nWHERE $__timeFilter(created_at) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND arrayExists(t -> position(concat(' ', arrayStringConcat(splitByNonAlpha(lower(text)), ' '), ' '), concat(' ', arrayStringConcat(splitByNonAlpha(lower(t)), ' '), ' ')) > 0, splitByChar(',', ${terms:sqlstring}))\nORDER BY created_at DESC\nLIMIT 100",
+          "rawSql": "SELECT created_at AS time, subreddit, source, substring(text, 1, 400) AS text,\n       concat('https://www.reddit.com', permalink) AS link\nFROM items\nWHERE $__timeFilter(created_at) AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote})\n  AND (arrayExists(t -> position(concat(' ', arrayStringConcat(splitByNonAlpha(lower(text)), ' '), ' '), concat(' ', arrayStringConcat(splitByNonAlpha(lower(t)), ' '), ' ')) > 0, splitByChar(',', ${terms:sqlstring})) OR hasAny(intents, arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring}))))\nORDER BY created_at DESC\nLIMIT 100",
           "refId": "A"
         }
       ],

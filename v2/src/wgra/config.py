@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
+from wgra.text.intents import INTENT_KINDS
+
 # every tracked subreddit is also part of this group, so dashboards and queries can
 # always fall back to "everything we track completely"
 TRACKED_GROUP = "tracked"
@@ -20,6 +22,22 @@ TRACKED_GROUP = "tracked"
 # once. Subreddit names can't start with an underscore, so it can't clash with one.
 SAMPLE_SCOPE = "_sample"
 SAMPLE_GROUP = "sample"
+
+# what the text says: words, phrases, linked domains, mentioned subreddits. The intents
+# behind it (switches, alternatives, complaints, needs) are kinds of terms too.
+TEXT_KINDS = ("word", "phrase", "domain", "subreddit")
+KINDS = (*TEXT_KINDS, *INTENT_KINDS)
+
+
+def ranking(kind: str) -> str:
+    """Terms are ranked against the others of their ranking: words, phrases, domains and
+    subreddits together, each intent kind on its own. A switch between two products is
+    mentioned a few times a day, it would never make the top 50 of a scope's words."""
+    return kind if kind in INTENT_KINDS else "text"
+
+
+def _intent_defaults[T](value: T) -> dict[str, T]:
+    return dict.fromkeys(INTENT_KINDS, value)
 
 
 @dataclass(frozen=True)
@@ -33,6 +51,17 @@ class IngestConfig:
     max_post_poll_interval: float = 900.0
     # longest phrase (in words) that is counted
     max_ngram: int = 3
+
+
+@dataclass(frozen=True)
+class IntentsConfig:
+    """Why people mention things: switches, alternatives, complaints and needs, extracted
+    by the ingester (raw text is deleted after 48 hours, later is too late). See
+    docs/ARCHITECTURE-V2.md §4.7."""
+
+    enabled: bool = True
+    # also in the r/all sample: reddit-wide intents, and the prior for scoring them
+    sample: bool = True
 
 
 @dataclass(frozen=True)
@@ -84,7 +113,14 @@ class DetectConfig:
     # per scope ("tech", "r/de_EDV"), only the thresholds that differ
     scope_thresholds: dict[str, Thresholds] = field(default_factory=dict)
     sources: tuple[str, ...] = ("comment", "post")
-    kinds: tuple[str, ...] = ("word", "phrase", "domain", "subreddit")
+    kinds: tuple[str, ...] = KINDS
+    # per kind, only the thresholds that differ (on top of the scope's): intents are far
+    # rarer than words, a switch between two products is news at 3 mentions a day
+    kind_thresholds: dict[str, dict[str, Any]] = field(
+        default_factory=lambda: {
+            kind: {"min_mentions": 3, "min_authors": 3} for kind in INTENT_KINDS
+        }
+    )
     # the prior: every term's share in the r/all sample over this many days
     prior_days: int = 90
     # how many documents the prior is worth, as a share of the window's documents
@@ -96,15 +132,23 @@ class DetectConfig:
     # breadth of a group trend: member subreddits where the term has z above this
     breadth_min_z: float = 3.0
     breadth_min_mentions: int = 3
-    # stored per scope and horizon on every run, by score
+    # stored per scope and horizon on every run, by score: the words, phrases, domains and
+    # subreddits, and separately each intent kind (see `ranking`)
     max_per_scope: int = 50
+    max_per_intent: int = 20
     # no alerts until the reference period has data from this many days
     min_reference_days: int = 3
     # scopes that aren't scored at all
     exclude_scopes: tuple[str, ...] = ()
 
-    def thresholds_for(self, scope: str) -> Thresholds:
-        return self.scope_thresholds.get(scope, self.thresholds)
+    def thresholds_for(self, scope: str, kind: str | None = None) -> Thresholds:
+        thresholds = self.scope_thresholds.get(scope, self.thresholds)
+        if kind and (overrides := self.kind_thresholds.get(kind)):
+            thresholds = replace(thresholds, **overrides)
+        return thresholds
+
+    def max_stored(self, kind: str) -> int:
+        return self.max_per_scope if ranking(kind) == "text" else self.max_per_intent
 
 
 MACRO = "macro"
@@ -124,6 +168,10 @@ class LongTermConfig:
     # the volume floor: comments and posts mentioning the term per week, on average over
     # the window and in all of the scope's subreddits together
     min_mentions_per_week: float = 20
+    # per kind, where it differs: intents are far rarer than words
+    kind_min_mentions_per_week: dict[str, float] = field(
+        default_factory=lambda: _intent_defaults(2.0)
+    )
     # a group's weekly share: "macro" averages its subreddits' shares, so a big subreddit
     # doesn't drown out the small ones; "pooled" divides all mentions by all comments
     group_rate: str = MACRO
@@ -131,7 +179,8 @@ class LongTermConfig:
     # least this share of them have it
     min_member_share: float = 0.5
     # the first pass (least squares in ClickHouse) picks the terms growing or shrinking by
-    # at least min_growth, the strongest this many per scope and window get the robust
+    # at least min_growth, the strongest this many per scope, window and ranking (the
+    # words, phrases, domains and subreddits, and each intent kind) get the robust
     # statistics and are tested
     max_candidates: int = 100
     # added to the mentions of every week, so weeks without one have a finite log share
@@ -149,9 +198,12 @@ class LongTermConfig:
     # emerging when the trend line starts at most this many per 1,000 comments and posts,
     # mainstreaming above
     emerging_max_base: float = 1.0
-    # stored per scope, window and category, by growth
+    # stored per scope, window, category and ranking, by growth
     max_per_category: int = 25
     exclude_scopes: tuple[str, ...] = ()
+
+    def min_mentions_per_week_for(self, kind: str) -> float:
+        return self.kind_min_mentions_per_week.get(kind, self.min_mentions_per_week)
 
 
 @dataclass(frozen=True)
@@ -194,6 +246,8 @@ class LeadLagConfig:
     window_hours: int = 24
     reference_days: int = 28
     onset_min_mentions: int = 5
+    # per kind, where it differs: intents are far rarer than words
+    kind_onset_min_mentions: dict[str, int] = field(default_factory=lambda: _intent_defaults(3))
     onset_min_ratio: float = 2.0
     onset_min_z: float = 3.0
     # no onsets in a scope with less history than this
@@ -225,6 +279,9 @@ class LeadLagConfig:
     # edges per topic (the group an event trended in most) besides those over all events.
     # Each topic is another look at the same data: their edges need max_q / topics.
     topics: bool = True
+
+    def onset_min_mentions_for(self, kind: str) -> int:
+        return self.kind_onset_min_mentions.get(kind, self.onset_min_mentions)
 
 
 @dataclass(frozen=True)
@@ -273,6 +330,7 @@ class Config:
     languages: dict[str, str] = field(default_factory=dict)
     background: BackgroundConfig = field(default_factory=BackgroundConfig)
     ingest: IngestConfig = field(default_factory=IngestConfig)
+    intents: IntentsConfig = field(default_factory=IntentsConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
     long_term: LongTermConfig = field(default_factory=LongTermConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
@@ -329,6 +387,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
         languages=languages,
         background=BackgroundConfig(**(raw.get("background") or {})),
         ingest=IngestConfig(**(raw.get("ingest") or {})),
+        intents=IntentsConfig(**(raw.get("intents") or {})),
         detect=parse_detect(raw.get("detect") or {}),
         long_term=parse_long_term(raw.get("long_term") or {}),
         notify=parse_notify(raw.get("notify") or {}),
@@ -350,6 +409,14 @@ def _normalize_scope(scope: str) -> str:
     return f"r/{_normalize_subreddit(scope)}" if scope.lower().startswith("r/") else scope
 
 
+def _per_kind(name: str, raw: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    """Per-kind settings from config.yaml on top of the defaults, kinds checked."""
+    unknown = set(raw) - set(KINDS)
+    if unknown:
+        raise ValueError(f"config: {name} has unknown kinds: {', '.join(sorted(unknown))}")
+    return defaults | raw
+
+
 def parse_detect(raw: dict[str, Any]) -> DetectConfig:
     raw = dict(raw)
     threshold_names = set(Thresholds.__dataclass_fields__)
@@ -359,6 +426,21 @@ def parse_detect(raw: dict[str, Any]) -> DetectConfig:
         for scope, overrides in (raw.pop("scopes", None) or {}).items()
     }
     detect = DetectConfig(thresholds=thresholds, scope_thresholds=scope_thresholds)
+    if "kind_thresholds" in raw:
+        kind_thresholds = _per_kind(
+            "detect.kind_thresholds",
+            {
+                kind: {**detect.kind_thresholds.get(kind, {}), **(overrides or {})}
+                for kind, overrides in (raw.pop("kind_thresholds") or {}).items()
+            },
+            detect.kind_thresholds,
+        )
+        for kind, overrides in kind_thresholds.items():
+            if unknown := set(overrides) - threshold_names:
+                raise ValueError(
+                    f"config: detect.kind_thresholds.{kind}: unknown {', '.join(sorted(unknown))}"
+                )
+        detect = replace(detect, kind_thresholds=kind_thresholds)
     if "horizons" in raw:
         horizons = tuple(
             Horizon(name=str(name), **(options or {}))
@@ -377,6 +459,12 @@ def parse_detect(raw: dict[str, Any]) -> DetectConfig:
 
 def parse_long_term(raw: dict[str, Any]) -> LongTermConfig:
     raw = dict(raw)
+    if "kind_min_mentions_per_week" in raw:
+        raw["kind_min_mentions_per_week"] = _per_kind(
+            "long_term.kind_min_mentions_per_week",
+            raw["kind_min_mentions_per_week"] or {},
+            LongTermConfig().kind_min_mentions_per_week,
+        )
     if "horizons" in raw:
         raw["horizons"] = tuple(sorted({int(weeks) for weeks in raw["horizons"] or ()}))
         if any(weeks < 4 for weeks in raw["horizons"]):
@@ -408,6 +496,13 @@ def parse_notify(raw: dict[str, Any]) -> NotifyConfig:
 
 
 def parse_lead_lag(raw: dict[str, Any]) -> LeadLagConfig:
+    raw = dict(raw)
+    if "kind_onset_min_mentions" in raw:
+        raw["kind_onset_min_mentions"] = _per_kind(
+            "lead_lag.kind_onset_min_mentions",
+            raw["kind_onset_min_mentions"] or {},
+            LeadLagConfig().kind_onset_min_mentions,
+        )
     lead_lag = LeadLagConfig(**raw)
     _check_time("lead_lag.run_at", lead_lag.run_at)
     if not 0 < lead_lag.interval < 1:

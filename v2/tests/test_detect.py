@@ -62,6 +62,7 @@ class History:
                     "text",
                     f"/r/{subreddit}/comments/x/{self._next_id}",
                     10,
+                    [],
                 )
             )
             for kind, term in terms or []:

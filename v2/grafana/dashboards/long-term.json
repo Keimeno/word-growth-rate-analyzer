@@ -91,7 +91,7 @@
         "type": "custom",
         "name": "kind",
         "label": "Kind",
-        "query": "word,phrase,domain,subreddit",
+        "query": "word,phrase,domain,subreddit,switch,alternative,complaint,need",
         "options": [
           {
             "text": "word",
@@ -112,6 +112,26 @@
             "text": "subreddit",
             "value": "subreddit",
             "selected": true
+          },
+          {
+            "text": "switch",
+            "value": "switch",
+            "selected": false
+          },
+          {
+            "text": "alternative",
+            "value": "alternative",
+            "selected": false
+          },
+          {
+            "text": "complaint",
+            "value": "complaint",
+            "selected": false
+          },
+          {
+            "text": "need",
+            "value": "need",
+            "selected": false
           }
         ],
         "current": {

@@ -16,7 +16,13 @@ def test_split_statements_ignores_comment_lines():
 
 
 def test_migrations_are_applied_once(client):
-    assert migrate(client) == ["001_init", "002_trends", "003_long_term_trends", "004_lead_lag"]
+    assert migrate(client) == [
+        "001_init",
+        "002_trends",
+        "003_long_term_trends",
+        "004_lead_lag",
+        "005_intents",
+    ]
     assert migrate(client) == []
 
 

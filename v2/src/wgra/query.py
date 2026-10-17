@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
 from clickhouse_connect.driver.client import Client
@@ -181,3 +181,160 @@ def latest_long_term(
     if not rows:
         return None, []
     return week, [LongTermTrend(*row) for row in rows]
+
+
+@dataclass(frozen=True)
+class IntentRow:
+    term: str
+    mentions: int
+    authors: int
+    # mentions in the period before, as long as this one
+    before: int
+    # trending in the scope in the last 24 hours: the strongest score, 0 if not
+    z: float = 0.0
+    # comments and posts with it in the last 48 hours (raw text is kept that long)
+    recent: int = 0
+
+
+@dataclass(frozen=True)
+class IntentReport:
+    scope: str
+    kind: str
+    first_day: date
+    last_day: date
+    terms: int
+    mentions: int
+    total: int
+    total_before: int
+    rows: list[IntentRow]
+
+    def per_10k(self, row: IntentRow) -> float:
+        return 10_000 * row.mentions / self.total if self.total else 0.0
+
+    def change(self, row: IntentRow) -> float | None:
+        """Times the share of the period before, with half a mention added to both."""
+        if not self.total or not self.total_before:
+            return None
+        return ((row.mentions + 0.5) / self.total) / ((row.before + 0.5) / self.total_before)
+
+
+@dataclass(frozen=True)
+class IntentExample:
+    term: str
+    created_at: datetime
+    subreddit: str
+    permalink: str
+    text: str
+
+
+def intent_report(
+    client: Client, scope: str, kind: str, days: int, limit: int = 30, today: date | None = None
+) -> IntentReport:
+    """The intents of a kind in a scope over the last `days` days (today included), the
+    most mentioned first, with the same number of days before them to compare."""
+    today = today or datetime.now(UTC).date()
+    parameters = {
+        "scope": normalize_scope(scope),
+        "kind": kind,
+        "days": days,
+        "limit": limit,
+        "today": today,
+    }
+    (total, total_before), *_ = client.query(
+        f"""
+        SELECT sumIf(docs, toDate(hour) > {{today:Date}} - {{days:UInt32}}),
+               sumIf(docs, toDate(hour) <= {{today:Date}} - {{days:UInt32}})
+        FROM scope_hourly
+        WHERE {_SCOPE}
+          AND hour >= toDateTime({{today:Date}} - 2 * {{days:UInt32}} + 1, 'UTC')
+          AND hour < toDateTime({{today:Date}} + 1, 'UTC')
+        """,
+        parameters=parameters,
+    ).result_rows
+    rows = client.query(
+        f"""
+        SELECT term, mentions, authors, before,
+               count() OVER () AS terms, sum(mentions) OVER () AS all_mentions
+        FROM (
+            SELECT term,
+                   sumIf(docs, day > {{today:Date}} - {{days:UInt32}}) AS mentions,
+                   uniqCombinedMergeIf(12)(authors, day > {{today:Date}} - {{days:UInt32}})
+                       AS authors,
+                   sumIf(docs, day <= {{today:Date}} - {{days:UInt32}}) AS before
+            FROM term_daily
+            WHERE {_SCOPE} AND kind = {{kind:String}}
+              AND day > {{today:Date}} - 2 * {{days:UInt32}} AND day <= {{today:Date}}
+            GROUP BY term
+            HAVING mentions > 0
+        )
+        ORDER BY mentions DESC, authors DESC, term
+        LIMIT {{limit:UInt32}}
+        """,
+        parameters=parameters,
+    ).result_rows
+    terms = [row[0] for row in rows]
+    trending = {
+        term: float(z)
+        for term, z in client.query(
+            """
+            SELECT term, max(z) FROM trends
+            WHERE scope = {trend_scope:String} AND term IN {terms:Array(String)}
+              AND detected_at > now() - INTERVAL 24 HOUR AND subsumed_by = ''
+            GROUP BY term
+            """,
+            parameters={"trend_scope": normalize_trend_scope(scope), "terms": terms},
+        ).result_rows
+    }
+    recent = {
+        term: int(count)
+        for term, count in client.query(
+            f"""
+            SELECT term, count() FROM items ARRAY JOIN intents AS term
+            WHERE {_SCOPE} AND term IN {{terms:Array(String)}}
+              AND created_at > now() - INTERVAL 48 HOUR
+            GROUP BY term
+            """,
+            parameters=parameters | {"terms": terms},
+        ).result_rows
+    }
+    return IntentReport(
+        scope=scope,
+        kind=kind,
+        first_day=today - timedelta(days=days - 1),
+        last_day=today,
+        terms=rows[0][4] if rows else 0,
+        mentions=int(rows[0][5]) if rows else 0,
+        total=int(total or 0),
+        total_before=int(total_before or 0),
+        rows=[
+            IntentRow(
+                term,
+                int(mentions),
+                int(authors),
+                int(before),
+                trending.get(term, 0.0),
+                recent.get(term, 0),
+            )
+            for term, mentions, authors, before, _, _ in rows
+        ],
+    )
+
+
+def intent_examples(
+    client: Client, scope: str, terms: Sequence[str], per_term: int
+) -> list[IntentExample]:
+    """The latest comments and posts of the last 48 hours behind each intent."""
+    if not terms or per_term <= 0:
+        return []
+    rows = client.query(
+        f"""
+        SELECT term, created_at, subreddit, permalink, text
+        FROM items FINAL ARRAY JOIN intents AS term
+        WHERE {_SCOPE} AND term IN {{terms:Array(String)}}
+          AND created_at > now() - INTERVAL 48 HOUR
+        ORDER BY created_at DESC
+        LIMIT {{per_term:UInt32}} BY term
+        """,
+        parameters={"scope": normalize_scope(scope), "terms": list(terms), "per_term": per_term},
+    ).result_rows
+    return [IntentExample(*row) for row in rows]

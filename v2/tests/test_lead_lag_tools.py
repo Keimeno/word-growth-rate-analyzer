@@ -76,6 +76,7 @@ class Items:
                     text,
                     f"/r/{subreddit}/comments/x{number}/title/c{number}/",
                     10,
+                    [],
                 )
             )
 

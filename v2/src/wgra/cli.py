@@ -1,5 +1,6 @@
 """wgra command line: ``wgra ingest | analyze | long-term | lead-lag | replay | trends |
-edges | forecasts | suggest-subreddits | wikipedia | notify-test | migrate | status | term``."""
+edges | forecasts | suggest-subreddits | wikipedia | intents | notify-test | migrate | status |
+term``."""
 
 from __future__ import annotations
 
@@ -22,8 +23,19 @@ from dotenv import load_dotenv
 from wgra.config import Env, load_config
 from wgra.detect.short_term import GROUP, Trend
 from wgra.notify.messages import per_month_text
-from wgra.query import ingestion_status, latest_long_term, latest_trends, term_series
+from wgra.query import (
+    IntentReport,
+    IntentRow,
+    ingestion_status,
+    intent_examples,
+    intent_report,
+    latest_long_term,
+    latest_trends,
+    term_series,
+)
 from wgra.store import connect, migrate
+from wgra.text.intents import INTENT_KINDS, SWITCH, intent_entity, source_sentence
+from wgra.text.terms import clean
 
 if TYPE_CHECKING:
     from clickhouse_connect.driver.client import Client
@@ -571,6 +583,99 @@ def cmd_status(_: argparse.Namespace) -> None:
     _print_table(["table", "rows", "size"], status["tables"])
 
 
+INTENT_TITLES = {
+    "switch": ("Switches", "from → to"),
+    "alternative": ("Alternatives sought", "alternative to"),
+    "complaint": ("Complaints", "about"),
+    "need": ("Needs", "need"),
+}
+
+
+def cmd_intents(args: argparse.Namespace) -> None:
+    config = load_config(args.config)
+    client = connect(Env.from_environ(require_reddit=False))
+    for kind in args.kind or INTENT_KINDS:
+        report = intent_report(client, args.scope, kind, args.days, args.limit)
+        _print_intents(report)
+        if args.examples and report.rows:
+            examples = intent_examples(
+                client, args.scope, [row.term for row in report.rows[: args.limit]], args.examples
+            )
+            print()
+            for example in examples:
+                language = config.language(example.permalink.split("/")[2])
+                sentence = source_sentence(clean(example.text), example.term, language)
+                print(f"  {intent_entity(example.term)}: {sentence or example.text[:200]}")
+                print(f"    https://www.reddit.com{example.permalink}")
+        print()
+
+
+def cmd_backfill_intents(args: argparse.Namespace) -> None:
+    from wgra.ingest.backfill import backfill_intents
+    from wgra.ingest.run import write_groups
+
+    config = load_config(args.config)
+    env = Env.from_environ(require_reddit=False)
+    target = connect(env)
+    if applied := migrate(target):
+        logging.getLogger(__name__).info("applied migrations: %s", ", ".join(applied))
+    source_database = args.source_database or env.clickhouse_database
+    if args.copy_items:
+        if source_database == env.clickhouse_database:
+            raise SystemExit("--copy-items copies into another database (CLICKHOUSE_DB)")
+        if not args.dry_run:
+            write_groups(target, config)
+    result = backfill_intents(
+        connect(env, database=source_database),
+        target,
+        config,
+        args.before,
+        source_database,
+        copy_items=args.copy_items,
+        dry_run=args.dry_run,
+    )
+    print(
+        f"{result.items:,} items stored before {args.before:%Y-%m-%d %H:%M} UTC in "
+        f"{source_database}: {result.with_intents:,} with intents, {result.term_rows:,} "
+        f"intents ({', '.join(f'{n:,} {kind}' for kind, n in sorted(result.kinds.items()))})"
+        + (" — dry run, nothing written" if args.dry_run else f", counted in {target.database}")
+    )
+
+
+def _print_intents(report: IntentReport) -> None:
+    title, column = INTENT_TITLES[report.kind]
+    print(
+        f"{title} in {report.scope}, {report.first_day:%Y-%m-%d} to {report.last_day:%Y-%m-%d} "
+        f"vs the {(report.last_day - report.first_day).days + 1} days before: "
+        f"{report.terms:,} {'flows' if report.kind == SWITCH else 'terms'}, "
+        f"{report.mentions:,} mentions in {report.total:,} comments and posts"
+    )
+    if not report.rows:
+        return
+    print()
+
+    def change(row: IntentRow) -> str:
+        times = report.change(row)
+        return "" if times is None else f"{times:.1f}x"
+
+    _print_table(
+        (column, "mentions", "authors", "per 10k", "before", "change", "trending", "last 48h"),
+        [
+            (
+                intent_entity(row.term),
+                row.mentions,
+                row.authors,
+                f"{report.per_10k(row):.2f}",
+                row.before,
+                change(row),
+                f"z {row.z:.1f}" if row.z else "",
+                row.recent or "",
+            )
+            for row in report.rows
+        ],
+    )
+
+
 def cmd_term(args: argparse.Namespace) -> None:
     client = connect(Env.from_environ(require_reddit=False))
     points = term_series(client, args.term, args.scope, args.days, args.bucket)
@@ -743,6 +848,56 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     commands.add_parser("migrate", help="apply database migrations").set_defaults(func=cmd_migrate)
     commands.add_parser("status", help="ingestion health").set_defaults(func=cmd_status)
+
+    intents = commands.add_parser(
+        "intents",
+        help="why people mention things: switches, alternatives, complaints, needs",
+        description="The most mentioned intents in a group or subreddit over the last days, "
+        "compared with as many days before. Switches are 'x → y'; the other kinds are "
+        "stored as 'alternative: x', 'complaint: x', 'need: x' (use those with `wgra term`).",
+    )
+    intents.add_argument(
+        "--scope", default="tracked", help="group or r/subreddit (default: tracked)"
+    )
+    intents.add_argument(
+        "--kind", action="append", choices=INTENT_KINDS, help="repeatable (default: all four)"
+    )
+    intents.add_argument("--days", type=int, default=7)
+    intents.add_argument("--limit", type=int, default=20)
+    intents.add_argument(
+        "--examples",
+        type=int,
+        default=0,
+        metavar="N",
+        help="show up to N comments of the last 48 hours behind each term",
+    )
+    intents.set_defaults(func=cmd_intents)
+
+    backfill = commands.add_parser(
+        "backfill-intents",
+        help="count the intents of the raw items stored before the upgrade (once)",
+        description="Intents are extracted at ingest, and raw text is deleted after 48 "
+        "hours. After upgrading the ingester, this counts the intents of the items it stored "
+        "before (only intents, their words were counted then). Run it once: running it "
+        "twice counts them twice.",
+    )
+    backfill.add_argument(
+        "--before",
+        type=_utc,
+        required=True,
+        help="UTC time the upgraded ingester started, e.g. 2026-10-12T09:30: items "
+        "ingested before it are counted",
+    )
+    backfill.add_argument("--dry-run", action="store_true", help="count, write nothing")
+    backfill.add_argument(
+        "--source-database", help="read the items from here (default: CLICKHOUSE_DB)"
+    )
+    backfill.add_argument(
+        "--copy-items",
+        action="store_true",
+        help="also copy the items, into a separate database to try things on",
+    )
+    backfill.set_defaults(func=cmd_backfill_intents)
 
     term = commands.add_parser("term", help="how often a term was mentioned")
     term.add_argument("term")

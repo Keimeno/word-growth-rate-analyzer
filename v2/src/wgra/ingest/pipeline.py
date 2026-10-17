@@ -13,6 +13,7 @@ from typing import Any
 from wgra.config import SAMPLE_SCOPE, Config
 from wgra.reddit.models import RedditItem
 from wgra.text import extract_terms
+from wgra.text.intents import INTENT_KINDS
 
 ITEM_COLUMNS = (
     "id",
@@ -23,6 +24,7 @@ ITEM_COLUMNS = (
     "text",
     "permalink",
     "token_count",
+    "intents",
 )
 TERM_COLUMNS = ("hour", "subreddit", "source", "kind", "term", "author_hash", "occurrences")
 
@@ -101,6 +103,7 @@ class Processor:
         # untracked subreddits only reach us through the background sample, their counts
         # are pooled (the permalink still names the real subreddit)
         scope = self._config.scope(item.subreddit)
+        intents = self._config.intents
         terms = extract_terms(
             item.text,
             language=self._config.language(item.subreddit),
@@ -109,6 +112,7 @@ class Processor:
                 if scope == SAMPLE_SCOPE
                 else self._config.ingest.max_ngram
             ),
+            intents=intents.enabled and (intents.sample or scope != SAMPLE_SCOPE),
         )
         created_at = datetime.fromtimestamp(item.created_utc, UTC)
         hour = created_at.replace(minute=0, second=0, microsecond=0)
@@ -123,6 +127,8 @@ class Processor:
             item.text[:MAX_STORED_TEXT],
             item.permalink,
             terms.token_count,
+            # the intents' terms, so dashboards can show the comments behind an intent
+            sorted(term for kind, term in terms.counts if kind in INTENT_KINDS),
         )
         term_rows = [
             (hour, scope, item.source, kind, term, author_hash, occurrences)

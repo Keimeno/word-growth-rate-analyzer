@@ -1,0 +1,1523 @@
+{
+  "uid": "wgra-intents",
+  "title": "Intent radar",
+  "description": "Why people mention things: switches between products, alternatives sought, complaints and unmet needs.",
+  "tags": [
+    "wgra"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "15m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "group",
+        "label": "Group",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "definition": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "sort": 0,
+        "current": {
+          "text": "tracked",
+          "value": "tracked"
+        }
+      },
+      {
+        "type": "query",
+        "name": "subreddit",
+        "label": "Subreddits",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
+        "definition": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "allValue": "$__all",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "type": "custom",
+        "name": "source",
+        "label": "Source",
+        "query": "comment,post",
+        "options": [
+          {
+            "text": "comment",
+            "value": "comment",
+            "selected": true
+          },
+          {
+            "text": "post",
+            "value": "post",
+            "selected": true
+          }
+        ],
+        "current": {
+          "text": [
+            "comment",
+            "post"
+          ],
+          "value": [
+            "comment",
+            "post"
+          ]
+        },
+        "multi": true,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "min_authors",
+        "label": "Min authors",
+        "query": "1,2,3,5,10",
+        "options": [
+          {
+            "text": "1",
+            "value": "1",
+            "selected": true
+          },
+          {
+            "text": "2",
+            "value": "2",
+            "selected": false
+          },
+          {
+            "text": "3",
+            "value": "3",
+            "selected": false
+          },
+          {
+            "text": "5",
+            "value": "5",
+            "selected": false
+          },
+          {
+            "text": "10",
+            "value": "10",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "1",
+          "value": "1"
+        },
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "type": "custom",
+        "name": "min_mentions",
+        "label": "Min mentions (7 days)",
+        "query": "1,2,3,5,10",
+        "options": [
+          {
+            "text": "1",
+            "value": "1",
+            "selected": false
+          },
+          {
+            "text": "2",
+            "value": "2",
+            "selected": true
+          },
+          {
+            "text": "3",
+            "value": "3",
+            "selected": false
+          },
+          {
+            "text": "5",
+            "value": "5",
+            "selected": false
+          },
+          {
+            "text": "10",
+            "value": "10",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "2",
+          "value": "2"
+        },
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "type": "textbox",
+        "name": "term",
+        "label": "Term (comments)",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      },
+      {
+        "type": "custom",
+        "name": "intent_kind",
+        "label": "Kinds (comments)",
+        "query": "switch,alternative,complaint,need",
+        "options": [
+          {
+            "text": "switch",
+            "value": "switch",
+            "selected": true
+          },
+          {
+            "text": "alternative",
+            "value": "alternative",
+            "selected": true
+          },
+          {
+            "text": "complaint",
+            "value": "complaint",
+            "selected": true
+          },
+          {
+            "text": "need",
+            "value": "need",
+            "selected": true
+          }
+        ],
+        "current": {
+          "text": [
+            "switch",
+            "alternative",
+            "complaint",
+            "need"
+          ],
+          "value": [
+            "switch",
+            "alternative",
+            "complaint",
+            "need"
+          ]
+        },
+        "multi": true,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Switches",
+      "description": "Comments and posts with a switch intent in the time range.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 5,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Alternatives sought",
+      "description": "Comments and posts with a alternative intent in the time range.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 0,
+        "w": 5,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'alternative' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Complaints",
+      "description": "Comments and posts with a complaint intent in the time range.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 0,
+        "w": 5,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'complaint' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Needs",
+      "description": "Comments and posts with a need intent in the time range.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 0,
+        "w": 5,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'need' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Counting intents since",
+      "description": "The first day with intents, in any subreddit: they're extracted at ingest, so there is no history before the ingester started extracting them (plus the 48 hours of raw text before, with wgra backfill-intents).",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT toString(min(day)) FROM term_daily WHERE kind IN ('switch', 'alternative', 'complaint', 'need')",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Top switching flows (x → y)",
+      "description": "Someone switched from x to y, in the selected subreddits and time range: 'switched from Notion to Obsidian', 'dropped ChatGPT for Claude', 'we replaced our Jira with Linear', 'the Jenkins to GitHub Actions migration'. mentions: comments and posts (each counts once), authors: different people. the other way: the mentions of y → x, who is winning. per_10k: per 10,000 comments and posts. Click a flow for the comments behind it (last 48 hours) or the term explorer.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 11
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(toDate($__fromTime), 'UTC') AND hour < toDateTime(toDate($__toTime) + 1, 'UTC')) AS total,\n    flows AS (\n        SELECT term, sum(docs) AS mentions, uniqCombinedMerge(12)(authors) AS authors\n        FROM term_daily\n        WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\n        GROUP BY term\n    )\nSELECT\n    splitByString(' → ', f.term)[1] AS from,\n    splitByString(' → ', f.term)[2] AS to,\n    f.mentions AS mentions,\n    f.authors AS authors,\n    r.mentions AS `the other way`,\n    round(10000 * f.mentions / total, 2) AS per_10k,\n    f.term AS term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM flows AS f\nLEFT JOIN flows AS r\n    ON r.term = concat(splitByString(' → ', f.term)[2], ' → ', splitByString(' → ', f.term)[1])\nWHERE f.authors >= ${min_authors:raw}\nORDER BY mentions DESC, authors DESC, from\nLIMIT 50",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\nGROUP BY time, term\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "from"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Comments of the last 48 hours",
+                    "url": "${__data.fields.examples}"
+                  },
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "to"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Comments of the last 48 hours",
+                    "url": "${__data.fields.examples}"
+                  },
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "examples"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "authors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "the other way"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_10k"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per day"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "mentions",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "term",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "exclude",
+            "match": "any",
+            "filters": [
+              {
+                "fieldName": "mentions A",
+                "config": {
+                  "id": "isNull"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "from A": "from",
+              "to A": "to",
+              "mentions A": "mentions",
+              "authors A": "authors",
+              "the other way A": "the other way",
+              "Trend #B A": "Trend #B",
+              "per_10k A": "per_10k",
+              "term A": "term",
+              "examples A": "examples",
+              "explore A": "explore",
+              "Trend #B": "per day"
+            },
+            "indexByName": {
+              "from": 0,
+              "from A": 0,
+              "to": 1,
+              "to A": 1,
+              "mentions": 2,
+              "mentions A": 2,
+              "authors": 3,
+              "authors A": 3,
+              "the other way": 4,
+              "the other way A": 4,
+              "Trend #B": 5,
+              "Trend #B A": 5,
+              "per_10k": 6,
+              "per_10k A": 6,
+              "term": 7,
+              "term A": 7,
+              "examples": 8,
+              "examples A": 8,
+              "explore": 9,
+              "explore A": 9
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Rising: alternatives sought",
+      "description": "Alternatives people look for or use instead: 'alternatives to LastPass', 'a good Plex alternative', 'I use Firefox instead of Chrome', 'moving away from AWS'. The last 7 days (today included) against the 28 days before, in the selected subreddits; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its subreddits. per day: the last 35 days. Click an entry for the comments behind it.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 11
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'alternative' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT concat('r/', subreddit)\n                        FROM subreddit_groups WHERE group_name = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ' → ') > 0, term, substring(term, position(term, ': ') + 2)) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'alternative' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'alternative' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "entity"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Comments of the last 48 hours",
+                    "url": "${__data.fields.examples}"
+                  },
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "examples"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "excess"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "times_usual"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_week_before"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 115
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "authors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "trend_z"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per day"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "excess",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "term",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "exclude",
+            "match": "any",
+            "filters": [
+              {
+                "fieldName": "mentions A",
+                "config": {
+                  "id": "isNull"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "entity A": "entity",
+              "mentions A": "mentions",
+              "Trend #B A": "Trend #B",
+              "excess A": "excess",
+              "times_usual A": "times_usual",
+              "per_week_before A": "per_week_before",
+              "authors A": "authors",
+              "trend_z A": "trend_z",
+              "term A": "term",
+              "examples A": "examples",
+              "explore A": "explore",
+              "Trend #B": "per day"
+            },
+            "indexByName": {
+              "entity": 0,
+              "entity A": 0,
+              "mentions": 1,
+              "mentions A": 1,
+              "Trend #B": 2,
+              "Trend #B A": 2,
+              "excess": 3,
+              "excess A": 3,
+              "times_usual": 4,
+              "times_usual A": 4,
+              "per_week_before": 5,
+              "per_week_before A": 5,
+              "authors": 6,
+              "authors A": 6,
+              "trend_z": 7,
+              "trend_z A": 7,
+              "term": 8,
+              "term A": 8,
+              "examples": 9,
+              "examples A": 9,
+              "explore": 10,
+              "explore A": 10
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Rising: complaints",
+      "description": "'is Reddit down?', 'Teams is unusable', 'cancelled my Netflix subscription', 'Spotify raised prices again', 'YouTube enshittification'. The last 7 days (today included) against the 28 days before, in the selected subreddits; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its subreddits. per day: the last 35 days. Click an entry for the comments behind it.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 11
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'complaint' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT concat('r/', subreddit)\n                        FROM subreddit_groups WHERE group_name = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ' → ') > 0, term, substring(term, position(term, ': ') + 2)) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'complaint' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'complaint' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "entity"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Comments of the last 48 hours",
+                    "url": "${__data.fields.examples}"
+                  },
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "examples"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "excess"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "times_usual"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_week_before"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 115
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "authors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "trend_z"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per day"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline",
+                  "hideValue": true
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "excess",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "term",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "exclude",
+            "match": "any",
+            "filters": [
+              {
+                "fieldName": "mentions A",
+                "config": {
+                  "id": "isNull"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "entity A": "entity",
+              "mentions A": "mentions",
+              "Trend #B A": "Trend #B",
+              "excess A": "excess",
+              "times_usual A": "times_usual",
+              "per_week_before A": "per_week_before",
+              "authors A": "authors",
+              "trend_z A": "trend_z",
+              "term A": "term",
+              "examples A": "examples",
+              "explore A": "explore",
+              "Trend #B": "per day"
+            },
+            "indexByName": {
+              "entity": 0,
+              "entity A": 0,
+              "mentions": 1,
+              "mentions A": 1,
+              "Trend #B": 2,
+              "Trend #B A": 2,
+              "excess": 3,
+              "excess A": 3,
+              "times_usual": 4,
+              "times_usual A": 4,
+              "per_week_before": 5,
+              "per_week_before A": 5,
+              "authors": 6,
+              "authors A": 6,
+              "trend_z": 7,
+              "trend_z A": 7,
+              "term": 8,
+              "term A": 8,
+              "examples": 9,
+              "examples A": 9,
+              "explore": 10,
+              "explore A": 10
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Top unmet needs per group",
+      "description": "The 10 needs mentioned most in each configured group (and the r/all sample) in the time range: 'is there an app to …', 'I wish there was a way to …', 'I'd pay for an app that …', 'does anyone know a tool for …'. A need is the 2–3 words after it ('track my sleep'). Ignores the group picker. Click a need for its comments.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 10,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    g.group_name AS group,\n    substring(t.term, 7) AS need,\n    sum(t.docs) AS mentions,\n    uniqCombinedMerge(12)(t.authors) AS authors,\n    t.term AS term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(group), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(group), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily AS t\nINNER JOIN subreddit_groups AS g ON g.subreddit = t.subreddit\nWHERE t.kind = 'need' AND t.day >= toDate($__fromTime) AND t.day <= toDate($__toTime)\n  AND t.source IN (${source:singlequote}) AND g.group_name != 'tracked'\nGROUP BY group, term\nHAVING authors >= ${min_authors:raw}\nORDER BY group, mentions DESC, authors DESC, need\nLIMIT 10 BY group",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "need"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Comments of the last 48 hours",
+                    "url": "${__data.fields.examples}"
+                  },
+                  {
+                    "title": "Open in the term explorer",
+                    "url": "${__data.fields.explore}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "term"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "examples"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "explore"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "group"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mentions"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 85
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "authors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "type": "table",
+      "title": "Comments behind intents, last 48 hours",
+      "description": "The comments and posts the intents were found in, newest first. Raw text is only kept for 48 hours, and only items ingested since intents were extracted (migration 005) carry them. Set Term (or click an entry in the tables above) to see one intent's comments, e.g. 'notion → obsidian' or 'complaint: reddit'; empty shows all of the selected kinds.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 27,
+        "w": 14,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    created_at AS time,\n    -- not \"AS subreddit\": the alias would replace the column in WHERE\n    splitByChar('/', permalink)[3] AS community,\n    arrayStringConcat(arrayFilter(t -> if(position(t, ' → ') > 0, 'switch', splitByString(': ', t)[1]) IN (${intent_kind:singlequote})\n                                       AND (${term:sqlstring} = '' OR t = ${term:sqlstring}),\n                                  intents), ', ') AS found,\n    substring(text, 1, 500) AS text,\n    concat('https://www.reddit.com', permalink) AS link\nFROM items\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND created_at > now() - INTERVAL 48 HOUR\n  AND arrayExists(t -> if(position(t, ' → ') > 0, 'switch', splitByString(': ', t)[1]) IN (${intent_kind:singlequote})\n                       AND (${term:sqlstring} = '' OR t = ${term:sqlstring}), intents)\nORDER BY created_at DESC\nLIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "link"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on reddit",
+                    "url": "${__value.raw}",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "time"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "community"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "found"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "type": "timeseries",
+      "title": "Intents per day",
+      "description": "Comments and posts with an intent per day, by kind.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, kind, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind IN ('switch', 'alternative', 'complaint', 'need') AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\nGROUP BY time, kind\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.kind}",
+          "custom": {
+            "spanNulls": true,
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

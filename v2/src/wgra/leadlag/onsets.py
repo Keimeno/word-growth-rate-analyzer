@@ -6,7 +6,8 @@ vectorized over the hours). The onset is the first hour the window passes the on
 `onset_min_mentions`, `onset_min_ratio` times its usual share, and `onset_min_z`. It's the
 hour a detector running then could have seen the term rise in the scope. The gates are
 lower than the detector's (no author gate, the hourly author sketches can't be summed over
-rolling windows cheaply), so an onset usually comes before the scope's first trend.
+rolling windows cheaply), so an onset usually comes before the scope's first trend. Intents
+need fewer mentions than words (`kind_onset_min_mentions`).
 
 The scopes: every tracked subreddit, the r/all sample ("sample", reddit-wide), every
 configured group, and every group without each of its subreddits. A subreddit can't lead
@@ -59,6 +60,7 @@ def first_crossings(
     prior: Prior,
     first: int,
     settings: LeadLagConfig,
+    min_mentions: int | None = None,
 ) -> list[Crossing | None]:
     """The first hour index, from `first` on, at which each series' window passes the gates.
 
@@ -66,7 +68,7 @@ def first_crossings(
     and all of them, per hour. The window ending at hour i covers hours i − window + 1 to i,
     the reference period the `reference_days` × 24 hours before. `first` must leave room for
     both. A series needs `min_reference_days` of data (hours since its first comment)
-    before the window."""
+    before the window. `min_mentions` is the term's kind's (default onset_min_mentions)."""
     window = settings.window_hours
     reference = settings.reference_days * 24
     if first < window + reference - 1:
@@ -98,8 +100,10 @@ def first_crossings(
     enough_history = (window_start[None, :] - first_data[:, None]) >= (
         settings.min_reference_days * 24
     )
+    if min_mentions is None:
+        min_mentions = settings.onset_min_mentions
     passing = (
-        (y_window >= settings.onset_min_mentions)
+        (y_window >= min_mentions)
         & (n_window > 0)
         & enough_history
         & (log_odds >= math.log(settings.onset_min_ratio))
@@ -283,6 +287,7 @@ class OnsetFinder:
                 event_rows,
                 prior,
                 sample_mentions,
+                self.settings.onset_min_mentions_for(event.kind),
             )
             event.onsets_until = until
             event.closed = span.end <= until
@@ -340,6 +345,7 @@ class OnsetFinder:
         rows: NDArray | None,
         prior: Prior,
         sample_mentions: float,
+        min_mentions: int,
     ) -> list[Onset]:
         event_start = span_start - self._lead_in()
         offset = int((event_start - grid_start) / HOUR)
@@ -358,7 +364,7 @@ class OnsetFinder:
             )
         event_totals = totals[:, offset : offset + hours]
 
-        series = self._series(mentions, event_totals, first)
+        series = self._series(mentions, event_totals, first, min_mentions)
         if not series:
             return []
         crossings = first_crossings(
@@ -368,6 +374,7 @@ class OnsetFinder:
             prior,
             first,
             self.settings,
+            min_mentions,
         )
         return [
             Onset(
@@ -383,11 +390,14 @@ class OnsetFinder:
         ]
 
     def _series(
-        self, mentions: NDArray[np.float64], totals: NDArray[np.float64], first: int
+        self,
+        mentions: NDArray[np.float64],
+        totals: NDArray[np.float64],
+        first: int,
+        minimum: int,
     ) -> list[Series]:
         """Every scope that could cross: enough mentions in the hours the windows cover."""
         searched = slice(first - self.settings.window_hours + 1, None)
-        minimum = self.settings.onset_min_mentions
 
         def mentioned(values: NDArray[np.float64]) -> bool:
             return bool(values[searched].sum() >= minimum)

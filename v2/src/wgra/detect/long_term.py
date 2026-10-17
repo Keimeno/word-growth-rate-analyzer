@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import MACRO, Config, LongTermConfig
+from wgra.config import MACRO, Config, LongTermConfig, ranking
 from wgra.detect.short_term import Scope, as_utc, load_scopes
 from wgra.detect.trend_stats import (
     FLAT,
@@ -52,6 +52,7 @@ from wgra.detect.trend_stats import (
     theil_sen,
 )
 from wgra.notify.messages import REPORTED, LongTermSummary
+from wgra.text.intents import INTENT_KINDS
 
 log = logging.getLogger(__name__)
 
@@ -228,22 +229,27 @@ WEEKLY = (
 #    all of them together has at least 1/k of it in one of them: those are found per
 #    subreddit, then counted exactly.
 # 2. Their mentions per week and subreddit (the primary index skips most of the rest).
+# The floor of the term's kind: intents are far rarer than words.
+_FLOOR = (
+    "transform(toString(kind), {{floor_kinds:Array(String)}}, {{kind_{0}:Array(UInt64)}}, "
+    "toUInt64({{{0}:UInt64}}))"
+)
 SUBREDDIT_FLOOR = f"""
     above_floor AS (
         SELECT kind, term FROM term_daily WHERE {TERMS}
-        GROUP BY subreddit, term, kind HAVING sum(docs) >= {{min_total:UInt64}}
+        GROUP BY subreddit, term, kind HAVING sum(docs) >= {_FLOOR.format("min_total")}
     ),"""
 GROUP_FLOOR = f"""
     candidates AS (
         SELECT DISTINCT kind, term FROM (
             SELECT subreddit, term, kind FROM term_daily WHERE {TERMS}
-            GROUP BY subreddit, term, kind HAVING sum(docs) >= {{member_min:UInt64}}
+            GROUP BY subreddit, term, kind HAVING sum(docs) >= {_FLOOR.format("member_min")}
         )
     ),
     above_floor AS (
         SELECT kind, term FROM term_daily
         WHERE {TERMS} AND (kind, term) IN (SELECT kind, term FROM candidates)
-        GROUP BY kind, term HAVING sum(docs) >= {{min_total:UInt64}}
+        GROUP BY kind, term HAVING sum(docs) >= {_FLOOR.format("min_total")}
     ),"""
 
 FIRST_PASS = f"""
@@ -291,9 +297,10 @@ FROM (
            count() OVER () AS terms_above_floor
     FROM series
 )
--- the ones growing or shrinking at least min_growth first, the strongest fit first
+-- the ones growing or shrinking at least min_growth first, the strongest fit first; as many
+-- of each ranking (words and phrases, each intent kind) as the limit
 ORDER BY abs(ols_slope) >= {{min_slope:Float64}} DESC, abs(t) DESC
-LIMIT {{limit:UInt32}}
+LIMIT {{limit:UInt32}} BY if(kind IN {{intent_kinds:Array(String)}}, toString(kind), 'text')
 SETTINGS optimize_aggregation_in_order = 1, max_block_size = 8192
 """
 
@@ -389,8 +396,15 @@ class LongTermDetector:
         """The least squares pass in ClickHouse: the candidates of one scope and window."""
         started = time.monotonic()
         settings = self.settings
-        min_total = math.ceil(settings.min_mentions_per_week * window.weeks)
-        group = len(window.members) > 1
+        kinds = list(self._config.detect.kinds)
+        members = len(window.members)
+
+        def floor(per_week: float) -> int:
+            return math.ceil(per_week * window.weeks)
+
+        min_total = floor(settings.min_mentions_per_week)
+        kind_totals = [floor(settings.min_mentions_per_week_for(kind)) for kind in kinds]
+        group = members > 1
         pooled = [sum(week) for week in zip(*member_totals, strict=True)]
         min_slope = math.log(settings.min_growth) / WEEKS_PER_MONTH
         rows = self._client.query(
@@ -406,9 +420,13 @@ class LongTermDetector:
                 "start": window.start,
                 "end": window.end,
                 "sources": list(self._config.detect.sources),
-                "kinds": list(self._config.detect.kinds),
+                "kinds": kinds,
                 "min_total": min_total,
-                "member_min": math.ceil(min_total / len(window.members)),
+                "member_min": math.ceil(min_total / members),
+                "floor_kinds": kinds,
+                "kind_min_total": kind_totals,
+                "kind_member_min": [math.ceil(total / members) for total in kind_totals],
+                "intent_kinds": list(INTENT_KINDS),
                 "macro": settings.group_rate == MACRO,
                 "pseudo": settings.pseudo_mentions,
                 "min_slope": min_slope,
@@ -537,15 +555,16 @@ class Scored:
 
 
 def rank(trends: list[LongTermTrend], limit: int) -> list[LongTermTrend]:
-    """The strongest `limit` per scope, window and category: by growth or decline, one-offs
-    by the change between the halves of the window."""
+    """The strongest `limit` per scope, window, category and ranking (words and phrases,
+    each intent kind): by growth or decline, one-offs by the change between the halves of
+    the window."""
 
     def strength(trend: LongTermTrend) -> float:
         return abs(math.log(trend.change if trend.category == ONE_OFF else trend.growth))
 
-    groups: dict[tuple[str, str, str], list[LongTermTrend]] = defaultdict(list)
+    groups: dict[tuple[str, str, str, str], list[LongTermTrend]] = defaultdict(list)
     for trend in trends:
-        groups[trend.horizon, trend.scope, trend.category].append(trend)
+        groups[trend.horizon, trend.scope, trend.category, ranking(trend.kind)].append(trend)
     kept = []
     for members in groups.values():
         members.sort(key=strength, reverse=True)

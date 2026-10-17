@@ -8,6 +8,9 @@ Terms come in four kinds:
 * ``domain``: the host of every linked url ("github.com")
 * ``subreddit``: mentioned subreddits ("r/selfhosted")
 
+and the intents behind mentions (``switch``, ``alternative``, ``complaint``, ``need``), see
+intents.py.
+
 Quoted lines, code and user mentions are ignored. Usernames are never part of a term.
 """
 
@@ -17,9 +20,10 @@ import html
 import re
 from collections import Counter
 from dataclasses import dataclass
-from functools import cache
-from importlib import resources
 from urllib.parse import urlsplit
+
+from wgra.text.intents import extract_intents
+from wgra.text.lexicon import stopwords
 
 WORD = "word"
 PHRASE = "phrase"
@@ -57,21 +61,6 @@ class Terms:
     token_count: int
 
 
-@cache
-def _load_stopwords(language: str) -> frozenset[str]:
-    path = resources.files("wgra.text") / "stopwords" / f"{language}.txt"
-    if not path.is_file():
-        return frozenset()
-    lines = path.read_text(encoding="utf-8").splitlines()
-    return frozenset(line.strip() for line in lines if line.strip() and not line.startswith("#"))
-
-
-@cache
-def stopwords(language: str) -> frozenset[str]:
-    # english is mixed into every subreddit
-    return _load_stopwords("en") | _load_stopwords(language)
-
-
 def _domain(url: str) -> str | None:
     if not url.lower().startswith(("http://", "https://")):
         url = f"http://{url}"
@@ -97,10 +86,11 @@ def _has_letter(words: list[str]) -> bool:
     return any(char.isalpha() for word in words for char in word)
 
 
-def extract_terms(text: str, language: str = "en", max_ngram: int = 3) -> Terms:
-    counts: Counter[tuple[str, str]] = Counter()
-    stop = stopwords(language)
-
+def clean(text: str, counts: Counter[tuple[str, str]] | None = None) -> str:
+    """The text words, phrases and intents are taken from: without code, quoted lines,
+    urls and mentions. Linked domains and mentioned subreddits are counted into `counts`."""
+    if counts is None:
+        counts = Counter()
     # reddit double-escapes some entities, e.g. the zero width space in "&amp;#x200B;"
     text = html.unescape(html.unescape(text)).translate(_INVISIBLE).translate(_APOSTROPHES)
     text = _FENCED_CODE.sub("\n", text)
@@ -124,7 +114,15 @@ def extract_terms(text: str, language: str = "en", max_ngram: int = 3) -> Terms:
     text = _MARKDOWN_LINK.sub(replace_link, text)
     text = _URL.sub(replace_url, text)
     text = _SUBREDDIT_MENTION.sub(replace_subreddit, text)
-    text = _USER_MENTION.sub("\n", text)
+    return _USER_MENTION.sub("\n", text)
+
+
+def extract_terms(
+    text: str, language: str = "en", max_ngram: int = 3, intents: bool = True
+) -> Terms:
+    counts: Counter[tuple[str, str]] = Counter()
+    stop = stopwords(language)
+    text = clean(text, counts)
 
     token_count = 0
     for segment in _SEGMENT_BREAK.split(text.lower()):
@@ -140,4 +138,6 @@ def extract_terms(text: str, language: str = "en", max_ngram: int = 3) -> Terms:
                     continue
                 counts[PHRASE, " ".join(words)] += 1
 
+    if intents:
+        counts.update(extract_intents(text, language))
     return Terms(counts=counts, token_count=token_count)

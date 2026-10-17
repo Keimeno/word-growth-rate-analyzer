@@ -1,6 +1,6 @@
 # WGRA v2: Architecture and Plan
 
-Status: phases 1, 2 and 4 and the lead-lag early warning built, collecting history · October 2026
+Status: phases 1, 2 and 4, the lead-lag early warning and intents built, collecting history · October 2026
 
 ## 1. What the system is for
 
@@ -15,6 +15,11 @@ level?** It answers it on two horizons:
 
 Both work **per subreddit** and **per topic group**, for example
 `tech = r/technology + r/programming + r/hardware + r/LocalLLaMA + …`.
+
+On top of what is mentioned, the system counts **why** (§4.7): people switching from one
+product to another (`notion → obsidian`), looking for alternatives, complaining, and asking
+for things that don't exist yet. Those are counted, scored and shown like words, so the same
+horizons answer "which products are people leaving, and for what?"
 
 The constraints from the original README still hold. Results must be
 normalized for activity swings across the day and week, robust against spam,
@@ -112,6 +117,9 @@ Everything in the solid boxes is free, open source software (see §3.6).
   stopword (per-language stopword lists), so you get `right to repair` but
   not `of the`. Optional light lemmatization with `simplemma` (multilingual,
   so it covers r/de too): `agents` → `agent`.
+* **Intents** (built, §4.7): switches, alternatives sought, complaints and needs, from
+  patterns over the same tokens, as terms of their own kinds (`notion → obsidian`,
+  `complaint: reddit`). They can only be extracted here, before the text is deleted.
 * **The sample is pooled.** Items from untracked subreddits only arrive through
   the r/all sample, a few percent of each. Per subreddit that's far too thin
   to mean anything. Kept separate, thousands of tiny subreddits would add about
@@ -134,7 +142,7 @@ The schema as built is in
 
 | Table | Engine | Key | Retention | Purpose |
 | --- | --- | --- | --- | --- |
-| `items` | ReplacingMergeTree | (subreddit, created_at, id) | 48h TTL | Raw comments and posts: example comments, LLM context |
+| `items` | ReplacingMergeTree | (subreddit, created_at, id) | 48h TTL | Raw comments and posts and the intents found in them: example comments, LLM context |
 | `term_events` | Null | — | not stored | Insert target, feeds the views |
 | `term_hourly` | AggregatingMergeTree | (subreddit, term, kind, source, hour) | 180 days TTL | Short-term detection |
 | `term_daily` | AggregatingMergeTree | (subreddit, term, kind, source, day) | forever | Long-term detection |
@@ -209,6 +217,11 @@ datasource. None of the dashboards need custom front-end code:
 5. **Ingestion health:** requests/min vs budget, items/min per stream,
    coverage, gaps, error rate. A Grafana alert sends to ntfy when ingestion
    stalls.
+6. **Intent radar** (§4.7): per group and its subreddits, the top switching flows
+   (x → y, with mentions, distinct authors, the flow the other way and a daily
+   sparkline), the alternatives sought and complaints rising in the last 7 days against
+   the 28 before (with the short-term detector's score when they trend), the top needs of
+   every group, and the comments behind each intent from the last 48 hours.
 
 A custom web UI is only worth building later, if you want to share this
 publicly.
@@ -686,6 +699,179 @@ article:
 `wgra wikipedia` prints how often Reddit was first, the median lead, and a two-sided sign
 test.
 
+### 4.7 Intents: why people mention things
+
+Counting that a product is mentioned more says little about what's happening to it.
+Counting why does: people leaving it, people looking for something else, people complaining,
+and what people wish existed. As built
+([`v2/src/wgra/text/intents.py`](../v2/src/wgra/text/intents.py)), the ingester extracts four
+more kinds of terms from every comment and post, next to words and phrases:
+
+| Kind | Term | Extracted from (examples) |
+| --- | --- | --- |
+| `switch` | `notion → obsidian` | "I switched from Notion to Obsidian", "switching to Bitwarden from LastPass", "dropped ChatGPT for Claude", "we replaced our Jira with Linear", "the Jenkins to GitHub Actions migration", "Ich bin von Windows zu Linux gewechselt" |
+| `alternative` | `alternative: lastpass` | "alternatives to LastPass", "a good Plex alternative?", "any alternatives for Plex", "looking for a replacement for Evernote", "I use Firefox instead of Chrome", "Alternative zu Notion" |
+| `complaint` | `complaint: reddit` | "is Reddit down?", "YouTube is down again", "Teams has been unusable since the update", "Windows is broken again", "Google search is getting worse", "cancelled my Netflix subscription", "Spotify raised prices", "the enshittification of Reddit", "Netflix hat die Preise erhöht", "mein Spotify-Abo gekündigt" |
+| `need` | `need: track my sleep` | "is there an app to track my sleep?", "I wish there was a way to mute subreddits", "I'd pay for an app that syncs notes", "does anyone know a tool for batch renaming files", "can anyone recommend an app for meal planning", "Gibt es eine App für Haushaltsbuch?" |
+
+**Only at ingest.** Raw text is deleted after 48 hours (§7), so an intent that isn't
+extracted when the item arrives is lost. There is no history from before the ingester
+extracts them, apart from the 48 hours `wgra backfill-intents` can still read once, right
+after the upgrade.
+
+**Matching.** Per sentence (split at `. ! ? ; :` and line breaks), on the same cleaned text
+as words (quotes, code, urls and user mentions removed) and the same tokens (lowercase,
+possessive 's removed). Commas, dashes, parentheses and slashes stay in as soft breaks that
+an entity can't cross, and a sentence ending in "?" ends with a "?" token, so patterns can
+require a question. Each pattern is a regular expression over the sentence's tokens joined
+by spaces; its groups mark where the entities are:
+
+* between two anchors ("switched from **X** to"), the determiners in front left out
+* from an anchor forward to the next boundary ("alternatives to **X** …")
+* back from an anchor to the previous boundary ("… **X** alternative")
+
+An entity is 1–3 tokens. It ends at stopwords, punctuation, the words of
+`intent_words/boundary_*.txt` (time expressions, adjectives that come before names: "last
+year", "a free Notion alternative") and -ly adverbs. What a product is called besides its
+name is dropped ("my Netflix subscription", "Spotify-Abo"), and so is a number before a time
+unit ("a 7800XT 2 years ago"). Needs are phrases: 2–3 tokens after the helper words ("an app
+that lets me track sleep"), not starting or ending with a stopword (one long german word is a
+need too: "Haushaltsbuch").
+
+**Names.** Precision depends on knowing that X is a thing and not a person, a place or an
+everyday word. Without a lexicon or a model, the writing has to tell:
+
+* In english text, X has to be written like a name: capitalized in the middle of a sentence
+  ("moved to Proton"), mixed case ("iPhone", "GitLab"), an acronym ("AWS"), letters with
+  digits ("gpt-5", "iX3"), or on a list of names. The entity is trimmed to the name: "the
+  crappy Lattafa" counts as `lattafa`.
+* Two lists of names count in any case and position. `names_en.txt`: the 4,208 words the live
+  corpus capitalized in at least half of the items where they appear mid-sentence (at least
+  5 items, 3 authors), generated by
+  [`bench/intent_names.py`](../v2/bench/intent_names.py) from the first 338,180 english items.
+  "reddit", "spotify" and "youtube" are on it (capitalized in 55%, 77% and 73% of their
+  mid-sentence uses on the first day), "notion" (5%), "windows" (43%) and "teams" (3%) aren't:
+  there only a capital letter makes them a name.
+  `products_*.txt`: products named with everyday words, kept by hand ("notion", "windows",
+  "signal", "rust"; a few german banks and telcos).
+* At the start of a sentence, in Title Case (post titles) and in german (every noun is
+  capitalized) a capital letter says nothing; in ALL CAPS sentences acronyms say nothing.
+* `generic_*.txt` never name a thing: acronyms like AI, EU, OP, DLC, GP; countries,
+  nationalities, US states and big cities; months and weekdays; family words; placeholders
+  ("switch from X to Y").
+
+**What the live data taught.** The patterns were developed on the first day of live items
+(293,005 items up to 2026-10-11 10:21 UTC), reading every extraction. Each rule below
+removed a class of errors that made up most of a kind's mistakes:
+
+| Rule | Errors it removed |
+| --- | --- |
+| A switch needs a person switching: a subject (i, we, people, users, devs, companies, …), a gerund ("after switching"), or "Switched from" opening a sentence; plus "made the switch". Not in a question or after if, would, should, considering, thinking … | "the traffic light switched", "the Slavic rite switches", "they switched from Emboar to Stoutland" (game updates), "they had migrated from Urfa to Kırıkkale", "if I want that I need to switch from …", "do people really bother switching from …?" |
+| One side of a switch must be known (on the lists, mixed case, acronym or digits), not only capitalized | game characters and builds ("Tremor Scorch → Middle"), car parts |
+| No "went/moved from X to Y", "made the jump", "the switch from", "replace X with Y", "dropped/left X for Y"; "replaced" only with a first-person subject; settings and media aren't things ("video", "CLI") | travel ("went from Bangkok to Koh Phangan"), relocation, tube lines, game levels ("E2 → E6"), team building in game threads ("replace Zhongli with Jean"), fantasy football ("dropped Bryce Young for Roman"), transfers ("Ronaldo left Real Madrid for Juventus"), "switched from PNG to Video" (an upload option) |
+| "instead of X" only after a verb of using or choosing (not "bought": football transfers) | of the 1,516 items with "instead of", nearly all were not about products ("instead of going outside", "Clinton instead of Sanders") |
+| "X alternative" only as a noun at the end of a phrase, not after "the", not for qualifiers (-compatible, -based, non-…, nationalities) | "alternative rock", "the AMD alternative" (AMD's), "a Linux-compatible alternative", "EU alternatives" |
+| "alternatives for X" only in the plural, not for "my …" or a platform; "replacement for X" only when someone asks for one; no "moving away from X" | "an alternative for Mac" (a Mac version), "alternatives for my MB", football replacements, "moved away from Norfolk" |
+| "X is down" only before nothing, "again", "for me/anyone", "everywhere"; "is X down?" only as a question, not "why is X down?" | "NVIDIA is down 5%", "NVDA is down today", "why is NVDA down today?", "the chips are down", "I'm down for that", "FIRST DOWN?" |
+| "broken" only as "broken again", "broken for me", "broken since" | gamers call strong characters broken ("Lancelot is broken") |
+| "cancelled my/our X" | "noise cancelling headphones", "they cancelled the show" |
+| Needs: no pronouns, numbers or vague objects ("get an idea", "play the game"), not a request to someone ("is there a way that you could send …"), "any app that …" only as a question | how-to questions without a need, statements |
+
+**Storage.** Intents go through `term_events` into `term_hourly` and `term_daily` like words,
+under their kind. No new tables: migration 005 only adds `items.intents`, the intent terms of
+each raw item (gone with the text after 48 hours), so dashboards and `wgra intents --examples`
+show the comments behind an intent exactly instead of guessing them from the words.
+
+The kind is part of the term ("complaint: reddit", not "reddit"): `trends` and
+`long_term_trends` are keyed by term, not kind, so a complaint "reddit" trending in the same
+run as the word "reddit" would replace it. No word or phrase contains a colon or an arrow, so
+every query that looks up a term (the explorer, `wgra term`, alerts, the digest, the cooldown)
+stays correct, and an intent can be typed into the explorer as it is.
+
+**Detection.** The detectors treat intents like any term, with gates of their own (§4.2–4.6
+otherwise unchanged), all in `config.yaml`:
+
+| | Words and phrases | Intents |
+| --- | --- | --- |
+| short term: mentions and authors in the window (`detect.kind_thresholds`) | 10 and 5 | 3 and 3 |
+| short term: stored per scope and run (`max_per_scope`, `max_per_intent`) | top 50 together | top 20 of each kind, ranked apart |
+| long term: floor in mentions per week (`kind_min_mentions_per_week`) | 20 | 2 |
+| long term: candidates per scope and window (`max_candidates`) | 100 together | 100 of each kind |
+| lead–lag: onset mentions (`kind_onset_min_mentions`) | 5 | 3 |
+
+Ranking intents apart matters: a new flow mentioned by 4 people in a day scores z ≈ 4.5,
+nowhere near the top 50 words of a scope. Alerts, the daily digest and the weekly report
+include intents like any term; none of the gates were lowered for them.
+
+**Measured precision.** With `bench/intent_precision.py` on the live items (read-only), on
+2026-10-11: every extraction in the 487,255 items of the first 40 hours (no kind reached 50).
+Each was labeled independently by two judges, me and a second labeler that saw only the
+kind, the term, the sentence and these rules:
+
+* correct only if the sentence expresses the intent (someone switched or is switching, not a
+  question or a hypothetical; someone looks for, recommends or uses something instead of x;
+  complains about or cancelled x; asks or wishes for a tool or a way to do something), and
+* the term names what it is about recognizably: a product, service, app, platform, brand,
+  company, game, technology, format, model, medication or provider, chosen or used as a user
+  or customer. Not people, characters or cards inside games, places, languages, ideas,
+  generic categories or settings. Cut to the brand is fine ("apple" for Apple Music); extra
+  words, or a cut that changes the thing, are not. A need has to say what, readable alone.
+
+Dev: items the patterns were developed and corrected on (the last correction after the
+second labeler's first batch and a code review, frozen 11:40:56 UTC). Held-out: items created
+after that, which nothing was tuned on. Precision = both judges say correct (my labels alone
+in brackets):
+
+| Kind | All | Dev | Held-out |
+| --- | --- | --- | --- |
+| switch | 3 of 6, 50% (83%) | 3 of 4 | 0 of 2 |
+| alternative | 28 of 42, 67% (76%) | 23 of 32, 72% | 5 of 10 |
+| complaint | 11 of 14, 79% (93%) | 10 of 13 | 1 of 1 |
+| need | 12 of 17, 71% (82%) | 10 of 13 | 2 of 4 |
+
+**The target of 80% per kind is not met**, and the samples are too small to say more than
+"somewhere around 50–80%": the 95% intervals span 30–40 points. The judges agreed on 85% of
+the labels; the second was stricter on borderline cuts and hypotheticals. The errors that
+remain, in order of frequency:
+
+* capitalized names that aren't products: game characters ("Yae", "Faruzan", "Loucha →
+  Robin"), countries and languages ("RU", "Hungarian"), cards
+* entities cut so they lose what they are ("marvel rivals moon", "4a" for Pixel 4a, needs
+  like "make the filters" or "keep temp")
+* a trimming bug: when x isn't a name, the entity can skip forward to a later name ("a free
+  alternative to photoshop use Krita" counts `krita`)
+* features and settings of a product ("Figma's components", "the Windows sound panel")
+
+Tracked subreddits weren't cleaner than the r/all sample (17 of 25 vs 37 of 54 correct).
+
+**Cost.** Extraction takes the ingester from 30 to 77 µs per item (measured on 50,000 live
+items; a prefilter skips sentences without any word a pattern needs): about 2 CPU minutes a
+day at 2.5 million items. About 1 item in 6,000 has an intent, so they add next to nothing to
+the term tables.
+
+**Limits.**
+
+* **Low recall, by design.** 79 intents in the 487,255 items of the first 40 hours (6
+  switches), against 1,516 items in the first 293,005 saying "instead of" alone. Products named with everyday words count only when
+  capitalized or on the hand-kept list; a switch needs one known side; X has to sit in a
+  pattern's exact wording. Most intents of a scope will be counted once or twice a week, so
+  short-term trends of intents need a real burst (an outage, a price hike, a migration
+  wave), and long-term trends months of history.
+* **A name isn't a product.** Capitalized people, places and game characters still get
+  through where the pattern fits ("an alternative to Onyxia", a card game card). `generic_*.txt`
+  catches the common ones.
+* No negation or hypotheticals: "I'd never switch from Windows to Linux", "if you switch from
+  Chrome to Firefox" count as switches. Sarcasm counts too.
+* Entities and needs are cut at 3 words ("Marvel Rivals Moon Knights" → "marvel rivals moon").
+* German: fewer patterns, and too few german items to measure them well: r/de, r/Finanzen and
+  r/de_EDV had 1,751 of the 374,224 items (10% of the tracked ones), and german posts in the
+  r/all sample are counted with the english patterns only.
+* `names_en.txt` comes from one day of data. Regenerate it once more data is in (it only
+  grows the names; check precision again with `bench/intent_precision.py`).
+* Reddit-wide intents come from the r/all sample, whose topics (sports, games, politics)
+  bring most of the people and places that look like names. Tracked tech and finance
+  subreddits are cleaner; `intents.sample: false` turns the sample off.
+
 ## 5. Tech stack
 
 | Concern | v1 | v2 | Why |
@@ -728,12 +914,15 @@ v2/
     provisioning/           # datasource, dashboard provider
   src/wgra/
     reddit/                 # client: auth, pacing by rate limit headers; listing parsing
-    text/                   # cleaning, tokenizer, phrases, stopwords (en, de)
-    ingest/                 # feeds + scheduler, processing, batch writer, main loop
+    text/                   # cleaning, tokenizer, phrases, stopwords (en, de),
+                            # intents.py and the word lists it uses (intent_words/)
+    ingest/                 # feeds + scheduler, processing, batch writer, main loop,
+                            # backfill.py (intents of the last 48 hours, once)
     store/                  # clickhouse client, migrations runner
     migrations/*.sql
     query.py                # read-only queries for the CLI
-    cli.py                  # wgra ingest | analyze | replay | trends | notify-test | migrate | status | term
+    cli.py                  # wgra ingest | analyze | replay | trends | intents | notify-test |
+                            # migrate | status | term | backfill-intents | …
     detect/                 # scoring.py, short_term.py, alerts.py, run.py, replay.py,
                             # long_term.py, trend_stats.py
     notify/                 # ntfy.py, messages.py
@@ -742,7 +931,8 @@ v2/
     explain/                # phase 3: optional LLM explanations
   tests/
   bench/                    # production-scale synthetic history, long-term and
-                            # lead-lag benchmarks
+                            # lead-lag benchmarks; intent_names.py (the list of names from
+                            # live data), intent_precision.py (sample and score extractions)
 ```
 
 ## 6. Delivery plan
@@ -1064,6 +1254,104 @@ Next:
 * Consider volume: big subreddits cross sooner on the same relative rise (§7). If the
   edges are mostly big → small, compare onsets at matched mention counts.
 
+### Intents (built 2026-10-11, not deployed yet)
+
+Built, in `v2/` (see §4.7 for the method as built):
+
+* Extraction in the ingest pipeline: `text/intents.py`, english and german patterns, the word
+  lists in `text/intent_words/` (generic words, boundaries, names from live data, products
+  kept by hand), a prefilter. `intents:` in `config.yaml` (`enabled`, `sample`).
+* Migration 005: `items.intents`. Intents themselves go into the existing term tables.
+* Per-kind gates and rankings in short-term, long-term and lead-lag detection:
+  `detect.kind_thresholds`, `detect.max_per_intent`, `long_term.kind_min_mentions_per_week`,
+  `lead_lag.kind_onset_min_mentions`.
+* `wgra intents --scope <group|subreddit> --kind <kind> --days N [--examples N]`: the most
+  mentioned intents of a kind against as many days before, per 10,000 comments and posts,
+  whether they trend, and the sentences they came from. `wgra backfill-intents --before …`:
+  the intents of the items stored before the upgrade, once.
+* Grafana: the Intent radar dashboard; intents as options of Kind on Trending now and
+  Long-term trends; the term explorer shows the comments behind an intent term. Checked in
+  a throwaway Grafana on a copy of the live items with synthetic intent history added.
+* `bench/intent_names.py` (the list of names), `bench/intent_precision.py` (precision on
+  live data, labels kept outside the repository).
+* 341 tests (from 208): 118 golden tests of the extraction (positives and the negatives that
+  shaped the rules, english and german), pipeline and config, and end to end in throwaway
+  ClickHouse databases: a switch flow trending at its own gates while words need theirs, and
+  ranked apart from them; a switch emerging over 13 weeks at 2 mentions a week, below the
+  words' floor; onsets of a switch at 4 mentions, not of a word; the intent report and its
+  examples; the backfill counting intents once and words not again.
+
+Measured on 2026-10-11:
+
+* **Precision: below the 80% target** (§4.7): switch 3 of 6, alternative 28 of 42 (67%),
+  complaint 11 of 14 (79%), need 12 of 17 (71%), both judges agreeing on correct; on the
+  held-out items, 8 of 17. The samples are small and the intervals wide.
+* **Volume:** 79 intents in the 487,255 items of the first 40 hours: 42 alternatives, 17
+  needs, 14 complaints, 6 switches; 25 of them from tracked subreddits. On the order of 100
+  a day at current rates, mostly from the r/all sample, a handful a day in tracked
+  subreddits, and a switch flow every few days there.
+* **Cost:** 30 → 77 µs per item in the ingester, about 2 CPU minutes a day.
+* **Detection:** on the copy of the live items plus 35 days of synthetic intent history,
+  `wgra analyze --once` found a complaint spike (z 8.7, 19× its usual share) and a rising
+  switch flow (z 8.3) with the intent gates; at the words' gates neither would pass.
+
+Deploying it (to a stack that runs phase 4 from a checkout of this repository,
+compose project `wgra`). The version to deploy also brings the lead-lag early
+warning (§4.6) on top of phase 4: the analyzer applies migration 004 and starts its daily
+lead-lag run.
+
+1. Check the checkout the stack runs from is clean, then update it to the `wgra-v2`
+   branch:
+
+   ```bash
+   cd <the checkout the stack runs from>
+   git status --short            # nothing but untracked, ignored files
+   git checkout wgra-v2
+   ```
+
+2. Rebuild and restart the ingester and the analyzer. Compose stops the old ingester (it
+   flushes what it buffered) before it starts the new one, so only one ingester polls
+   reddit at a time. The new ingester applies migration 005 when it starts.
+
+   ```bash
+   cd v2
+   docker compose up -d --build ingest analyze
+   docker compose logs ingest analyze | grep "applied migrations"   # 004, 005
+   docker inspect -f '{{.State.StartedAt}}' wgra-ingest-1     # note it, UTC
+   ```
+
+3. Count the intents of the items stored before the new ingester started, once (they still
+   have their text for up to 48 hours, from then on it's gone). First a dry run:
+
+   ```bash
+   docker compose run --rm --no-deps analyze wgra backfill-intents --before <StartedAt> --dry-run
+   docker compose run --rm --no-deps analyze wgra backfill-intents --before <StartedAt>
+   ```
+
+   `<StartedAt>` without fractions, e.g. `2026-10-12T09:30:15`. Running it twice counts the
+   intents twice.
+
+4. Grafana loads the Intent radar from the mounted dashboards folder within 10 seconds, no
+   restart. After 15 minutes, check that intents are counted:
+
+   ```bash
+   docker compose run --rm --no-deps analyze wgra intents --scope sample --days 1
+   ```
+
+Still open:
+
+* **Done when:** precision at 80% or more per kind on a held-out week of live intents (50 per
+  kind) with `bench/intent_precision.py`. Not met yet. The next levers, by the errors above:
+  a list of game characters and languages (or skipping the r/all sample's gaming
+  subreddits), fixing the trimming bug (reject instead of skipping to a later name), and
+  rejecting cuts that drop a lowercase head noun ("Figma's components").
+* Regenerate `names_en.txt` from a full 48 hours of items (`bench/intent_names.py`) and
+  measure again.
+* Recall: product names that are everyday words beyond the hand-kept list, negation ("I'd
+  never switch"), more german patterns once r/de has enough intents to measure.
+* Intent-specific alerts, e.g. an outage: "complaint: x" bursting across subreddits. Alerts
+  already include intents, but at the words' alert gates (z ≥ 10, 20 authors).
+
 ### Phase 5: hardening and cutover
 
 * GHCR images, deploy over SSH (`docker compose pull && up -d`), nightly
@@ -1103,6 +1391,12 @@ Facts below were checked against primary sources on 2026-10-10.
   * The multi-year bundles have disappeared from Academic Torrents (reason
     unverified). The dumps carry no license.
   * Use only for private exploration, if at all.
+* **Intents are pattern matches, not understanding** (§4.7). They miss most of what people
+  mean, count hypotheticals and sarcasm, and take capitalized people, places and game
+  characters for products where the wording fits. Read them as counts of explicit
+  statements, check the comments behind a surprising one (the Intent radar links them),
+  and re-measure precision with `bench/intent_precision.py` after changing the patterns
+  or the lists.
 * **Coordinated campaigns or bots** can look like trends. Distinct authors
   helps. Account age would help more but costs extra API calls, so it's left
   out for now. A campaign that posts in one subreddit first and others later

@@ -17,7 +17,10 @@ SCOPE = (
     "AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) "
     "AND source IN (${source:singlequote})"
 )
-TERMS = "term IN arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring}))"
+# the kinds of intents (docs/ARCHITECTURE-V2.md §4.7), terms like words otherwise
+INTENT_KINDS = ["switch", "alternative", "complaint", "need"]
+TERM_LIST = "arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring}))"
+TERMS = f"term IN {TERM_LIST}"
 # words of the text and of each term, joined by single spaces, so "GPT-5" matches "gpt 5"
 TEXT_MATCHES_TERMS = (
     "arrayExists(t -> position("
@@ -344,7 +347,8 @@ LIMIT 100
 SELECT created_at AS time, subreddit, source, substring(text, 1, 400) AS text,
        concat('https://www.reddit.com', permalink) AS link
 FROM items
-WHERE $__timeFilter(created_at) AND {SCOPE} AND {TEXT_MATCHES_TERMS}
+WHERE $__timeFilter(created_at) AND {SCOPE}
+  AND ({TEXT_MATCHES_TERMS} OR hasAny(intents, {TERM_LIST}))
 ORDER BY created_at DESC
 LIMIT 100
 """,
@@ -1012,7 +1016,7 @@ LIMIT 200
         custom_variable(
             "kind",
             "Kind",
-            ["word", "phrase", "domain", "subreddit"],
+            ["word", "phrase", "domain", "subreddit", *INTENT_KINDS],
             default=["word", "phrase", "domain", "subreddit"],
             multi=True,
         ),
@@ -1340,7 +1344,7 @@ ORDER BY time
         custom_variable(
             "kind",
             "Kind",
-            ["word", "phrase", "domain", "subreddit"],
+            ["word", "phrase", "domain", "subreddit", *INTENT_KINDS],
             default=["word", "phrase", "domain", "subreddit"],
             multi=True,
         ),
@@ -1780,9 +1784,492 @@ WHERE {EDGE_ROWS}
 )
 
 
+# Intents (docs/ARCHITECTURE-V2.md §4.7): why people mention things. Switches are stored as
+# "x → y", the other kinds as "alternative: x", "complaint: x" and "need: x".
+# what an intent is about, without its kind
+ENTITY = "if(position(term, ' → ') > 0, term, substring(term, position(term, ': ') + 2))"
+INTENT_DAYS = "day >= toDate($__fromTime) AND day <= toDate($__toTime)"
+# the same whole days, for scope_hourly
+INTENT_HOURS = (
+    "hour >= toDateTime(toDate($__fromTime), 'UTC') "
+    "AND hour < toDateTime(toDate($__toTime) + 1, 'UTC')"
+)
+
+
+def intent_links(group: str = "${group:sqlstring}") -> str:
+    """SQL for the urls of an intent: its comments on this dashboard, and the explorer."""
+    return (
+        "concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), "
+        f"'&var-group=', encodeURLFormComponent({group}), '&from=now-30d&to=now') AS examples, "
+        "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
+        f"'&var-group=', encodeURLFormComponent({group}), "
+        "'&var-bucket=day&from=now-90d&to=now') AS explore"
+    )
+
+
+def link_to_examples(column: str) -> dict:
+    """A table override: clicking `column` shows the comments behind the intent (url in
+    "examples"), or opens it in the term explorer."""
+    return {
+        "matcher": {"id": "byName", "options": column},
+        "properties": [
+            {
+                "id": "links",
+                "value": [
+                    {"title": "Comments of the last 48 hours", "url": "${__data.fields.examples}"},
+                    {"title": "Open in the term explorer", "url": "${__data.fields.explore}"},
+                ],
+            }
+        ],
+    }
+
+
+def with_daily_sparklines(
+    table_panel: dict, kind: str, columns: list[str], days: str, pixels: int = 200
+) -> dict:
+    """Adds each term's mentions per day as a sparkline column ("per day")."""
+    table_panel["targets"].append(
+        {
+            **target(
+                f"""
+SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions
+FROM term_daily
+WHERE {SCOPE} AND kind = '{kind}' AND {days}
+GROUP BY time, term
+ORDER BY time
+"""
+            ),
+            "refId": "B",
+        }
+    )
+    table_panel["transformations"] = [
+        {"id": "timeSeriesTable", "options": {}},
+        {"id": "joinByField", "options": {"byField": "term", "mode": "outerTabular"}},
+        # terms that are only in the sparklines (not in the table's top) are dropped
+        {
+            "id": "filterByValue",
+            "options": {
+                "type": "exclude",
+                "match": "any",
+                "filters": [{"fieldName": "mentions A", "config": {"id": "isNull"}}],
+            },
+        },
+        {
+            "id": "organize",
+            "options": {
+                "renameByName": {
+                    **{f"{column} A": column for column in columns},
+                    "Trend #B": "per day",
+                },
+                "indexByName": {
+                    name: index
+                    for index, column in enumerate(columns)
+                    for name in (column, f"{column} A")
+                },
+            },
+        },
+    ]
+    table_panel["fieldConfig"]["overrides"].append(
+        {
+            "matcher": {"id": "byName", "options": "per day"},
+            "properties": [
+                {"id": "custom.cellOptions", "value": {"type": "sparkline", "hideValue": True}},
+                {"id": "custom.width", "value": pixels},
+            ],
+        }
+    )
+    return table_panel
+
+
+SWITCH_COLUMNS = [
+    "from",
+    "to",
+    "mentions",
+    "authors",
+    "the other way",
+    "Trend #B",
+    "per_10k",
+    "term",
+    "examples",
+    "explore",
+]
+switches_table = with_daily_sparklines(
+    panel(
+        "table",
+        "Top switching flows (x → y)",
+        f"""
+WITH
+    (SELECT sum(docs) FROM scope_hourly WHERE {SCOPE} AND {INTENT_HOURS}) AS total,
+    flows AS (
+        SELECT term, sum(docs) AS mentions, uniqCombinedMerge(12)(authors) AS authors
+        FROM term_daily
+        WHERE {SCOPE} AND kind = 'switch' AND {INTENT_DAYS}
+        GROUP BY term
+    )
+SELECT
+    splitByString(' → ', f.term)[1] AS from,
+    splitByString(' → ', f.term)[2] AS to,
+    f.mentions AS mentions,
+    f.authors AS authors,
+    r.mentions AS `the other way`,
+    round(10000 * f.mentions / total, 2) AS per_10k,
+    f.term AS term,
+    {intent_links()}
+FROM flows AS f
+LEFT JOIN flows AS r
+    ON r.term = concat(splitByString(' → ', f.term)[2], ' → ', splitByString(' → ', f.term)[1])
+WHERE f.authors >= ${{min_authors:raw}}
+ORDER BY mentions DESC, authors DESC, from
+LIMIT 50
+""",
+        0,
+        5,
+        24,
+        11,
+        table=True,
+        description=(
+            "Someone switched from x to y, in the selected subreddits and time range: "
+            "'switched from Notion to Obsidian', 'dropped ChatGPT for Claude', 'we replaced our "
+            "Jira with Linear', 'the Jenkins to GitHub Actions migration'. mentions: comments "
+            "and posts (each counts once), authors: different people. the other way: the "
+            "mentions of y → x, who is winning. per_10k: per 10,000 comments and posts. Click a "
+            "flow for the comments behind it (last 48 hours) or the term explorer."
+        ),
+        fieldConfig={
+            "defaults": {},
+            "overrides": [
+                link_to_examples("from"),
+                link_to_examples("to"),
+                hidden("term"),
+                hidden("examples"),
+                hidden("explore"),
+                width("mentions", 90),
+                width("authors", 80),
+                width("the other way", 110),
+                width("per_10k", 80),
+            ],
+        },
+    ),
+    "switch",
+    SWITCH_COLUMNS,
+    INTENT_DAYS,
+)
+switches_table["options"] = {"sortBy": [{"displayName": "mentions", "desc": True}]}
+
+RISING_COLUMNS = [
+    "entity",
+    "mentions",
+    "Trend #B",
+    "excess",
+    "times_usual",
+    "per_week_before",
+    "authors",
+    "trend_z",
+    "term",
+    "examples",
+    "explore",
+]
+RISING_DAYS = "day >= today() - 34"
+
+
+def rising_table(kind: str, title: str, x: int, description: str) -> dict:
+    """The last 7 days against the 28 before, the most extra mentions first."""
+    table = with_daily_sparklines(
+        panel(
+            "table",
+            title,
+            f"""
+WITH
+    (SELECT sum(docs) FROM scope_hourly
+     WHERE {SCOPE} AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,
+    (SELECT sum(docs) FROM scope_hourly
+     WHERE {SCOPE} AND hour >= toDateTime(today() - 34, 'UTC')
+       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,
+    trending AS (
+        SELECT term, max(z) AS z FROM trends
+        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = '{kind}' AND subsumed_by = ''
+          AND scope IN (SELECT ${{group:sqlstring}} UNION ALL SELECT concat('r/', subreddit)
+                        FROM subreddit_groups WHERE group_name = ${{group:sqlstring}})
+        GROUP BY term
+    )
+SELECT
+    {ENTITY} AS entity,
+    sumIf(docs, day >= today() - 6) AS mentions,
+    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,
+    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,
+    -- the share now against the share before, with half a mention added to both
+    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)
+          / greatest(n_before, 1)), 1) AS times_usual,
+    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)
+        AS excess,
+    round(any(t.z), 1) AS trend_z,
+    term,
+    {intent_links()}
+FROM term_daily
+LEFT JOIN trending AS t USING term
+WHERE {SCOPE} AND kind = '{kind}' AND {RISING_DAYS}
+GROUP BY term
+HAVING mentions >= ${{min_mentions:raw}} AND authors >= ${{min_authors:raw}}
+ORDER BY excess DESC, mentions DESC
+LIMIT 30
+""",
+            x,
+            16,
+            12,
+            11,
+            table=True,
+            description=description,
+            fieldConfig={
+                "defaults": {},
+                "overrides": [
+                    link_to_examples("entity"),
+                    hidden("term"),
+                    hidden("examples"),
+                    hidden("explore"),
+                    width("mentions", 80),
+                    width("excess", 65),
+                    width("times_usual", 90),
+                    width("per_week_before", 115),
+                    width("authors", 70),
+                    width("trend_z", 65),
+                ],
+            },
+        ),
+        kind,
+        RISING_COLUMNS,
+        RISING_DAYS,
+        pixels=130,
+    )
+    table["options"] = {"sortBy": [{"displayName": "excess", "desc": True}]}
+    return table
+
+
+RISING_HELP = (
+    "The last 7 days (today included) against the 28 days before, in the selected subreddits; "
+    "ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly "
+    "average of the 28 days before. times_usual: the share of comments and posts now against "
+    "before. excess: mentions above what the share before would give, what the table is "
+    "sorted by. trend_z: the strongest score of the short-term detector in the last 24 "
+    "hours, if it trends in the group or one of its subreddits. per day: the last 35 days. "
+    "Click an entry for the comments behind it."
+)
+
+needs_table = panel(
+    "table",
+    "Top unmet needs per group",
+    f"""
+SELECT
+    g.group_name AS group,
+    substring(t.term, 7) AS need,
+    sum(t.docs) AS mentions,
+    uniqCombinedMerge(12)(t.authors) AS authors,
+    t.term AS term,
+    {intent_links("group")}
+FROM term_daily AS t
+INNER JOIN subreddit_groups AS g ON g.subreddit = t.subreddit
+WHERE t.kind = 'need' AND {INTENT_DAYS.replace("day", "t.day")}
+  AND t.source IN (${{source:singlequote}}) AND g.group_name != 'tracked'
+GROUP BY group, term
+HAVING authors >= ${{min_authors:raw}}
+ORDER BY group, mentions DESC, authors DESC, need
+LIMIT 10 BY group
+""",
+    0,
+    27,
+    10,
+    12,
+    table=True,
+    description=(
+        "The 10 needs mentioned most in each configured group (and the r/all sample) in the "
+        "time range: 'is there an app to …', 'I wish there was a way to …', 'I'd pay for an "
+        "app that …', 'does anyone know a tool for …'. A need is the 2–3 words after it "
+        "('track my sleep'). Ignores the group picker. Click a need for its comments."
+    ),
+    fieldConfig={
+        "defaults": {},
+        "overrides": [
+            link_to_examples("need"),
+            hidden("term"),
+            hidden("examples"),
+            hidden("explore"),
+            width("group", 90),
+            width("mentions", 85),
+            width("authors", 75),
+        ],
+    },
+)
+
+# the kind of an intent's term
+TERM_KIND = "if(position(t, ' → ') > 0, 'switch', splitByString(': ', t)[1])"
+examples_table = panel(
+    "table",
+    "Comments behind intents, last 48 hours",
+    f"""
+SELECT
+    created_at AS time,
+    -- not "AS subreddit": the alias would replace the column in WHERE
+    splitByChar('/', permalink)[3] AS community,
+    arrayStringConcat(arrayFilter(t -> {TERM_KIND} IN (${{intent_kind:singlequote}})
+                                       AND (${{term:sqlstring}} = '' OR t = ${{term:sqlstring}}),
+                                  intents), ', ') AS found,
+    substring(text, 1, 500) AS text,
+    concat('https://www.reddit.com', permalink) AS link
+FROM items
+WHERE {SCOPE} AND created_at > now() - INTERVAL 48 HOUR
+  AND arrayExists(t -> {TERM_KIND} IN (${{intent_kind:singlequote}})
+                       AND (${{term:sqlstring}} = '' OR t = ${{term:sqlstring}}), intents)
+ORDER BY created_at DESC
+LIMIT 200
+""",
+    10,
+    27,
+    14,
+    12,
+    table=True,
+    description=(
+        "The comments and posts the intents were found in, newest first. Raw text is only kept "
+        "for 48 hours, and only items ingested since intents were extracted (migration "
+        "005) carry them. Set Term (or click an entry in the tables above) to see one intent's "
+        "comments, e.g. 'notion → obsidian' or 'complaint: reddit'; empty shows all of the "
+        "selected kinds."
+    ),
+    fieldConfig={
+        "defaults": {},
+        "overrides": [
+            {
+                "matcher": {"id": "byName", "options": "link"},
+                "properties": [
+                    {
+                        "id": "links",
+                        "value": [
+                            {
+                                "title": "Open on reddit",
+                                "url": "${__value.raw}",
+                                "targetBlank": True,
+                            }
+                        ],
+                    },
+                    {"id": "custom.width", "value": 90},
+                ],
+            },
+            width("time", 160),
+            width("community", 120),
+            width("found", 220),
+        ],
+    },
+)
+
+
+def text_stat(title: str, sql: str, x: int, y: int, w: int, h: int, description: str) -> dict:
+    """A stat panel showing a text value, such as a date."""
+    stat = panel("stat", title, sql, x, y, w, h, table=True, description=description)
+    stat["options"]["reduceOptions"]["fields"] = "/.*/"
+    return stat
+
+
+def intent_count(kind: str, title: str, x: int) -> dict:
+    return panel(
+        "stat",
+        title,
+        f"SELECT sum(docs) FROM term_daily WHERE {SCOPE} AND kind = '{kind}' AND {INTENT_DAYS}",
+        x,
+        0,
+        5,
+        5,
+        table=True,
+        description=f"Comments and posts with a {kind} intent in the time range.",
+    )
+
+
+intent_dashboard = dashboard(
+    "wgra-intents",
+    "Intent radar",
+    "Why people mention things: switches between products, alternatives sought, complaints "
+    "and unmet needs.",
+    [
+        intent_count("switch", "Switches", 0),
+        intent_count("alternative", "Alternatives sought", 5),
+        intent_count("complaint", "Complaints", 10),
+        intent_count("need", "Needs", 15),
+        text_stat(
+            "Counting intents since",
+            "SELECT toString(min(day)) FROM term_daily "
+            "WHERE kind IN ('switch', 'alternative', 'complaint', 'need')",
+            20,
+            0,
+            4,
+            5,
+            description="The first day with intents, in any subreddit: they're extracted at "
+            "ingest, so there is no history before the ingester started extracting them (plus "
+            "the 48 hours of raw text before, with wgra backfill-intents).",
+        ),
+        switches_table,
+        rising_table(
+            "alternative",
+            "Rising: alternatives sought",
+            0,
+            "Alternatives people look for or use instead: 'alternatives to LastPass', 'a good "
+            "Plex alternative', 'I use Firefox instead of Chrome', 'moving away from AWS'. "
+            + RISING_HELP,
+        ),
+        rising_table(
+            "complaint",
+            "Rising: complaints",
+            12,
+            "'is Reddit down?', 'Teams is unusable', 'cancelled my Netflix subscription', "
+            "'Spotify raised prices again', 'YouTube enshittification'. " + RISING_HELP,
+        ),
+        needs_table,
+        examples_table,
+        panel(
+            "timeseries",
+            "Intents per day",
+            f"""
+SELECT toDateTime(day, 'UTC') AS time, kind, sum(docs) AS mentions
+FROM term_daily
+WHERE {SCOPE} AND kind IN ('switch', 'alternative', 'complaint', 'need') AND {INTENT_DAYS}
+GROUP BY time, kind
+ORDER BY time
+""",
+            0,
+            39,
+            24,
+            8,
+            description="Comments and posts with an intent per day, by kind.",
+            series_label="kind",
+            draw_style="bars",
+            stacking="normal",
+        ),
+    ],
+    [
+        *scope_variables(),
+        custom_variable("min_authors", "Min authors", ["1", "2", "3", "5", "10"], default="1"),
+        custom_variable(
+            "min_mentions", "Min mentions (7 days)", ["1", "2", "3", "5", "10"], default="2"
+        ),
+        {
+            "type": "textbox",
+            "name": "term",
+            "label": "Term (comments)",
+            "query": "",
+            "current": {"text": "", "value": ""},
+        },
+        custom_variable(
+            "intent_kind",
+            "Kinds (comments)",
+            INTENT_KINDS,
+            default=INTENT_KINDS,
+            multi=True,
+        ),
+    ],
+    "now-30d",
+    refresh="15m",
+)
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, board in [
     ("trending", trending_dashboard),
+    ("intents", intent_dashboard),
     ("long-term", long_term_dashboard),
     ("early-warning", early_warning_dashboard),
     ("term-explorer", terms_dashboard),

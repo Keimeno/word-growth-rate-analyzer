@@ -143,3 +143,60 @@ def test_long_term_defaults_and_overrides():
 def test_invalid_long_term_settings(section, values, message):
     with pytest.raises(ValueError, match=message):
         make_config(**{section: values})
+
+
+def test_intents_have_their_own_gates_by_default():
+    detect = make_config().detect
+    assert set(detect.kinds) >= {"word", "switch", "alternative", "complaint", "need"}
+    switch = detect.thresholds_for("tech", "switch")
+    assert (switch.min_mentions, switch.min_authors, switch.min_z) == (3, 3, 3.0)
+    assert detect.thresholds_for("tech", "word").min_mentions == 10
+    assert (detect.max_stored("word"), detect.max_stored("need")) == (50, 20)
+    config = make_config()
+    assert config.long_term.min_mentions_per_week_for("switch") == 2
+    assert config.long_term.min_mentions_per_week_for("phrase") == 20
+    assert config.lead_lag.onset_min_mentions_for("complaint") == 3
+    assert config.lead_lag.onset_min_mentions_for("word") == 5
+    assert config.intents.enabled and config.intents.sample
+
+
+def test_kind_thresholds_go_on_top_of_scope_thresholds():
+    config = make_config(
+        detect={
+            "min_mentions": 12,
+            "scopes": {"r/de_EDV": {"min_mentions": 5, "min_authors": 2}},
+            "kind_thresholds": {"switch": {"min_mentions": 2}, "domain": {"min_ratio": 3}},
+        }
+    )
+    detect = config.detect
+    # what a kind sets wins, the rest comes from the scope
+    assert detect.thresholds_for("r/de_edv", "switch").min_mentions == 2
+    assert detect.thresholds_for("r/de_edv", "switch").min_authors == 3
+    assert detect.thresholds_for("r/de_edv", "word").min_authors == 2
+    assert detect.thresholds_for("tech", "domain").min_ratio == 3
+    # the other intents keep their defaults
+    assert detect.thresholds_for("tech", "need").min_mentions == 3
+
+
+def test_per_kind_settings_are_checked():
+    with pytest.raises(ValueError, match="unknown kinds: swtich"):
+        make_config(detect={"kind_thresholds": {"swtich": {"min_mentions": 2}}})
+    with pytest.raises(ValueError, match="unknown min_mention"):
+        make_config(detect={"kind_thresholds": {"switch": {"min_mention": 2}}})
+    with pytest.raises(ValueError, match="unknown kinds"):
+        make_config(long_term={"kind_min_mentions_per_week": {"swtich": 1}})
+    config = make_config(
+        long_term={"kind_min_mentions_per_week": {"need": 5}},
+        lead_lag={"kind_onset_min_mentions": {"switch": 2}},
+        intents={"sample": False},
+    )
+    assert config.long_term.min_mentions_per_week_for("need") == 5
+    assert config.long_term.min_mentions_per_week_for("switch") == 2
+    assert config.lead_lag.onset_min_mentions_for("switch") == 2
+    assert not config.intents.sample
+
+
+def test_the_shipped_config_parses_with_intents():
+    config = load_config(Path(__file__).parents[1] / "config.yaml")
+    assert config.intents.enabled
+    assert config.detect.thresholds_for("tech", "switch").min_mentions <= 5

@@ -19,7 +19,7 @@ from typing import Any
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SAMPLE_SCOPE, TRACKED_GROUP, Config, DetectConfig, Horizon
+from wgra.config import SAMPLE_SCOPE, TRACKED_GROUP, Config, DetectConfig, Horizon, ranking
 from wgra.detect.scoring import WORD, Candidate, Counts, Prior, breadth, passes, subsumed_by
 from wgra.text.terms import stopwords
 
@@ -163,15 +163,20 @@ WINDOW_TERMS = f"""
     subreddit IN {{subreddits:Array(String)}} AND source IN {{sources:Array(String)}}
     AND kind IN {{kinds:Array(String)}} AND {WINDOW_HOURS}
 """
+# the gates of the term's kind: intents need fewer mentions than words
+_GATE = (
+    "transform(toString(kind), {{gated_kinds:Array(String)}}, {{kind_{0}:Array(UInt64)}}, "
+    "toUInt64({{{0}:UInt64}}))"
+)
 CANDIDATES = f"""
 SELECT kind, term
 FROM term_hourly
 WHERE {WINDOW_TERMS} AND (kind, term) IN (
     SELECT kind, term FROM term_hourly WHERE {WINDOW_TERMS}
-    GROUP BY kind, term HAVING sum(docs) >= {{min_mentions:UInt64}}
+    GROUP BY kind, term HAVING sum(docs) >= {_GATE.format("min_mentions")}
 )
 GROUP BY kind, term
-HAVING uniqCombinedMerge(12)(authors) >= {{min_authors:UInt64}}
+HAVING uniqCombinedMerge(12)(authors) >= {_GATE.format("min_authors")}
 """
 
 
@@ -333,10 +338,12 @@ class Detector:
         total = sum(member.total for member in members)
         reference_total = sum(member.reference_total for member in members)
         reference_days = max((member.reference_days for member in members), default=0)
-        thresholds = self.settings.thresholds_for(scope.name)
-        if total < thresholds.min_mentions:
+        kinds = self.settings.kinds
+        gates = {kind: self.settings.thresholds_for(scope.name, kind) for kind in kinds}
+        if not gates or total < min(gate.min_mentions for gate in gates.values()):
             return []
 
+        thresholds = self.settings.thresholds_for(scope.name)
         rows = self._client.query(
             COUNTS_SQL,
             parameters=parameters
@@ -344,6 +351,9 @@ class Detector:
                 "subreddits": list(scope.subreddits),
                 "min_mentions": thresholds.min_mentions,
                 "min_authors": thresholds.min_authors,
+                "gated_kinds": list(kinds),
+                "kind_min_mentions": [gates[kind].min_mentions for kind in kinds],
+                "kind_min_authors": [gates[kind].min_authors for kind in kinds],
             },
         ).result_rows
 
@@ -362,16 +372,27 @@ class Detector:
         trending = [
             c
             for c in candidates
-            if passes(scores[c.kind, c.term], c.counts.mentions, c.authors, thresholds)
+            if passes(scores[c.kind, c.term], c.counts.mentions, c.authors, gates[c.kind])
         ]
         trending.sort(key=lambda c: scores[c.kind, c.term].z, reverse=True)
-        stored = trending[: self.settings.max_per_scope]
+        # the strongest of each ranking: words and phrases, and each intent kind apart
+        ranked: dict[str, list[Candidate]] = defaultdict(list)
+        for candidate in trending:
+            if len(ranked[ranking(candidate.kind)]) < self.settings.max_stored(candidate.kind):
+                ranked[ranking(candidate.kind)].append(candidate)
+        stored = [
+            (rank, candidate)
+            for candidates_of_ranking in ranked.values()
+            for rank, candidate in enumerate(candidates_of_ranking, start=1)
+        ]
         member_counts = (
-            self.member_counts(scope, stored, parameters, totals) if scope.type == GROUP else {}
+            self.member_counts(scope, [c for _, c in stored], parameters, totals)
+            if scope.type == GROUP
+            else {}
         )
 
         trends = []
-        for rank, candidate in enumerate(stored, start=1):
+        for rank, candidate in stored:
             score = scores[candidate.kind, candidate.term]
             counts = candidate.counts
             bursting, mentioning = (
@@ -408,7 +429,8 @@ class Detector:
                     and reference_days >= self.settings.min_reference_days,
                     breadth=bursting,
                     members=mentioning,
-                    subsumed_by=subsumed_by(candidate, trending, prior, thresholds) or "",
+                    subsumed_by=subsumed_by(candidate, trending, prior, gates[candidate.kind])
+                    or "",
                     rank=rank,
                     reference_days=reference_days,
                 )
