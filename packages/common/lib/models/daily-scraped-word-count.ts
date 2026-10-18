@@ -34,6 +34,9 @@ const dailyScrapedWordCountSchema = new Schema<DailyScrapedWordCountDocument>(
   }
 );
 
+// every upsert and every analyzer lookup filters by these three fields
+dailyScrapedWordCountSchema.index({subreddit: 1, word: 1, createdAt: 1});
+
 export const generateDailyScrapedWordCountModel = (connection: Connection) => {
   return connection.model<DailyScrapedWordCountDocument>(
     'DailyScrapedWordCountDocument',

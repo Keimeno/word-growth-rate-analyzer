@@ -61,8 +61,9 @@ export default class Poll<T extends object> extends EventEmitter {
         // Emit the new listing of all new items
         this.emit('listing', newItems);
         overviewState.successCount++;
-      } catch {
+      } catch (e) {
         overviewState.errorCount++;
+        console.error('Failed to poll', (e as Error).message);
       }
     }, frequency);
   }
@@ -85,10 +86,14 @@ export const DefaultOptions: SnooStormOptions = {
 };
 
 export class CommentStream extends Poll<Snoowrap.Comment> {
-  constructor(client: Snoowrap, options: SnooStormOptions = DefaultOptions) {
+  constructor(
+    getClient: () => Promise<Snoowrap>,
+    options: SnooStormOptions = DefaultOptions
+  ) {
     super({
       frequency: options.pollTime || 2000,
-      get: async () => client.getNewComments(options.subreddit, options),
+      get: async () =>
+        (await getClient()).getNewComments(options.subreddit, options),
       identifier: 'id',
     });
   }
