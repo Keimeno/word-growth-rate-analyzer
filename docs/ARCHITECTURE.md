@@ -1303,22 +1303,25 @@ compose project `wgra`). The version to deploy also brings the lead-lag early
 warning (§4.6) on top of phase 4: the analyzer applies migration 004 and starts its daily
 lead-lag run.
 
-1. Check the checkout the stack runs from is clean, then update it to the `wgra-v2`
+1. Check the checkout the stack runs from is clean, then update it to the `develop`
    branch:
 
    ```bash
    cd <the checkout the stack runs from>
    git status --short            # nothing but untracked, ignored files
-   git checkout wgra-v2
+   git checkout develop && git pull
    ```
 
-2. Rebuild and restart the ingester and the analyzer. Compose stops the old ingester (it
-   flushes what it buffered) before it starts the new one, so only one ingester polls
-   reddit at a time. The new ingester applies migration 005 when it starts.
+2. Rebuild and restart everything from the repository root. A stack started from `v2/`
+   before the move is the same compose project (`wgra`) with the same volumes, so this
+   replaces its containers and keeps the data. Its `.env` moves to the root, replacing
+   v1's, which nothing reads any more. Compose stops the old ingester (it flushes what it
+   buffered) before it starts the new one, so only one ingester polls reddit at a time.
+   The new containers apply migrations 004 and 005 when they start.
 
    ```bash
-   cd v2
-   docker compose up -d --build ingest analyze
+   cp v2/.env .env               # only when the stack ran from v2/ before
+   docker compose up -d --build
    docker compose logs ingest analyze | grep "applied migrations"   # 004, 005
    docker inspect -f '{{.State.StartedAt}}' wgra-ingest-1     # note it, UTC
    ```
