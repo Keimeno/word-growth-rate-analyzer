@@ -1,0 +1,263 @@
+<!doctype html>
+<!-- Source of docs/architecture.png. Render with headless Chrome:
+  chrome --headless --hide-scrollbars --force-device-scale-factor=2 --window-size=1860,1220 --screenshot=docs/architecture.png docs/architecture.html -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --ink: #1f2933;
+    --muted: #5b6672;
+    --line: #6b7682;
+    --proc: #2f6fb3;
+    --proc-bg: #eef4fb;
+    --store: #b7791f;
+    --store-bg: #fdf6e9;
+    --out: #2f855a;
+    --out-bg: #edf7f1;
+    --ext-bg: #f4f5f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1860px; height: 1220px; background: #ffffff; color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    position: relative; overflow: hidden;
+  }
+  svg.layer { position: absolute; inset: 0; }
+  .title { position: absolute; left: 40px; top: 34px; font-size: 30px; font-weight: 700; letter-spacing: -0.3px; }
+  .subtitle { position: absolute; left: 40px; top: 78px; font-size: 16px; color: var(--muted); }
+  .boundary-label { position: absolute; left: 330px; top: 140px; font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .3px; text-transform: uppercase; }
+  .boundary-note { position: absolute; right: 340px; top: 140px; font-size: 13px; color: var(--muted); }
+
+  .box {
+    position: absolute; border: 2px solid var(--line); border-radius: 10px; background: #fff;
+    padding: 14px 18px; font-size: 13.5px; line-height: 1.42;
+  }
+  .box h3 { font-size: 19px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+  .box .tag { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+  .box .port { margin-left: auto; font: 600 11.5px "SF Mono", Menlo, monospace; color: var(--muted);
+    border: 1px solid #c9d0d7; border-radius: 4px; padding: 1px 5px; }
+  .box ul { list-style: none; margin-top: 10px; }
+  .box li { position: relative; padding-left: 14px; margin-top: 6px; }
+  .box li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .45; }
+  .box b { font-weight: 650; }
+  .box code { font: 12.5px "SF Mono", Menlo, monospace; }
+
+  .proc { border-color: var(--proc); background: var(--proc-bg); }
+  .proc h3 { color: var(--proc); }
+  .out { border-color: var(--out); background: var(--out-bg); }
+  .out h3 { color: var(--out); }
+  .ext { background: var(--ext-bg); text-align: center; display: flex; flex-direction: column; justify-content: center; }
+  .ext h3 { justify-content: center; }
+  .ext p { color: var(--muted); margin-top: 4px; }
+  .dashed { border-style: dashed; }
+  .file { border-style: dashed; border-color: #a7b0b9; background: #fafbfc; }
+
+  .step { margin-top: 11px; }
+  .step .when { font: 600 11.5px "SF Mono", Menlo, monospace; color: var(--proc); text-transform: uppercase; letter-spacing: .2px; }
+  .step .what { font-weight: 650; }
+  .step .how { color: var(--muted); }
+
+  .store { position: absolute; padding: 0 26px; font-size: 13px; line-height: 1.4; }
+  .store h3 { font-size: 19px; font-weight: 700; color: var(--store); text-align: center; }
+  .store .tag { display: block; text-align: center; font-size: 12.5px; color: var(--muted); }
+  .store .port { display: block; text-align: center; margin-top: 4px; font: 600 11.5px "SF Mono", Menlo, monospace; color: var(--muted); }
+  .store h4 { margin-top: 18px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); border-bottom: 1px solid #ead9b8; padding-bottom: 4px; }
+  .tbl { display: flex; justify-content: space-between; align-items: baseline; margin-top: 7px; gap: 10px; }
+  .tbl code { font: 600 13px "SF Mono", Menlo, monospace; color: var(--ink); }
+  .tbl span { font-size: 12px; color: var(--muted); text-align: right; }
+  .tbl.sub { padding-left: 16px; }
+  .mv { font-size: 11.5px; color: var(--store); padding-left: 2px; margin-top: 3px; }
+
+  .legend { position: absolute; left: 40px; top: 1090px; font-size: 13px; color: var(--muted); line-height: 1.9; }
+  .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 2px solid; vertical-align: -2px; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<svg class="layer" width="1860" height="1220" viewBox="0 0 1860 1220">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5560"/>
+    </marker>
+  </defs>
+  <!-- compose boundary -->
+  <rect x="310" y="125" width="1230" height="905" rx="14" fill="none" stroke="#8a949e" stroke-width="2" stroke-dasharray="9 7"/>
+
+  <!-- ClickHouse cylinder -->
+  <g fill="#fdf6e9" stroke="#b7791f" stroke-width="2.2">
+    <path d="M740,205 L740,965 A180,24 0 0 0 1100,965 L1100,205"/>
+    <ellipse cx="920" cy="205" rx="180" ry="24"/>
+  </g>
+
+  <g stroke="#4a5560" stroke-width="2" fill="none" marker-end="url(#a)">
+    <!-- reddit -> ingest -->
+    <line x1="262" y1="355" x2="346" y2="355"/>
+    <!-- ingest -> clickhouse -->
+    <line x1="672" y1="330" x2="736" y2="330"/>
+    <!-- clickhouse -> analyze (read) -->
+    <line x1="1102" y1="290" x2="1166" y2="290"/>
+    <!-- analyze -> clickhouse (write) -->
+    <line x1="1168" y1="470" x2="1104" y2="470"/>
+    <!-- clickhouse -> grafana -->
+    <line x1="738" y1="800" x2="674" y2="800"/>
+    <!-- grafana -> browser -->
+    <line x1="348" y1="800" x2="264" y2="800"/>
+    <!-- analyze -> ntfy -->
+    <line x1="1335" y1="632" x2="1335" y2="676"/>
+    <!-- ntfy -> phone -->
+    <line x1="1502" y1="750" x2="1596" y2="750"/>
+    <!-- clickhouse -> cli -->
+    <line x1="920" y1="992" x2="920" y2="1076"/>
+  </g>
+  <!-- wikipedia -> analyze, optional -->
+  <line x1="1598" y1="300" x2="1504" y2="300" stroke="#4a5560" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#a)"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, Arial" font-size="12.5" font-weight="650" fill="#3d4750"
+     paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" text-anchor="middle">
+    <text x="304" y="343">read</text>
+    <text x="304" y="374" font-weight="500">HTTPS</text>
+    <text x="704" y="318">write</text>
+    <text x="1134" y="278">read</text>
+    <text x="1136" y="458">write</text>
+    <text x="706" y="788">read</text>
+    <text x="306" y="788">HTTP</text>
+    <text x="1310" y="659" text-anchor="end">push</text>
+    <text x="1549" y="738">notify</text>
+    <text x="1549" y="288">read</text>
+    <text x="1549" y="319" font-weight="500">optional</text>
+    <text x="936" y="1050" text-anchor="start">read</text>
+  </g>
+</svg>
+
+<div class="title">Word Growth Rate Analyzer · architecture</div>
+<div class="subtitle">Which words and phrases gain or lose share of the conversation per subreddit and group, over hours and over months.</div>
+<div class="boundary-label">docker compose · one server, a laptop or a VPS</div>
+<div class="boundary-note">ports bound to localhost · free, open source software only</div>
+
+<!-- external: left -->
+<div class="box ext" style="left:40px; top:290px; width:222px; height:130px;">
+  <h3>Reddit API</h3>
+  <p>app-only OAuth, free tier<br>≤ 100 requests / min</p>
+</div>
+<div class="box ext" style="left:40px; top:730px; width:222px; height:140px;">
+  <h3>You · browser</h3>
+  <p>dashboards, click a term<br>to explore it</p>
+</div>
+
+<!-- external: right -->
+<div class="box ext dashed" style="left:1598px; top:235px; width:222px; height:130px;">
+  <h3>Wikipedia</h3>
+  <p>daily pageviews: did reddit<br>notice it first?</p>
+</div>
+<div class="box ext" style="left:1598px; top:680px; width:222px; height:140px;">
+  <h3>You · phone</h3>
+  <p>ntfy app; tapping an alert<br>opens Grafana</p>
+</div>
+
+<!-- ingest -->
+<div class="box proc" style="left:350px; top:180px; width:322px; height:420px;">
+  <h3>ingest <span class="tag">Python · asyncio · always on</span></h3>
+  <ul>
+    <li><b>Feeds:</b> tracked subreddits as multireddits (<code>r/a+b+c</code>), each polled as often as its volume needs, plus a sample of r/all as the “normal” vocabulary</li>
+    <li>Paced by Reddit’s rate limit headers, gaps detected</li>
+    <li><b>Terms:</b> words, 2–3 word phrases, linked domains, mentioned subreddits</li>
+    <li><b>Intents:</b> switch <code>x → y</code>, alternative, complaint, need</li>
+    <li>Authors only as a keyed hash; counted once per comment</li>
+    <li>Batched inserts, flushed on shutdown</li>
+  </ul>
+</div>
+
+<!-- grafana -->
+<div class="box out" style="left:350px; top:660px; width:322px; height:330px;">
+  <h3>Grafana <span class="tag">OSS</span><span class="port">:3608</span></h3>
+  <div style="color:var(--muted); margin-top:2px;">ClickHouse datasource, generated dashboards</div>
+  <ul>
+    <li><b>Trending now</b> · short-term trends</li>
+    <li><b>Long-term trends</b> · 13 / 26 / 52 weeks</li>
+    <li><b>Early warning</b> · leaders, forecasts</li>
+    <li><b>Intent radar</b> · switches, complaints, needs</li>
+    <li><b>Term explorer</b> · any term, any scope</li>
+    <li><b>Rising</b> · <b>Ingestion</b> health</li>
+  </ul>
+</div>
+
+<!-- clickhouse -->
+<div class="store" style="left:740px; top:240px; width:360px;">
+  <h3>ClickHouse</h3>
+  <span class="tag">26.8 LTS · migrations applied on start</span>
+  <span class="port">:3607</span>
+
+  <h4>Collected by ingest</h4>
+  <div class="tbl"><code>items</code><span>raw text + intents · 48 h</span></div>
+  <div class="tbl"><code>term_events</code><span>comment × distinct term</span></div>
+  <div class="mv">↳ materialized views</div>
+  <div class="tbl sub"><code>term_hourly</code><span>180 days</span></div>
+  <div class="tbl sub"><code>term_daily</code><span>forever</span></div>
+  <div class="tbl"><code>scope_hourly</code><span>denominators · forever</span></div>
+  <div class="tbl"><code>polls</code><span>every request · 90 d</span></div>
+
+  <h4>Written by analyze</h4>
+  <div class="tbl"><code>trends</code><span>every 15 min · 90 d</span></div>
+  <div class="tbl"><code>long_term_trends</code><span>weekly · forever</span></div>
+  <div class="tbl"><code>lead_lag_events</code><span>onsets per scope</span></div>
+  <div class="tbl"><code>propagation_edges</code><span>leader → follower</span></div>
+  <div class="tbl"><code>forecasts</code><span>and how they turned out</span></div>
+  <div class="tbl"><code>notifications</code><span>everything sent</span></div>
+  <div class="tbl"><code>wiki_*</code><span>optional</span></div>
+</div>
+
+<!-- analyze -->
+<div class="box proc" style="left:1170px; top:180px; width:332px; height:450px;">
+  <h3>analyze <span class="tag">Python · one loop</span></h3>
+  <div class="step">
+    <div class="when">every 15 min</div>
+    <div class="what">Short-term bursts</div>
+    <div class="how">24 h vs the 28 days before, 6 h vs the same hours; weighted log-odds z-score with an r/all prior</div>
+  </div>
+  <div class="step">
+    <div class="when">daily 00:30 UTC</div>
+    <div class="what">Long-term trends</div>
+    <div class="how">weekly shares over 13 / 26 / 52 weeks; Theil–Sen, Mann–Kendall, Benjamini–Hochberg</div>
+  </div>
+  <div class="step">
+    <div class="when">daily 01:00 UTC · every run</div>
+    <div class="what">Lead–lag early warning</div>
+    <div class="how">which subreddits pick terms up first; forecasts where a burst spreads next</div>
+  </div>
+  <div class="step">
+    <div class="what">Alert rules</div>
+    <div class="how">≤ 5 a day, once per story, digests and weekly reports</div>
+  </div>
+</div>
+
+<!-- ntfy -->
+<div class="box out" style="left:1170px; top:680px; width:332px; height:140px;">
+  <h3>ntfy <span class="tag">self-hosted push</span><span class="port">:3609</span></h3>
+  <ul>
+    <li>Instant alerts for the strongest trends</li>
+    <li>Daily digest 08:00 · weekly report Mon</li>
+  </ul>
+</div>
+
+<!-- config -->
+<div class="box file" style="left:1170px; top:860px; width:332px; height:130px;">
+  <h3 style="font-size:16px;"><code style="font-size:15px;">config.yaml</code> <span class="tag">+ <code>.env</code></span></h3>
+  <div style="color:var(--muted); margin-top:6px;">Subreddits, groups, languages, request budget, thresholds per scope. Read by ingest and analyze; <code>.env</code> holds the secrets.</div>
+</div>
+
+<!-- cli -->
+<div class="box ext" style="left:740px; top:1080px; width:360px; height:110px;">
+  <h3>You · terminal</h3>
+  <p><code>uv run wgra</code> status · term · trends · intents<br>replay · edges · forecasts · suggest-subreddits</p>
+</div>
+
+<div class="legend">
+  <div><span class="sw" style="border-color:var(--proc); background:var(--proc-bg)"></span>process (Python 3.13, one image)</div>
+  <div><span class="sw" style="border-color:var(--store); background:var(--store-bg)"></span>storage</div>
+  <div><span class="sw" style="border-color:var(--out); background:var(--out-bg)"></span>output</div>
+  <div><span class="sw" style="border-color:var(--line); background:var(--ext-bg)"></span>outside the server · dashed: optional</div>
+</div>
+
+</body>
+</html>

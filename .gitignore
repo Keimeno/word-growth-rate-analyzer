@@ -1,6 +1,6 @@
-node_modules
-dist
-*.log
 .env
-package-lock.json
-config.json
+.venv
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
