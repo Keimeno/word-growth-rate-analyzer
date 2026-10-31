@@ -5,7 +5,10 @@
 -- The documents remember which intents (docs/ARCHITECTURE.md §4.7) they carry, so
 -- dashboards can show the comments behind an intent exactly. Like the text, this is gone
 -- after 48 hours.
-CREATE TABLE items
+--
+-- IF NOT EXISTS: the ingester and the analyzer both migrate when they start, on a new
+-- database at the same moment.
+CREATE TABLE IF NOT EXISTS items
 (
     id          String,                    -- unique within its platform: reddit's fullname
     platform    LowCardinality(String),    -- reddit
@@ -26,7 +29,7 @@ ORDER BY (channel, created_at, id)
 TTL created_at + INTERVAL 48 HOUR;
 
 -- Denominators: how many documents, words and authors a channel had per hour.
-CREATE TABLE scope_hourly
+CREATE TABLE IF NOT EXISTS scope_hourly
 (
     hour      DateTime('UTC'),
     channel   LowCardinality(String),
@@ -39,7 +42,7 @@ ENGINE = AggregatingMergeTree
 PARTITION BY toYYYYMM(hour)
 ORDER BY (channel, doc_type, hour);
 
-CREATE MATERIALIZED VIEW scope_hourly_mv TO scope_hourly AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS scope_hourly_mv TO scope_hourly AS
 SELECT
     toStartOfHour(created_at) AS hour,
     channel,
@@ -52,7 +55,7 @@ GROUP BY hour, channel, doc_type;
 
 -- One row per (document, distinct term). Never stored, the materialized views
 -- below aggregate every insert into hourly and daily counts.
-CREATE TABLE term_events
+CREATE TABLE IF NOT EXISTS term_events
 (
     hour        DateTime('UTC'),
     channel     LowCardinality(String),
@@ -66,7 +69,7 @@ ENGINE = Null;
 
 -- docs: documents containing the term, the main measure, a single comment can't add
 -- more than one. authors: distinct authors, to tell a trend from one spammer.
-CREATE TABLE term_hourly
+CREATE TABLE IF NOT EXISTS term_hourly
 (
     hour        DateTime('UTC'),
     channel     LowCardinality(String),
@@ -82,7 +85,7 @@ PARTITION BY toYYYYMM(hour)
 ORDER BY (channel, term, kind, doc_type, hour)
 TTL hour + INTERVAL 180 DAY;
 
-CREATE MATERIALIZED VIEW term_hourly_mv TO term_hourly AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS term_hourly_mv TO term_hourly AS
 SELECT
     hour,
     channel,
@@ -96,7 +99,7 @@ FROM term_events
 GROUP BY hour, channel, doc_type, kind, term;
 
 -- The long term history, kept forever.
-CREATE TABLE term_daily
+CREATE TABLE IF NOT EXISTS term_daily
 (
     day         Date,
     channel     LowCardinality(String),
@@ -111,7 +114,7 @@ ENGINE = AggregatingMergeTree
 PARTITION BY toYear(day)
 ORDER BY (channel, term, kind, doc_type, day);
 
-CREATE MATERIALIZED VIEW term_daily_mv TO term_daily AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS term_daily_mv TO term_daily AS
 SELECT
     toDate(hour) AS day,
     channel,
@@ -125,7 +128,7 @@ FROM term_events
 GROUP BY day, channel, doc_type, kind, term;
 
 -- Every request to a platform, for the ingestion health dashboard.
-CREATE TABLE polls
+CREATE TABLE IF NOT EXISTS polls
 (
     ts                  DateTime64(3, 'UTC'),
     platform            LowCardinality(String),
@@ -151,7 +154,7 @@ TTL toDateTime(ts) + INTERVAL 90 DAY;
 -- the detectors, dashboards and queries know them. A scope is a channel or a group.
 -- analyzed: the detectors see it (not r/_search). background: the platform channel, the
 -- prior of its platform's scopes (r/all).
-CREATE TABLE channels
+CREATE TABLE IF NOT EXISTS channels
 (
     channel    String,
     platform   LowCardinality(String),
@@ -164,7 +167,7 @@ ORDER BY channel;
 
 -- Groups list channels, the group named like a platform ("reddit") every tracked channel
 -- of it.
-CREATE TABLE channel_groups
+CREATE TABLE IF NOT EXISTS channel_groups
 (
     group_name String,
     channel    String

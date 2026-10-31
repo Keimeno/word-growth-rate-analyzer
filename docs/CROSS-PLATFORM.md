@@ -599,6 +599,21 @@ item's channel (background channels: 2-grams, `intents.sample`). `wgra ingest` g
    it finds nothing at all, before and after.
 3. Compare after mapping the names of §8.2: the same rows with the same numbers. Long-term
    trends are covered by their integration tests, which run unchanged apart from names.
+
+   **Result (2026-10-31).** `run backfill`: 626,533 sightings, 8,923 events, 18,718 pairs
+   tested, 17 edges, before and after. Every event with its topic, scopes and every onset,
+   and every edge with all its columns, are identical at full float precision after
+   mapping the names. The replay of the last 3 days (72 hourly steps, both horizons):
+   323,433 trends before and after, and the same report (alert-worthy 5,072, sent 15,
+   capped 2,875, cooldown 260, per day and group). Per run, scope, horizon and ranking the
+   trends carry exactly the same numbers. Two kinds of rows differ:
+   * `r/all`'s breadth and members (7,195 rows), 1 of 1 for the group `sample`, 0 for the
+     channel `r/all` (§8.10).
+   * Which of two terms with exactly the same counts gets the higher rank (6,123 ranks,
+     8 of them with the replay's alert going to the other one), and so which of them is
+     the 50th stored and which is cut (71 rows). The synthetic vocabulary has many terms
+     with identical counts. Ties keep the order ClickHouse returns them in, which depends
+     on how the parts are laid out, and the copied history's parts differ.
 4. `uv run pytest`, `ruff check`, `ruff format --check` and `mypy` pass.
 5. Recreate the local database (§8.3), run a day, and check `wgra status`, the ingestion
    dashboard and Trending now.
@@ -630,7 +645,9 @@ tested:
 
 ### 8.10 As built (2026-10-31)
 
-Built in four commits on `develop`, in the order of §8.8. Where the plan turned out wrong
+Built in five commits on `develop`, in the order of §8.8. The local database was recreated
+on 2026-10-31 at 15:50 UTC: the 1.15 million documents collected since 2026-10-10 are gone,
+as planned, and collection restarted under the new names. Where the plan turned out wrong
 or incomplete against the code:
 
 * **r/all is a channel, so its trends lose a group's breadth.** The sample was scored as
@@ -678,5 +695,10 @@ or incomplete against the code:
   without `r/` (`hn`), a fake platform's items and polls through the sink into ClickHouse,
   and `RedditSource` choosing `r/x`, `r/all` and `r/_search`, setting `skip`, and handing
   each item on once.
+* **Migration 001 creates its tables `IF NOT EXISTS`**, like 002–004: on the recreated
+  database the ingester and the analyzer migrated at the same moment, and the ingester
+  crashed once on "table items already exists" before Docker restarted it.
+* **`bench/synthetic.py`** connected to the `wgra` database to create its own, which a
+  fresh bench ClickHouse doesn't have; it uses `default` now, like `bench/lead_lag.py`.
 * **`ruff format --check` failed before phase 1:** ruff 0.17 formats the Python block of
   §8.4, which now follows its formatting.
