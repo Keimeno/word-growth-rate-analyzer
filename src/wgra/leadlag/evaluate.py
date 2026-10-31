@@ -6,7 +6,7 @@ analyzer stored). At each step only what was known then is used:
 * the events of the trends seen so far
 * edges learned once a day, after `lead_lag.run_at`, as of that time (edges.learn_edges
   only counts onsets whose hour was over, misses whose window was)
-* forecasts for the step's trends in leader subreddits, by the same `decide` as the live
+* forecasts for the step's trends in leader channels, by the same `decide` as the live
   loop
 
 Onsets are computed once with all the data: nothing after an hour goes into its onset, so
@@ -16,7 +16,7 @@ are scored with all the data, they're what happened.
 Scored per event and follower, the first forecast (of several leaders the most likely):
 
 * precision: the share that came true
-* recall: of the followers that did follow a subreddit's onset within `max_lag_days`, the
+* recall: of the followers that did follow a leader's onset within `max_lag_days`, the
   share forecast before they crossed. Over all of them, most of which no edge could
   forecast, and over those that followed a leader with an edge at the time (on edges)
 * lead time: from the forecast to the follower's onset, for the hits
@@ -73,7 +73,7 @@ class Evaluation:
     # the first per event and follower, with a known outcome, and those still pending
     scored: list[Forecast] = field(default_factory=list)
     pending: int = 0
-    # (event, follower) pairs that followed a subreddit, and those forecast before; the same
+    # (event, follower) pairs that followed a leader, and those forecast before; the same
     # for those that followed a leader with an edge to them at the time
     followed: int = 0
     forecast_in_time: int = 0
@@ -213,7 +213,7 @@ def evaluate(
             if current is None:
                 continue
             for forecast in decide(
-                current, leaders, edges, at, config.subreddit_groups, settings, config.forecast
+                current, leaders, edges, at, config.groups, settings, config.forecast
             ):
                 made.setdefault(forecast.key, forecast)
 
@@ -298,7 +298,7 @@ def report(evaluation: Evaluation) -> str:
     )
     found = (
         f"{recall:.0%} ({evaluation.forecast_in_time} of {evaluation.followed} followers that "
-        "followed a subreddit were forecast before they did)"
+        "followed a leader were forecast before they did)"
         if recall is not None
         else "- (no follower followed)"
     )

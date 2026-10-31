@@ -3,10 +3,10 @@ where it comes from, the comments and posts naming it and those with an intent a
 
 Where from:
 
-* ``watchlist``: the subreddits of the watchlist's group, tracked completely
-* ``tracked``: every other tracked subreddit
-* ``sample``: the r/all sample, a few percent of the rest of reddit
-* ``search``: posts naming a product anywhere, and the comment trees under some of them
+* ``watchlist``: the channels of the watchlist's group, tracked completely
+* ``reddit``: every other tracked subreddit
+* ``r/all``: the r/all sample, a few percent of the rest of reddit
+* ``r/_search``: posts naming a product anywhere, and the comment trees under some of them
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SAMPLE_SCOPE, SEARCH_SCOPE, TEXT_KINDS, Config, Watchlist
+from wgra.config import TEXT_KINDS, Config, Watchlist
+from wgra.sources.reddit.channels import PLATFORM, SAMPLE, SEARCH
 from wgra.text.intents import (
     ALTERNATIVE,
     ARROW,
@@ -29,17 +30,16 @@ from wgra.text.intents import (
     intent_entity,
 )
 
-ORIGINS = ("watchlist", "tracked", "sample", "search")
+ORIGINS = ("watchlist", PLATFORM, SAMPLE, SEARCH)
 # the intents about a product (a need is about what someone wants to do)
 RADAR_KINDS = (SWITCH, CONSIDERING, ALTERNATIVE, COMPLAINT)
 
 CANDIDATES_SQL = """
 SELECT
     multiIf(
-        subreddit = {search:String}, 'search',
-        subreddit = {sample:String}, 'sample',
-        has({watchlist:Array(String)}, subreddit), 'watchlist',
-        'tracked'
+        has({watchlist:Array(String)}, channel), 'watchlist',
+        channel IN ({search:String}, {sample:String}), toString(channel),
+        {platform:String}
     ) AS origin,
     kind,
     term,
@@ -47,6 +47,11 @@ SELECT
     uniqCombinedMerge(12)(authors) AS people
 FROM term_hourly
 WHERE hour >= toStartOfHour(now()) - toIntervalHour({hours:UInt32})
+  AND channel IN (
+      SELECT channel FROM channel_groups WHERE group_name = {platform:String}
+      UNION ALL SELECT arrayJoin({watchlist:Array(String)})
+      UNION ALL SELECT arrayJoin([{search:String}, {sample:String}])
+  )
   AND (
     kind IN {text_kinds:Array(String)} AND term IN {aliases:Array(String)}
     OR kind IN {intent_kinds:Array(String)} AND multiSearchAny(term, {aliases:Array(String)})
@@ -112,9 +117,10 @@ def candidates(
     rows = client.query(
         CANDIDATES_SQL,
         parameters={
-            "search": SEARCH_SCOPE,
-            "sample": SAMPLE_SCOPE,
-            "watchlist": list(config.subreddit_groups[watchlist.group]),
+            "platform": PLATFORM,
+            "search": SEARCH,
+            "sample": SAMPLE,
+            "watchlist": list(config.groups[watchlist.group]),
             "hours": days * 24,
             "text_kinds": [kind for kind in TEXT_KINDS if kind != "subreddit"],
             "intent_kinds": list(RADAR_KINDS),

@@ -71,10 +71,10 @@ def test_new_terms_need_a_floor():
         Counts(20, 10_000, 0, 280_000).score(Prior(total=0, weight=0.0, floor=0.0))
 
 
-def test_prior_comes_from_the_sample_share():
+def test_prior_comes_from_the_background_share():
     prior = Prior(total=1_000_000, weight=0.1, floor=1.0)
     # 1,000 pseudo-documents, the term is in 1% of the sample
-    alpha, beta = prior.pseudo_counts(sample_mentions=10_000, documents=1000)
+    alpha, beta = prior.pseudo_counts(background_mentions=10_000, documents=1000)
     assert alpha == pytest.approx(1000 * 0.01 + 1)
     assert beta == pytest.approx(1000 * 0.99 + 1)
     # without a sample only the floor is left
@@ -87,7 +87,7 @@ def test_prior_comes_from_the_sample_share():
 def test_the_prior_does_not_move_stable_terms(weight):
     # common on reddit (5% of the sample) but rare in the scope (0.1%), and stable: with
     # the same pseudo-counts on both sides, the small window would be pulled up
-    counts = Counts(10, 10_000, 280, 280_000, sample_mentions=50_000)
+    counts = Counts(10, 10_000, 280, 280_000, background_mentions=50_000)
     score = counts.score(Prior(total=1_000_000, weight=weight, floor=1.0))
     assert score.ratio == pytest.approx(1, abs=0.1)
 
@@ -95,29 +95,29 @@ def test_the_prior_does_not_move_stable_terms(weight):
 def test_the_prior_damps_bursts_of_terms_common_elsewhere():
     # a term that's everywhere on reddit gets a bit more mentions in a scope where it's
     # rare: likely spill-over, not the scope's own trend
-    counts = Counts(30, 10_000, 280, 280_000, sample_mentions=50_000)
+    counts = Counts(30, 10_000, 280, 280_000, background_mentions=50_000)
     flat = counts.score(Prior(total=1_000_000, weight=0.0, floor=1.0))
     informed = counts.score(Prior(total=1_000_000, weight=0.05, floor=1.0))
     assert flat.ratio == pytest.approx(3, rel=0.05)
     assert informed.ratio < 0.8 * flat.ratio
     # the scope's own vocabulary, rarer on reddit than here, is barely touched
-    topical = Counts(300, 10_000, 2800, 280_000, sample_mentions=100)
+    topical = Counts(300, 10_000, 2800, 280_000, background_mentions=100)
     assert topical.score(Prior(total=1_000_000, weight=0.05, floor=1.0)).ratio == pytest.approx(
         topical.score(FLAT).ratio, rel=0.01
     )
 
 
-def test_without_history_the_window_is_compared_with_the_sample():
+def test_without_history_the_window_is_compared_with_the_background():
     # the first day: no reference period yet. 5% of the window's documents mention the
     # term, 1% of the sample's
     prior = Prior(total=1_000_000, weight=0.05, floor=1.0)
-    first_day = Counts(500, 10_000, 0, 0, sample_mentions=10_000).score(prior)
+    first_day = Counts(500, 10_000, 0, 0, background_mentions=10_000).score(prior)
     assert first_day.ratio == pytest.approx(5, rel=0.03)
     # a few hours of history: half real, half the sample's share
-    some_history = Counts(500, 10_000, 250, 5_000, sample_mentions=10_000).score(prior)
+    some_history = Counts(500, 10_000, 250, 5_000, background_mentions=10_000).score(prior)
     assert 1 < some_history.ratio < first_day.ratio
     # with history, the sample no longer stands in for it
-    stable = Counts(500, 10_000, 14_000, 280_000, sample_mentions=10_000).score(prior)
+    stable = Counts(500, 10_000, 14_000, 280_000, background_mentions=10_000).score(prior)
     assert stable.ratio == pytest.approx(1, abs=0.05)
 
 

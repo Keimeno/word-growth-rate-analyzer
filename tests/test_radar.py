@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from helpers import make_config, make_item
 
-from wgra.config import SAMPLE_SCOPE, SEARCH_SCOPE
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from wgra.ingest.run import write_channels
 from wgra.ingest.search import due_trees, names_any, search_query, stored_ids, wants_tree
 from wgra.radar.candidates import candidates, products_of, summarize
 from wgra.store import migrate
@@ -108,12 +108,12 @@ def test_watched_names_count_in_lowercase():
     assert not extract_intents(sentence)
 
 
-def test_search_items_are_counted_under_the_search_scope():
+def test_search_items_are_counted_in_the_search_channel():
     item = make_item(1, subreddit="productivity", text="I switched from Notion to Obsidian.")
-    processed = Processor(pkm_config(), b"key").process(item, SEARCH_SCOPE)
-    assert processed.item_row[ITEM_COLUMNS.index("subreddit")] == SEARCH_SCOPE
+    processed = Processor(pkm_config(), b"key").process(item, "r/_search")
+    assert processed.item_row[ITEM_COLUMNS.index("channel")] == "r/_search"
     assert processed.item_row[ITEM_COLUMNS.index("intents")] == ["notion → obsidian"]
-    assert {row[TERM_COLUMNS.index("subreddit")] for row in processed.term_rows} == {SEARCH_SCOPE}
+    assert {row[TERM_COLUMNS.index("channel")] for row in processed.term_rows} == {"r/_search"}
 
 
 def test_search_query_quotes_every_alias():
@@ -188,36 +188,39 @@ def test_candidates_take_the_most_named_alias_and_add_up_intents():
             ("watchlist", "alternative", "alternative: notion", 2, 2),
             ("watchlist", "considering", "considering: notion → obsidian", 2, 1),
             ("watchlist", "considering", "considering: notion", 1, 1),
-            ("search", "switch", "evernote → notion", 1, 1),
-            ("sample", "word", "obsidian", 5, 5),
-            ("tracked", "need", "need: apple notes", 1, 1),
+            ("r/_search", "switch", "evernote → notion", 1, 1),
+            ("r/all", "word", "obsidian", 5, 5),
+            ("reddit", "need", "need: apple notes", 1, 1),
         ],
     )
     notion = table["notion", "watchlist"]
     assert (notion.named, notion.named_authors) == (40, 30)
     assert notion.intents == {"switch": 3, "alternative": 2, "considering": 3}
     assert table["obsidian", "watchlist"].intents == {"switch": 3, "considering": 2}
-    assert table["notion", "search"].intents == {"switch": 1}
-    assert table["obsidian", "sample"].named == 5
-    assert table["apple notes", "tracked"].empty
+    assert table["notion", "r/_search"].intents == {"switch": 1}
+    assert table["obsidian", "r/all"].named == 5
+    assert table["apple notes", "reddit"].empty
 
 
 def test_candidates_from_clickhouse(client):
     migrate(client)
     config = pkm_config()
+    write_channels(client, config)
     hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     rows = []
-    for author, (subreddit, text) in enumerate(
+    for author, (channel, text) in enumerate(
         [
-            ("notion", "I switched from Notion to Obsidian, Notion is too slow"),
-            ("technology", "Is there an alternative to Notion?"),
-            ("technology", "Should I ditch Evernote for Obsidian?"),
-            (SAMPLE_SCOPE, "Notion and Obsidian"),
-            (SEARCH_SCOPE, "We migrated from Evernote to Notion"),
+            ("r/notion", "I switched from Notion to Obsidian, Notion is too slow"),
+            ("r/technology", "Is there an alternative to Notion?"),
+            ("r/technology", "Should I ditch Evernote for Obsidian?"),
+            ("r/all", "Notion and Obsidian"),
+            ("r/_search", "We migrated from Evernote to Notion"),
+            # a channel the radar doesn't know isn't counted anywhere
+            ("r/elsewhere", "Notion and Obsidian"),
         ]
     ):
-        item = make_item(author + 1, subreddit=subreddit, author=f"a{author}", text=text)
-        rows += Processor(config, b"key").process(item, subreddit).term_rows
+        item = make_item(author + 1, subreddit="any", author=f"a{author}", text=text)
+        rows += Processor(config, b"key").process(item, channel).term_rows
     client.insert(
         "term_events",
         [(hour, *row[1:]) for row in rows],
@@ -227,11 +230,11 @@ def test_candidates_from_clickhouse(client):
     table = candidates(client, config, config.radar.watchlists["pkm"], days=1)
     assert table["notion", "watchlist"].named == 1
     assert table["notion", "watchlist"].intents == {"switch": 1}
-    assert table["notion", "tracked"].intents == {"alternative": 1}
-    assert table["evernote", "tracked"].intents == {"considering": 1}
-    assert table["obsidian", "tracked"].intents == {"considering": 1}
-    assert table["obsidian", "sample"].named == 1
-    assert table["evernote", "search"].intents == {"switch": 1}
+    assert table["notion", "reddit"].intents == {"alternative": 1}
+    assert table["evernote", "reddit"].intents == {"considering": 1}
+    assert table["obsidian", "reddit"].intents == {"considering": 1}
+    assert table["obsidian", "r/all"].named == 1
+    assert table["evernote", "r/_search"].intents == {"switch": 1}
 
 
 def test_due_trees_and_stored_ids(client):
@@ -248,7 +251,7 @@ def test_due_trees_and_stored_ids(client):
     for id36, hours_ago, title in posts:
         created = int((now - timedelta(hours=hours_ago)).timestamp())
         item = make_item(id36, created, source="post", subreddit="productivity", text=title)
-        rows.append(Processor(config, b"key").process(item, SEARCH_SCOPE).item_row)
+        rows.append(Processor(config, b"key").process(item, "r/_search").item_row)
     client.insert("items", rows, column_names=list(ITEM_COLUMNS))
 
     assert due_trees(client, config.radar, set()) == ["t3_1"]

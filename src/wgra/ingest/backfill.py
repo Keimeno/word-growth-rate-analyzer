@@ -23,7 +23,7 @@ from datetime import datetime
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SAMPLE_SCOPE, Config
+from wgra.config import Config
 from wgra.detect.short_term import as_utc
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS
 from wgra.text.intents import INTENT_KINDS, configure_names, extract_intents
@@ -34,7 +34,7 @@ log = logging.getLogger(__name__)
 BATCH_ROWS = 50_000
 
 SOURCE_SQL = """
-SELECT id, source, subreddit, created_at, author_hash, text, permalink, token_count
+SELECT id, platform, channel, doc_type, created_at, author_hash, text, url, lang, token_count
 FROM {database:Identifier}.items FINAL
 WHERE ingested_at < toDateTime({before:UInt32}, 'UTC')
 ORDER BY created_at
@@ -49,19 +49,11 @@ class BackfillResult:
     kinds: Counter[str] = field(default_factory=Counter)
 
 
-def real_subreddit(permalink: str) -> str:
-    """ "/r/AskReddit/comments/..." -> "askreddit": items of the sample are stored under
-    one scope, the permalink still names the subreddit (and so its language)."""
-    parts = permalink.split("/")
-    return parts[2].lower() if len(parts) > 2 and parts[1] == "r" else ""
-
-
-def item_intents(config: Config, scope: str, permalink: str, text: str) -> Counter[tuple[str, str]]:
+def item_intents(config: Config, channel: str, lang: str, text: str) -> Counter[tuple[str, str]]:
     """What the ingester would count for the item now (pipeline.Processor)."""
-    intents = config.intents
-    if not intents.enabled or (scope == SAMPLE_SCOPE and not intents.sample):
+    if not config.counts_intents(channel):
         return Counter()
-    return extract_intents(clean(text), config.language(f"r/{real_subreddit(permalink)}"))
+    return extract_intents(clean(text), lang)
 
 
 def backfill_intents(
@@ -96,13 +88,13 @@ def backfill_intents(
     ) as stream:
         for row in stream:
             # naive datetimes from ClickHouse are UTC; inserted naive, they'd be read as local
-            row = (*row[:3], as_utc(row[3]), *row[4:])
-            _, item_source, scope, created_at, author_hash, text, permalink, _ = row
+            row = (*row[:4], as_utc(row[4]), *row[5:])
+            _, _, channel, doc_type, created_at, author_hash, text, _, lang, _ = row
             result.items += 1
-            counts = item_intents(config, scope, permalink, text)
+            counts = item_intents(config, channel, lang, text)
             hour = created_at.replace(minute=0, second=0, microsecond=0)
             for (kind, term), occurrences in counts.items():
-                term_rows.append((hour, scope, item_source, kind, term, author_hash, occurrences))
+                term_rows.append((hour, channel, doc_type, kind, term, author_hash, occurrences))
                 result.kinds[kind] += 1
             if counts:
                 result.with_intents += 1

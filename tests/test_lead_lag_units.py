@@ -150,12 +150,16 @@ def test_trends_within_a_span_are_one_event():
 
 
 def test_the_topic_is_the_group_it_trended_in_most():
-    groups = {"tech": ["apple", "android", "linux"], "news": ["news"], "mac": ["apple"]}
+    groups = {
+        "tech": ["r/apple", "r/android", "r/linux"],
+        "news": ["r/news"],
+        "mac": ["r/apple"],
+    }
     assert topic_of({"r/linux": 8, "news": 5}, groups) == "tech"
     assert topic_of({"news": 9, "r/linux": 8}, groups) == "news"
     # r/apple is in tech and mac: the smaller group
     assert topic_of({"r/apple": 8}, groups) == "mac"
-    assert topic_of({"sample": 8}, groups) == ""
+    assert topic_of({"r/all": 8}, groups) == ""
     # an event's topic is decided by its first hour: later trends include the followers'
     event = Event("word", "x", T0, T0)
     first_hour = [sighting("x", "news", T0, 4), sighting("x", "r/apple", T0 + 50 * MINUTE, 5)]
@@ -188,9 +192,10 @@ def event(start: datetime, *onsets: Onset, until: datetime | None = None) -> Eve
 
 
 NETWORK = Network(
-    ["a", "b", "c"],
-    {"pair": ("a", "b"), "solo": ("c",)},
-    {"a": T0 - 30 * DAY, "b": T0 - 30 * DAY, "c": T0 + 50 * DAY, "_sample": T0 - 30 * DAY},
+    ["r/a", "r/all", "r/b", "r/c"],
+    {"pair": ("r/a", "r/b"), "solo": ("r/c",)},
+    {"r/a": T0 - 30 * DAY, "r/b": T0 - 30 * DAY, "r/c": T0 + 50 * DAY, "r/all": T0 - 30 * DAY},
+    backgrounds=["r/all"],
 )
 LOOSE = LeadLagConfig(min_events=1, min_hits=1, max_q=1.0, min_lead_share=0, topics=False)
 
@@ -202,14 +207,17 @@ def pairs_of(edges: list[Edge]) -> dict[tuple[str, str], Edge]:
 def test_followers_of_a_leader():
     followers = {(f.scope, f.type, f.without) for f in NETWORK.followers("r/a")}
     assert followers == {
-        ("r/b", "subreddit", ""),
-        ("r/c", "subreddit", ""),
+        ("r/b", "channel", ""),
+        ("r/c", "channel", ""),
         # a's own group without a, c's group as it is
         ("pair", "group", "r/a"),
         ("solo", "group", ""),
-        ("sample", "sample", ""),
+        # the platform's background follows, but doesn't lead
+        ("r/all", "platform", ""),
     }
-    # a group of one isn't followed by its only subreddit
+    assert NETWORK.leaders == ["r/a", "r/b", "r/c"]
+    assert NETWORK.followers("r/all") == []
+    # a group of one isn't followed by its only channel
     assert ("solo", "group", "r/c") not in {
         (f.scope, f.type, f.without) for f in NETWORK.followers("r/c")
     }
@@ -252,7 +260,7 @@ def test_edges_count_hits_misses_and_what_isnt_known_yet():
 def test_edges_use_nothing_after_the_run():
     # an earlier event that is over gives the base rates; without one nothing is tested
     events = [
-        event(T0 - 20 * DAY, onset("sample", T0 - 20 * DAY)),
+        event(T0 - 20 * DAY, onset("r/all", T0 - 20 * DAY)),
         event(T0, onset("r/a", T0), onset("r/b", T0 + 2 * DAY)),
     ]
     assert learn_edges(events[1:], NETWORK, T0 + 3 * DAY, LOOSE).tested == 0
@@ -325,7 +333,7 @@ EDGE = Edge(
     topic=ALL,
     leader="r/a",
     follower="r/b",
-    follower_type="subreddit",
+    follower_type="channel",
     without_leader=False,
     leader_onsets=12,
     events=10,
@@ -399,7 +407,7 @@ def test_topic_edges_win_over_all():
     assert index.of("r/a", "") == [[EDGE]]
     assert index.leaders == {"r/a"} and len(index) == 1
     current = replace(event(T0, onset("r/a", T0)), first_scopes={"r/a": 6.0})
-    groups = {"tech": ["a"]}
+    groups = {"tech": ["r/a"]}
     settings, forecast_settings = LeadLagConfig(), ForecastConfig()
     # an hour after the onset: every past hit took longer
     still = 3.5 / 4
@@ -419,7 +427,7 @@ def forecast(term: str, probability: float, **values: object) -> Forecast:
         "event_start": T0,
         "follower": "r/b",
         "leader": "r/a",
-        "follower_type": "subreddit",
+        "follower_type": "channel",
         "without_leader": False,
         "topic": ALL,
         "created_at": T0,
@@ -460,11 +468,11 @@ def test_forecast_alerts_are_off_by_default_and_share_the_cap():
     # one alert per term, its likeliest follower; edges with few events don't alert
     new = [
         forecast("one", 0.9),
-        forecast("one", 0.95, follower="sample"),
+        forecast("one", 0.95, follower="r/all"),
         forecast("few", 0.99, edge_events=3),
     ]
     sent = decide_forecast_alerts(new, 0, 0, notify, on)
-    assert [(item.term, item.follower) for item in sent] == [("one", "sample")]
+    assert [(item.term, item.follower) for item in sent] == [("one", "r/all")]
 
 
 def test_evaluation_scores_and_calibration():
@@ -534,7 +542,7 @@ def test_forecast_message():
         ForecastSummary(
             term="ollama",
             leader="r/localllama",
-            follower="sample",
+            follower="r/all",
             leader_onset=datetime(2026, 10, 13, 14, tzinfo=UTC),
             expected_at=datetime(2026, 10, 15, 14, tzinfo=UTC),
             due_by=datetime(2026, 10, 20, 14, tzinfo=UTC),
@@ -545,10 +553,11 @@ def test_forecast_message():
             edge_events=15,
             edge_hits=12,
             lag_median=60,
+            follower_label="reddit-wide (the r/all sample)",
         ),
         "https://grafana.test",
     )
-    assert message.title == "ollama: r/localllama → sample?"
+    assert message.title == "ollama: r/localllama → r/all?"
     assert "Rising in r/localllama since Tue 14:00 UTC." in message.body
     assert "Of 15 terms that rose in r/localllama before reddit-wide (the r/all sample), 12 " in (
         message.body

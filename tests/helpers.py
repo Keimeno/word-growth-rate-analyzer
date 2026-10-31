@@ -61,7 +61,7 @@ def make_trend(term: str = "vision pro", **overrides: object) -> Trend:
         "scope": "r/technology",
         "term": term,
         "detected_at": detected_at,
-        "scope_type": "subreddit",
+        "scope_type": "channel",
         "kind": "phrase",
         "window_start": detected_at - timedelta(hours=24),
         "window_end": detected_at,

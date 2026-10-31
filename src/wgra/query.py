@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 Bucket = Literal["hour", "day", "week"]
 
-# a scope is a group from config.yaml or a single subreddit
+# a scope is a group or a single channel
 _SCOPE = (
-    "subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = {scope:String} "
+    "channel IN (SELECT channel FROM channel_groups WHERE group_name = {scope:String} "
     "UNION ALL SELECT {scope:String})"
 )
 
@@ -38,15 +38,22 @@ def normalize_term(term: str) -> str:
     return " ".join(term.lower().split())
 
 
-def normalize_scope(scope: str) -> str:
-    return scope.strip().removeprefix("/").removeprefix("r/").lower()
+def resolve_scope(client: Client, scope: str) -> str:
+    """A scope as stored: a group by its name, a channel by its id, which is lowercase
+    (r/LocalLLaMA is r/localllama)."""
+    scope = scope.strip().removeprefix("/")
+    (is_channel,) = client.query(
+        "SELECT count() > 0 FROM channels WHERE channel = lowerUTF8({scope:String})",
+        parameters={"scope": scope},
+    ).result_rows[0]
+    return scope.lower() if is_channel else scope
 
 
 def term_series(
     client: Client, term: str, scope: str, days: int, bucket: Bucket = "day"
 ) -> list[TermPoint]:
-    """How many comments and posts in the scope mentioned the term, per hour, day or week
-    (ISO weeks, Monday to Sunday UTC, the current one so far)."""
+    """How many documents in the scope mentioned the term, per hour, day or week (ISO
+    weeks, Monday to Sunday UTC, the current one so far)."""
     if bucket in ("day", "week"):
         term_table = "term_daily"
         term_bucket = "day" if bucket == "day" else "toMonday(day)"
@@ -80,7 +87,11 @@ def term_series(
     """
     rows = client.query(
         sql,
-        parameters={"term": normalize_term(term), "scope": normalize_scope(scope), "days": days},
+        parameters={
+            "term": normalize_term(term),
+            "scope": resolve_scope(client, scope),
+            "days": days,
+        },
     ).result_rows
     return [TermPoint(bucket, docs, authors, total) for bucket, docs, authors, total in rows]
 
@@ -88,21 +99,29 @@ def term_series(
 def ingestion_status(client: Client) -> dict[str, Sequence[Sequence[Any]]]:
     feeds = client.query(
         """
-        SELECT feed, count() AS polls, countIf(status != 200) AS errors, sum(new_items) AS new,
-               sum(gap) AS gaps, round(avg(interval_s), 1) AS interval_s,
+        SELECT platform, feed, count() AS polls, countIf(status != 200) AS errors,
+               sum(new_items) AS new, sum(gap) AS gaps, round(avg(interval_s), 1) AS interval_s,
                round(argMax(rate, ts) * 60) AS per_minute, max(ts) AS last_poll
         FROM polls WHERE ts > now() - INTERVAL 1 HOUR
-        GROUP BY feed ORDER BY feed
+        GROUP BY platform, feed ORDER BY platform, feed
         """
     ).result_rows
-    subreddits = client.query(
+    # every channel of config.yaml, the documents of each type it got
+    channels = client.query(
         """
-        SELECT subreddit, sumIf(docs, source = 'comment') AS comments,
-               sumIf(docs, source = 'post') AS posts
-        FROM scope_hourly
-        WHERE hour >= now() - INTERVAL 24 HOUR
-          AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = 'tracked')
-        GROUP BY subreddit ORDER BY comments DESC
+        SELECT c.channel, c.platform, sum(s.docs) AS docs,
+               arrayStringConcat(
+                   arraySort(groupArrayIf(concat(s.doc_type, ' ', toString(s.docs)), s.docs > 0)),
+                   ', ') AS by_type
+        FROM channels AS c
+        LEFT JOIN (
+            SELECT channel, doc_type, sum(docs) AS docs
+            FROM scope_hourly
+            WHERE hour >= now() - INTERVAL 24 HOUR
+            GROUP BY channel, doc_type
+        ) AS s ON s.channel = c.channel
+        GROUP BY c.channel, c.platform
+        ORDER BY c.platform, docs DESC, c.channel
         """
     ).result_rows
     tables = client.query(
@@ -112,7 +131,7 @@ def ingestion_status(client: Client) -> dict[str, Sequence[Sequence[Any]]]:
         GROUP BY table ORDER BY sum(bytes_on_disk) DESC
         """
     ).result_rows
-    return {"feeds": feeds, "subreddits": subreddits, "tables": tables}
+    return {"feeds": feeds, "channels": channels, "tables": tables}
 
 
 def latest_trends(
@@ -139,17 +158,11 @@ def latest_trends(
         parameters={
             "horizon": horizon,
             "detected_at": latest[0],
-            "scope": normalize_trend_scope(scope) if scope else "",
+            "scope": resolve_scope(client, scope) if scope else "",
             "limit": limit,
         },
     ).result_rows
     return latest[0], [Trend(*row) for row in rows]
-
-
-def normalize_trend_scope(scope: str) -> str:
-    """Groups are plain names, subreddits "r/name" (as stored in the trends table)."""
-    scope = scope.strip().removeprefix("/")
-    return f"r/{scope[2:].lower()}" if scope.lower().startswith("r/") else scope
 
 
 def latest_long_term(
@@ -174,7 +187,7 @@ def latest_long_term(
         parameters={
             "horizon": horizon,
             "week": week,
-            "scope": normalize_trend_scope(scope) if scope else "",
+            "scope": resolve_scope(client, scope) if scope else "",
             "limit": limit,
         },
     ).result_rows
@@ -222,8 +235,9 @@ class IntentReport:
 class IntentExample:
     term: str
     created_at: datetime
-    subreddit: str
-    permalink: str
+    channel: str
+    url: str
+    lang: str
     text: str
 
 
@@ -233,8 +247,9 @@ def intent_report(
     """The intents of a kind in a scope over the last `days` days (today included), the
     most mentioned first, with the same number of days before them to compare."""
     today = today or datetime.now(UTC).date()
+    scope = resolve_scope(client, scope)
     parameters = {
-        "scope": normalize_scope(scope),
+        "scope": scope,
         "kind": kind,
         "days": days,
         "limit": limit,
@@ -282,7 +297,7 @@ def intent_report(
               AND detected_at > now() - INTERVAL 24 HOUR AND subsumed_by = ''
             GROUP BY term
             """,
-            parameters={"trend_scope": normalize_trend_scope(scope), "terms": terms},
+            parameters={"trend_scope": scope, "terms": terms},
         ).result_rows
     }
     recent = {
@@ -328,13 +343,17 @@ def intent_examples(
         return []
     rows = client.query(
         f"""
-        SELECT term, created_at, subreddit, permalink, text
+        SELECT term, created_at, channel, url, lang, text
         FROM items FINAL ARRAY JOIN intents AS term
         WHERE {_SCOPE} AND term IN {{terms:Array(String)}}
           AND created_at > now() - INTERVAL 48 HOUR
         ORDER BY created_at DESC
         LIMIT {{per_term:UInt32}} BY term
         """,
-        parameters={"scope": normalize_scope(scope), "terms": list(terms), "per_term": per_term},
+        parameters={
+            "scope": resolve_scope(client, scope),
+            "terms": list(terms),
+            "per_term": per_term,
+        },
     ).result_rows
     return [IntentExample(*row) for row in rows]

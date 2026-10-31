@@ -1,6 +1,6 @@
 """Forecasts: a term bursting in a leader whose followers haven't picked it up yet.
 
-When a term trends in a subreddit that leads others (an edge), and the subreddit's onset
+When a term trends in a channel that leads others (an edge), and the channel's onset
 for the term's event is known while a follower hasn't crossed yet, a forecast says: the
 follower will cross within `max_lag_days` of the leader's onset, with this probability
 (the edge's, for the event's topic if there's an edge for it, else over all events),

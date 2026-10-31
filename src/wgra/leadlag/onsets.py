@@ -9,10 +9,10 @@ lower than the detector's (no author gate, the hourly author sketches can't be s
 rolling windows cheaply), so an onset usually comes before the scope's first trend. Intents
 need fewer mentions than words (`kind_onset_min_mentions`).
 
-The scopes: every tracked subreddit, the r/all sample ("sample", reddit-wide), every
-configured group, and every group without each of its subreddits. A subreddit can't lead
-its own group, whose counts include its own; the rest of the group following is the
-question that makes sense. Groups pool their subreddits' counts, like short-term detection.
+The scopes: every analyzed channel (the tracked subreddits and r/all, reddit-wide), every
+configured group, and every group without each of its channels. A channel can't lead its
+own group, whose counts include its own; the rest of the group following is the question
+that makes sense. Groups pool their channels' counts, like short-term detection.
 
 Nothing after an hour is used for its onset, so onsets computed with data up to a later
 time agree with those computed earlier: replays compute them once and only look at the
@@ -32,15 +32,12 @@ import numpy as np
 from clickhouse_connect.driver.client import Client
 from numpy.typing import NDArray
 
-from wgra.config import SAMPLE_GROUP, SAMPLE_SCOPE, TRACKED_GROUP, Config, LeadLagConfig
+from wgra.config import Config, LeadLagConfig
 from wgra.detect.scoring import Prior, score_arrays
-from wgra.detect.short_term import GROUP, SUBREDDIT, Scope, load_scopes, subreddit_scope
+from wgra.detect.short_term import CHANNEL, GROUP, Scope, load_background, load_scopes
 from wgra.leadlag.events import HOUR, Event, Onset, event_span
 
 log = logging.getLogger(__name__)
-
-# the scope name of the sample in trends, edges and forecasts: reddit-wide
-SAMPLE = SAMPLE_GROUP
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +53,7 @@ class Crossing:
 def first_crossings(
     mentions: NDArray[np.float64],
     totals: NDArray[np.float64],
-    sample_mentions: float,
+    background_mentions: float,
     prior: Prior,
     first: int,
     settings: LeadLagConfig,
@@ -64,8 +61,8 @@ def first_crossings(
 ) -> list[Crossing | None]:
     """The first hour index, from `first` on, at which each series' window passes the gates.
 
-    `mentions` and `totals` are (series, hours): comments and posts mentioning the term,
-    and all of them, per hour. The window ending at hour i covers hours i − window + 1 to i,
+    `mentions` and `totals` are (series, hours): documents mentioning the term, and all of
+    them, per hour. The window ending at hour i covers hours i − window + 1 to i,
     the reference period the `reference_days` × 24 hours before. `first` must leave room for
     both. A series needs `min_reference_days` of data (hours since its first comment)
     before the window. `min_mentions` is the term's kind's (default onset_min_mentions)."""
@@ -93,7 +90,9 @@ def first_crossings(
 
     y_window, y_reference = sums(cumulative_mentions)
     n_window, n_reference = sums(cumulative_totals)
-    log_odds, z = score_arrays(y_window, n_window, y_reference, n_reference, sample_mentions, prior)
+    log_odds, z = score_arrays(
+        y_window, n_window, y_reference, n_reference, background_mentions, prior
+    )
 
     has_data = totals > 0
     first_data = np.where(has_data.any(axis=1), has_data.argmax(axis=1), hours)
@@ -134,7 +133,7 @@ def _seconds(moment: datetime) -> int:
 # table, so only integers come back
 _KEY = "concat(kind, '|', term)"
 _KEY_INDEX = f"transform({_KEY}, {{keys:Array(String)}}, {{indexes:Array(UInt32)}}, toUInt32(0))"
-_COLUMN = "toUInt16(indexOf({columns:Array(String)}, subreddit) - 1)"
+_COLUMN = "toUInt16(indexOf({columns:Array(String)}, channel) - 1)"
 _HOUR_INDEX = "toUInt32(intDiv(toUInt32(hour) - {grid_start:UInt32}, 3600))"
 _GRID = (
     "hour >= toDateTime({grid_start:UInt32}, 'UTC') AND hour < toDateTime({grid_end:UInt32}, 'UTC')"
@@ -144,7 +143,7 @@ MENTIONS_SQL = f"""
 SELECT {_KEY_INDEX} AS key, {_COLUMN} AS column, {_HOUR_INDEX} AS hour_index,
        toFloat64(sum(docs)) AS docs
 FROM term_hourly
-WHERE subreddit IN {{columns:Array(String)}} AND source IN {{sources:Array(String)}}
+WHERE channel IN {{columns:Array(String)}} AND doc_type IN {{doc_types:Array(String)}}
   AND (kind, term) IN {{terms:Array(Tuple(String, String))}} AND {_GRID}
 GROUP BY key, column, hour_index
 """
@@ -152,25 +151,25 @@ GROUP BY key, column, hour_index
 TOTALS_SQL = f"""
 SELECT {_COLUMN} AS column, {_HOUR_INDEX} AS hour_index, toFloat64(sum(docs)) AS docs
 FROM scope_hourly
-WHERE subreddit IN {{columns:Array(String)}} AND source IN {{sources:Array(String)}} AND {_GRID}
+WHERE channel IN {{columns:Array(String)}} AND doc_type IN {{doc_types:Array(String)}} AND {_GRID}
 GROUP BY column, hour_index
 """
 
-# the prior: each term's mentions in the sample per day, and the sample's comments per day
-SAMPLE_MENTIONS_SQL = f"""
+# the prior: each term's mentions in the background per day, and its documents per day
+BACKGROUND_MENTIONS_SQL = f"""
 SELECT {_KEY_INDEX} AS key, toUInt32(day - {{first_day:Date}}) AS day_index,
        toFloat64(sum(docs)) AS docs
 FROM term_daily
-WHERE subreddit = {{sample:String}} AND source IN {{sources:Array(String)}}
+WHERE channel = {{background:String}} AND doc_type IN {{doc_types:Array(String)}}
   AND (kind, term) IN {{terms:Array(Tuple(String, String))}}
   AND day >= {{first_day:Date}} AND day < {{last_day:Date}}
 GROUP BY key, day_index
 """
 
-SAMPLE_TOTALS_SQL = """
+BACKGROUND_TOTALS_SQL = """
 SELECT toUInt32(toDate(hour) - {first_day:Date}) AS day_index, toFloat64(sum(docs)) AS docs
 FROM scope_hourly
-WHERE subreddit = {sample:String} AND source IN {sources:Array(String)}
+WHERE channel = {background:String} AND doc_type IN {doc_types:Array(String)}
   AND hour >= toDateTime({first_day:Date}, 'UTC') AND hour < toDateTime({last_day:Date}, 'UTC')
 GROUP BY day_index
 """
@@ -191,14 +190,12 @@ class Series:
 
 
 def split_scopes(scopes: Sequence[Scope]) -> tuple[list[str], dict[str, tuple[str, ...]]]:
-    """The tracked subreddits, and the configured groups ("tracked" and "sample" aren't)."""
-    subreddits = [scope.subreddits[0] for scope in scopes if scope.type == SUBREDDIT]
+    """The analyzed channels, and the configured groups (the platforms' groups aren't)."""
+    channels = [scope.name for scope in scopes if scope.type == CHANNEL]
     groups = {
-        scope.name: scope.subreddits
-        for scope in scopes
-        if scope.type == GROUP and scope.name not in (TRACKED_GROUP, SAMPLE_GROUP)
+        scope.name: scope.channels for scope in scopes if scope.type == GROUP and not scope.implicit
     }
-    return subreddits, groups
+    return channels, groups
 
 
 class OnsetFinder:
@@ -207,12 +204,10 @@ class OnsetFinder:
     def __init__(self, client: Client, config: Config, scopes: Sequence[Scope] | None = None):
         self._client = client
         self._config = config
-        self.subreddits, self.groups = split_scopes(
-            load_scopes(client) if scopes is None else scopes
-        )
-        # the columns of the hourly matrices: tracked subreddits, then the sample
-        self.columns = [*self.subreddits, SAMPLE_SCOPE]
-        self._column = {subreddit: index for index, subreddit in enumerate(self.columns)}
+        # the columns of the hourly matrices: the analyzed channels, the background among them
+        self.columns, self.groups = split_scopes(load_scopes(client) if scopes is None else scopes)
+        self._column = {channel: index for index, channel in enumerate(self.columns)}
+        self.background = load_background(client)
 
     @property
     def settings(self) -> LeadLagConfig:
@@ -251,8 +246,8 @@ class OnsetFinder:
             "indexes": list(range(1, len(keys) + 1)),
             "terms": keys,
             "columns": self.columns,
-            "sources": list(self._config.detect.sources),
-            "sample": SAMPLE_SCOPE,
+            "doc_types": list(self._config.doc_types()),
+            "background": self.background,
         }
 
         totals = np.zeros((len(self.columns), 0))
@@ -278,7 +273,7 @@ class OnsetFinder:
             number = index[event.kind, event.term]
             start, stop = np.searchsorted(key_column, [number, number + 1])
             event_rows = rows[start:stop] if rows is not None else None
-            prior, sample_mentions = priors[event.key]
+            prior, background_mentions = priors[event.key]
             event.onsets = self._event_onsets(
                 span.start,
                 min(span.end, until),
@@ -286,7 +281,7 @@ class OnsetFinder:
                 totals,
                 event_rows,
                 prior,
-                sample_mentions,
+                background_mentions,
                 self.settings.onset_min_mentions_for(event.kind),
             )
             event.onsets_until = until
@@ -298,7 +293,7 @@ class OnsetFinder:
         index: dict[tuple[str, str], int],
         common: dict[str, object],
     ) -> dict[tuple[str, str, datetime], tuple[Prior, float]]:
-        """Each event's prior: the term's share of the sample in the `prior_days` before
+        """Each event's prior: the term's share of the background in the `prior_days` before
         its span (phase 2 takes the days up to the window, here nothing after the span's
         start may count)."""
         detect = self._config.detect
@@ -307,17 +302,17 @@ class OnsetFinder:
         last_day = max(days.values())
         parameters = common | {"first_day": first_day, "last_day": last_day}
         length = (last_day - first_day).days + 1
-        sample_totals = np.zeros(length)
+        background_totals = np.zeros(length)
         for day_index, docs in self._client.query(
-            SAMPLE_TOTALS_SQL, parameters=parameters
+            BACKGROUND_TOTALS_SQL, parameters=parameters
         ).result_rows:
-            sample_totals[day_index] = docs
+            background_totals[day_index] = docs
         mentions = np.zeros((len(index) + 1, length))
         for key, day_index, docs in self._client.query(
-            SAMPLE_MENTIONS_SQL, parameters=parameters
+            BACKGROUND_MENTIONS_SQL, parameters=parameters
         ).result_rows:
             mentions[key, day_index] = docs
-        cumulative_totals = np.concatenate([[0.0], np.cumsum(sample_totals)])
+        cumulative_totals = np.concatenate([[0.0], np.cumsum(background_totals)])
         cumulative_mentions = np.concatenate(
             [np.zeros((len(index) + 1, 1)), np.cumsum(mentions, axis=1)], axis=1
         )
@@ -332,8 +327,10 @@ class OnsetFinder:
                 weight=detect.prior_weight,
                 floor=detect.prior_floor,
             )
-            sample = float(cumulative_mentions[number, end] - cumulative_mentions[number, begin])
-            priors[event.key] = (prior, sample)
+            background = float(
+                cumulative_mentions[number, end] - cumulative_mentions[number, begin]
+            )
+            priors[event.key] = (prior, background)
         return priors
 
     def _event_onsets(
@@ -344,7 +341,7 @@ class OnsetFinder:
         totals: NDArray[np.float64],
         rows: NDArray | None,
         prior: Prior,
-        sample_mentions: float,
+        background_mentions: float,
         min_mentions: int,
     ) -> list[Onset]:
         event_start = span_start - self._lead_in()
@@ -370,7 +367,7 @@ class OnsetFinder:
         crossings = first_crossings(
             np.stack([s.mentions for s in series]),
             np.stack([s.totals for s in series]),
-            sample_mentions,
+            background_mentions,
             prior,
             first,
             self.settings,
@@ -403,13 +400,10 @@ class OnsetFinder:
             return bool(values[searched].sum() >= minimum)
 
         series = [
-            Series(subreddit_scope(subreddit), "", mentions[column], totals[column])
-            for column, subreddit in enumerate(self.subreddits)
+            Series(channel, "", mentions[column], totals[column])
+            for column, channel in enumerate(self.columns)
             if mentioned(mentions[column])
         ]
-        sample = self._column[SAMPLE_SCOPE]
-        if mentioned(mentions[sample]):
-            series.append(Series(SAMPLE, "", mentions[sample], totals[sample]))
         for group, members in self.groups.items():
             columns = [self._column[member] for member in members if member in self._column]
             group_mentions = mentions[columns].sum(axis=0)
@@ -423,11 +417,6 @@ class OnsetFinder:
                 rest = group_mentions - mentions[column]
                 if mentioned(rest):
                     series.append(
-                        Series(
-                            group,
-                            subreddit_scope(self.columns[column]),
-                            rest,
-                            group_totals - totals[column],
-                        )
+                        Series(group, self.columns[column], rest, group_totals - totals[column])
                     )
         return series

@@ -1,10 +1,10 @@
 """Short-term burst detection: which terms are mentioned far more than usual right now.
 
-For every scope (each tracked subreddit, each group) and horizon (24h, 6h), ClickHouse
+For every scope (each analyzed channel, each group) and horizon (24h, 6h), ClickHouse
 finds the candidates, terms mentioned often enough and by enough people in the window,
-and counts them in the window, the reference period and the r/all sample. Python scores
-them (see scoring.py), applies the gates, suppresses words that a trending phrase
-explains, and computes the breadth of group trends.
+and counts them in the window, the reference period and the platform's background (the
+r/all sample). Python scores them (see scoring.py), applies the gates, suppresses words
+that a trending phrase explains, and computes the breadth of group trends.
 """
 
 from __future__ import annotations
@@ -19,41 +19,56 @@ from typing import Any
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SAMPLE_SCOPE, TRACKED_GROUP, Config, DetectConfig, Horizon, ranking
+from wgra.config import Config, DetectConfig, Horizon, ranking
 from wgra.detect.scoring import WORD, Candidate, Counts, Prior, breadth, passes, subsumed_by
 from wgra.text.terms import stopwords
 
 log = logging.getLogger(__name__)
 
-SUBREDDIT = "subreddit"
+CHANNEL = "channel"
 GROUP = "group"
-
-
-def subreddit_scope(subreddit: str) -> str:
-    """Subreddit scopes are prefixed, the group "de" and r/de are different scopes."""
-    return f"r/{subreddit}"
 
 
 @dataclass(frozen=True)
 class Scope:
+    """A channel ("r/technology", "r/all") or a group of channels ("tech", "reddit")."""
+
     name: str
     type: str
-    subreddits: tuple[str, ...]
+    channels: tuple[str, ...]
+    # a channel: its platform's background, the prior of the platform's scores (r/all)
+    background: bool = False
+    # a group: the platform's group of every tracked channel ("reddit"), not configured
+    implicit: bool = False
 
 
 def load_scopes(client: Client, exclude: Iterable[str] = ()) -> list[Scope]:
-    """Every tracked subreddit and every group, from the subreddit_groups table."""
+    """Every analyzed channel and every group, from the channels and channel_groups tables."""
     rows = client.query(
-        "SELECT group_name, groupArray(subreddit) FROM subreddit_groups "
-        "GROUP BY group_name ORDER BY group_name"
+        "SELECT channel, background FROM channels WHERE analyzed ORDER BY channel"
     ).result_rows
-    groups = {name: tuple(sorted(subs)) for name, subs in rows}
     scopes = [
-        Scope(subreddit_scope(sub), SUBREDDIT, (sub,)) for sub in groups.get(TRACKED_GROUP, ())
+        Scope(channel, CHANNEL, (channel,), background=bool(background))
+        for channel, background in rows
     ]
-    scopes += [Scope(name, GROUP, subs) for name, subs in groups.items()]
+    rows = client.query(
+        "SELECT group_name, groupArray(channel), group_name IN (SELECT platform FROM channels) "
+        "FROM channel_groups GROUP BY group_name ORDER BY group_name"
+    ).result_rows
+    scopes += [
+        Scope(name, GROUP, tuple(sorted(channels)), implicit=bool(implicit))
+        for name, channels, implicit in rows
+    ]
     excluded = set(exclude)
     return [scope for scope in scopes if scope.name not in excluded]
+
+
+def load_background(client: Client) -> str:
+    """The channel every score's prior comes from: the platform's background, the r/all
+    sample. One platform, one prior: priors per platform come with the second platform
+    (docs/CROSS-PLATFORM.md §8.9)."""
+    rows = client.query("SELECT channel FROM channels WHERE background ORDER BY channel")
+    return rows.result_rows[0][0] if rows.result_rows else ""
 
 
 @dataclass
@@ -136,31 +151,31 @@ WINDOW_HOURS = (
 )
 
 TOTALS_SQL = f"""
-SELECT subreddit,
+SELECT channel,
        sumIf(docs, {IN_WINDOW}) AS total,
        sumIf(docs, {IN_REFERENCE}) AS reference_total,
        -- 24 hour periods before the window with data (not dates, the window can start
        -- at any hour)
        uniqExactIf(intDiv({_AGE} - 1, 24), {IN_REFERENCE}) AS reference_days
 FROM scope_hourly
-WHERE source IN {{sources:Array(String)}} AND {HOURS}
-GROUP BY subreddit
+WHERE doc_type IN {{doc_types:Array(String)}} AND {HOURS}
+GROUP BY channel
 """
 
-SAMPLE_TOTAL_SQL = """
+BACKGROUND_TOTAL_SQL = """
 SELECT sum(docs)
 FROM scope_hourly
-WHERE subreddit = {sample:String} AND source IN {sources:Array(String)}
+WHERE channel = {background:String} AND doc_type IN {doc_types:Array(String)}
   AND hour >= toDateTime({first_day:Date}, 'UTC')
   AND hour < toDateTime({last_day:Date} + 1, 'UTC')
 """
 
 # The candidates are found in the window alone, and only for them the reference period
-# (28 days) and the sample (90 days) are read. Mentions are counted first: a window has
+# (28 days) and the background (90 days) are read. Mentions are counted first: a window has
 # millions of distinct terms, merging the author sketches of all of them would take a lot
 # of memory, and only the few thousand mentioned often enough need them.
 WINDOW_TERMS = f"""
-    subreddit IN {{subreddits:Array(String)}} AND source IN {{sources:Array(String)}}
+    channel IN {{channels:Array(String)}} AND doc_type IN {{doc_types:Array(String)}}
     AND kind IN {{kinds:Array(String)}} AND {WINDOW_HOURS}
 """
 # the gates of the term's kind: intents need fewer mentions than words
@@ -182,37 +197,37 @@ HAVING uniqCombinedMerge(12)(authors) >= {_GATE.format("min_authors")}
 
 COUNTS_SQL = f"""
 WITH candidates AS ({CANDIDATES})
-SELECT c.kind, c.term, c.mentions, c.reference_mentions, c.authors, s.sample_mentions
+SELECT c.kind, c.term, c.mentions, c.reference_mentions, c.authors, s.background_mentions
 FROM (
     SELECT kind, term,
            sumIf(docs, {IN_WINDOW}) AS mentions,
            sumIf(docs, {IN_REFERENCE}) AS reference_mentions,
            uniqCombinedMergeIf(12)(authors, {IN_WINDOW}) AS authors
     FROM term_hourly
-    WHERE subreddit IN {{subreddits:Array(String)}} AND source IN {{sources:Array(String)}}
+    WHERE channel IN {{channels:Array(String)}} AND doc_type IN {{doc_types:Array(String)}}
       AND {HOURS} AND (kind, term) IN (SELECT kind, term FROM candidates)
     GROUP BY kind, term
 ) AS c
 LEFT JOIN (
-    SELECT kind, term, sum(docs) AS sample_mentions
+    SELECT kind, term, sum(docs) AS background_mentions
     FROM term_daily
-    WHERE subreddit = {{sample:String}} AND source IN {{sources:Array(String)}}
+    WHERE channel = {{background:String}} AND doc_type IN {{doc_types:Array(String)}}
       AND day BETWEEN {{first_day:Date}} AND {{last_day:Date}}
       AND (kind, term) IN (SELECT kind, term FROM candidates)
     GROUP BY kind, term
 ) AS s USING (kind, term)
 """
 
-# For the breadth of a group's trends: their counts in each member subreddit. Only for
+# For the breadth of a group's trends: their counts in each member channel. Only for
 # the trends that are stored, a few dozen terms, so only a sliver of the table is read.
 MEMBERS_SQL = f"""
-SELECT subreddit, kind, term,
+SELECT channel, kind, term,
        sumIf(docs, {IN_WINDOW}) AS mentions,
        sumIf(docs, {IN_REFERENCE}) AS reference_mentions
 FROM term_hourly
-WHERE subreddit IN {{subreddits:Array(String)}} AND source IN {{sources:Array(String)}}
+WHERE channel IN {{channels:Array(String)}} AND doc_type IN {{doc_types:Array(String)}}
   AND {HOURS} AND term IN {{terms:Array(String)}}
-GROUP BY subreddit, kind, term
+GROUP BY channel, kind, term
 """
 
 
@@ -251,15 +266,15 @@ class Detector:
             scopes = load_scopes(self._client, self.settings.exclude_scopes)
         first_day, last_day = prior_days(end, self.settings.prior_days)
         common = {
-            "sources": list(self.settings.sources),
+            "doc_types": list(self._config.doc_types()),
             "kinds": list(self.settings.kinds),
-            "sample": SAMPLE_SCOPE,
+            "background": load_background(self._client),
             "first_day": first_day,
             "last_day": last_day,
         }
-        sample_total = self._client.query(SAMPLE_TOTAL_SQL, parameters=common).result_rows[0][0]
+        background_total = self._client.query(BACKGROUND_TOTAL_SQL, parameters=common)
         prior = Prior(
-            total=int(sample_total or 0),
+            total=int(background_total.result_rows[0][0] or 0),
             weight=self.settings.prior_weight,
             floor=self.settings.prior_floor,
         )
@@ -269,8 +284,8 @@ class Detector:
             window = Window(horizon, end)
             parameters = common | window.parameters()
             totals = {
-                sub: ScopeTotals(total, reference_total, reference_days)
-                for sub, total, reference_total, reference_days in self._client.query(
+                channel: ScopeTotals(total, reference_total, reference_days)
+                for channel, total, reference_total, reference_days in self._client.query(
                     TOTALS_SQL, parameters=parameters
                 ).result_rows
             }
@@ -294,26 +309,26 @@ class Detector:
         parameters: dict[str, Any],
         totals: dict[str, ScopeTotals],
     ) -> dict[tuple[str, str], list[Counts]]:
-        """Each trend's counts in each member subreddit of the group."""
+        """Each trend's counts in each member channel of the group."""
         if not trends:
             return {}
-        sample = {(c.kind, c.term): c.counts.sample_mentions for c in trends}
+        background = {(c.kind, c.term): c.counts.background_mentions for c in trends}
         rows = self._client.query(
             MEMBERS_SQL,
             parameters=parameters
-            | {"subreddits": list(group.subreddits), "terms": sorted({c.term for c in trends})},
+            | {"channels": list(group.channels), "terms": sorted({c.term for c in trends})},
         ).result_rows
         counts: dict[tuple[str, str], list[Counts]] = defaultdict(list)
-        for subreddit, kind, term, mentions, reference_mentions in rows:
-            member = totals.get(subreddit)
-            if member and (kind, term) in sample:
+        for channel, kind, term, mentions, reference_mentions in rows:
+            member = totals.get(channel)
+            if member and (kind, term) in background:
                 counts[kind, term].append(
                     Counts(
                         mentions,
                         member.total,
                         reference_mentions,
                         member.reference_total,
-                        sample[kind, term],
+                        background[kind, term],
                     )
                 )
         return counts
@@ -322,7 +337,7 @@ class Detector:
         """Single words that are never a trend: stopwords in every language of the scope.
 
         "war" is a stopword in German ("was"), but not in r/worldnews."""
-        languages = {self._config.language(f"r/{sub}") for sub in scope.subreddits}
+        languages = {self._config.language(channel) for channel in scope.channels}
         return frozenset.intersection(*(stopwords(language) for language in languages))
 
     def score_scope(
@@ -334,7 +349,7 @@ class Detector:
         prior: Prior,
         detected_at: datetime,
     ) -> list[Trend]:
-        members = [totals[sub] for sub in scope.subreddits if sub in totals]
+        members = [totals[channel] for channel in scope.channels if channel in totals]
         total = sum(member.total for member in members)
         reference_total = sum(member.reference_total for member in members)
         reference_days = max((member.reference_days for member in members), default=0)
@@ -348,7 +363,7 @@ class Detector:
             COUNTS_SQL,
             parameters=parameters
             | {
-                "subreddits": list(scope.subreddits),
+                "channels": list(scope.channels),
                 "min_mentions": thresholds.min_mentions,
                 "min_authors": thresholds.min_authors,
                 "gated_kinds": list(kinds),
@@ -362,10 +377,10 @@ class Detector:
             Candidate(
                 kind,
                 term,
-                Counts(mentions, total, reference_mentions, reference_total, sample),
+                Counts(mentions, total, reference_mentions, reference_total, background),
                 authors,
             )
-            for kind, term, mentions, reference_mentions, authors, sample in rows
+            for kind, term, mentions, reference_mentions, authors, background in rows
             if not (kind == WORD and term in stop)
         ]
         scores = {(c.kind, c.term): c.counts.score(prior) for c in candidates}

@@ -3,7 +3,7 @@
 Ten weeks of hourly counts in five tracked subreddits and the r/all sample:
 
 * "lead" terms: r/a picks each up first, r/b 3 days later (± 4 hours), and two of every
-  three reach the sample (reddit-wide) 5 days after r/a
+  three reach r/all (reddit-wide) 5 days after r/a
 * "random" terms: r/c picks each up at a random time; some also show up in r/b, at an
   independent random time up to 10 days before or after
 * "background" terms: bursts in r/d or r/e only, unrelated to anything
@@ -21,20 +21,21 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
-from wgra.config import SAMPLE_SCOPE, Config
+from wgra.config import Config
 from wgra.detect.short_term import Detector, write_trends
 from wgra.ingest.pipeline import TERM_COLUMNS
+from wgra.ingest.run import write_channels
 from wgra.store import migrate
 
 DAYS = 70
 # recent: `trends` deletes rows older than 90 days
 END = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=2)
 START = END - timedelta(days=DAYS)
-GROUPS = {"first": ["a", "c"], "second": ["b", "d", "e"]}
+GROUPS = {"first": ["r/a", "r/c"], "second": ["r/b", "r/d", "r/e"]}
 # comments and posts per hour
-PER_HOUR = {"a": 100, "b": 150, "c": 100, "d": 80, "e": 80, SAMPLE_SCOPE: 400}
+PER_HOUR = {"r/a": 100, "r/b": 150, "r/c": 100, "r/d": 80, "r/e": 80, "r/all": 400}
 # a burst's mentions per hour
-BURST_RATE = {"a": 2.0, "b": 3.0, "c": 2.0, "d": 2.0, "e": 2.0, SAMPLE_SCOPE: 4.0}
+BURST_RATE = {"r/a": 2.0, "r/b": 3.0, "r/c": 2.0, "r/d": 2.0, "r/e": 2.0, "r/all": 4.0}
 BURST_HOURS = 48
 LEAD = timedelta(days=3)
 SAMPLE_LEAD = timedelta(days=5)
@@ -47,7 +48,7 @@ BACKGROUND_TERMS = 20
 
 @dataclass(frozen=True)
 class Burst:
-    subreddit: str
+    channel: str
     term: str
     start: datetime
 
@@ -66,23 +67,23 @@ class LeadLagHistory:
 
         for index, term in enumerate(self.leading):
             first = _hour(6 + index * 2.6 + rng.uniform(0, 1))
-            self.bursts.append(Burst("a", term, first))
+            self.bursts.append(Burst("r/a", term, first))
             jitter = timedelta(hours=int(rng.integers(-4, 5)))
-            self.bursts.append(Burst("b", term, first + LEAD + jitter))
+            self.bursts.append(Burst("r/b", term, first + LEAD + jitter))
             if index % 3:
-                self.bursts.append(Burst(SAMPLE_SCOPE, term, first + SAMPLE_LEAD))
+                self.bursts.append(Burst("r/all", term, first + SAMPLE_LEAD))
         for index, term in enumerate(self.random):
             first = _hour(rng.uniform(6, 56))
-            self.bursts.append(Burst("c", term, first))
+            self.bursts.append(Burst("r/c", term, first))
             if index < RANDOM_IN_B:
                 other = first + timedelta(days=float(rng.uniform(-10, 10)))
                 other = min(max(other, _hour(6)), _hour(58))
                 self.bursts.append(
-                    Burst("b", term, other.replace(minute=0, second=0, microsecond=0))
+                    Burst("r/b", term, other.replace(minute=0, second=0, microsecond=0))
                 )
         for index, term in enumerate(self.background):
-            subreddit = "d" if index % 2 else "e"
-            self.bursts.append(Burst(subreddit, term, _hour(rng.uniform(6, 58))))
+            channel = "r/d" if index % 2 else "r/e"
+            self.bursts.append(Burst(channel, term, _hour(rng.uniform(6, 58))))
 
         self._rng = rng
 
@@ -92,9 +93,9 @@ class LeadLagHistory:
         for burst in self.bursts:
             for offset in range(BURST_HOURS):
                 hour = burst.start + timedelta(hours=offset)
-                for _ in range(int(self._rng.poisson(BURST_RATE[burst.subreddit]))):
+                for _ in range(int(self._rng.poisson(BURST_RATE[burst.channel]))):
                     author += 1
-                    rows.append((hour, burst.subreddit, "comment", "word", burst.term, author, 1))
+                    rows.append((hour, burst.channel, "comment", "word", burst.term, author, 1))
         return rows
 
     def insert(self, client) -> None:
@@ -102,16 +103,16 @@ class LeadLagHistory:
         client.insert(
             "scope_hourly",
             [
-                (hour, sub, "comment", docs, docs * 20)
-                for sub, docs in PER_HOUR.items()
+                (hour, channel, "comment", docs, docs * 20)
+                for channel, docs in PER_HOUR.items()
                 for hour in hours
             ],
-            column_names=["hour", "subreddit", "source", "docs", "tokens"],
+            column_names=["hour", "channel", "doc_type", "docs", "tokens"],
         )
         client.insert("term_events", self.term_rows(), column_names=list(TERM_COLUMNS))
 
-    def first_burst(self, subreddit: str, term: str) -> datetime:
-        return min(b.start for b in self.bursts if (b.subreddit, b.term) == (subreddit, term))
+    def first_burst(self, channel: str, term: str) -> datetime:
+        return min(b.start for b in self.bursts if (b.channel, b.term) == (channel, term))
 
 
 def detect_daily(client, config: Config, start: datetime, end: datetime) -> int:
@@ -131,9 +132,7 @@ def detect_daily(client, config: Config, start: datetime, end: datetime) -> int:
 
 def build(client, config: Config, history: LeadLagHistory | None = None) -> LeadLagHistory:
     migrate(client)
-    client.insert(
-        "subreddit_groups", config.group_memberships(), column_names=["group_name", "subreddit"]
-    )
+    write_channels(client, config)
     history = history or LeadLagHistory()
     history.insert(client)
     return history

@@ -11,12 +11,13 @@ from datetime import UTC, datetime
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SEARCH_SCOPE, Config, Env
+from wgra.config import Config, Env
 from wgra.ingest.feeds import Feed, FeedScheduler, build_feeds
 from wgra.ingest.pipeline import Processor, RecentKeys
 from wgra.ingest.search import due_trees, stored_ids
 from wgra.ingest.writer import Writer
 from wgra.reddit import RedditClient, RedditError, RedditItem
+from wgra.sources.reddit.channels import PLATFORM, SEARCH, channel_of
 from wgra.store import connect, migrate
 
 log = logging.getLogger(__name__)
@@ -32,29 +33,49 @@ REPORT_INTERVAL = 60.0
 TREE_CHECK_INTERVAL = 600.0
 
 
-def write_groups(client: Client, config: Config) -> None:
-    client.command("TRUNCATE TABLE subreddit_groups")
+CHANNEL_COLUMNS = ("channel", "platform", "language", "analyzed", "background")
+
+
+def write_channels(client: Client, config: Config) -> None:
+    """The channels and groups of config.yaml, for the detectors, dashboards and queries."""
+    client.command("TRUNCATE TABLE channels")
     client.insert(
-        "subreddit_groups", config.group_memberships(), column_names=["group_name", "subreddit"]
+        "channels",
+        [
+            (channel.id, channel.platform, channel.language, channel.analyzed, channel.background)
+            for channel in config.channels()
+        ],
+        column_names=list(CHANNEL_COLUMNS),
+    )
+    client.command("TRUNCATE TABLE channel_groups")
+    client.insert(
+        "channel_groups", config.group_memberships(), column_names=["group_name", "channel"]
     )
 
 
 def seed_state(client: Client, feeds: list[Feed], seen: RecentKeys) -> None:
     """Restores what a previous run already ingested, so a restart doesn't count it twice."""
     newest = client.query(
-        "SELECT source, subreddit, argMax(id, created_at) FROM items "
-        "WHERE created_at > now() - INTERVAL 40 HOUR GROUP BY source, subreddit"
+        "SELECT doc_type, channel, argMax(id, created_at) FROM items "
+        "WHERE platform = {platform:String} AND created_at > now() - INTERVAL 40 HOUR "
+        "GROUP BY doc_type, channel",
+        parameters={"platform": PLATFORM},
     ).result_rows
-    newest_id = {(source, sub): int(fullname[3:], 36) for source, sub, fullname in newest}
+    newest_id = {
+        (doc_type, channel): int(fullname[3:], 36) for doc_type, channel, fullname in newest
+    }
     for feed in feeds:
-        source = "comment" if feed.kind == "comments" else "post"
-        ids = [newest_id[source, sub] for sub in feed.subreddits if (source, sub) in newest_id]
+        doc_type = "comment" if feed.kind == "comments" else "post"
+        channels = [(doc_type, channel_of(subreddit)) for subreddit in feed.subreddits]
+        ids = [newest_id[key] for key in channels if key in newest_id]
         if ids and feed.complete:
             feed.newest_id = max(ids)
 
     recent = client.query(
-        "SELECT id FROM items WHERE source = 'post' AND created_at > now() - INTERVAL 40 HOUR "
-        "OR source = 'comment' AND ingested_at > now() - INTERVAL 30 MINUTE"
+        "SELECT id FROM items WHERE platform = {platform:String} AND ("
+        "doc_type = 'post' AND created_at > now() - INTERVAL 40 HOUR "
+        "OR doc_type = 'comment' AND ingested_at > now() - INTERVAL 30 MINUTE)",
+        parameters={"platform": PLATFORM},
     ).result_rows
     for (fullname,) in recent:
         seen.add(fullname)
@@ -150,7 +171,7 @@ class Ingester:
             # and those in tracked subreddits are in their feeds already
             elif item.subreddit in self._tracked:
                 continue
-            new_items += self.ingest(item, SEARCH_SCOPE if feed.search else None)
+            new_items += self.ingest(item, SEARCH if feed.search else None)
 
         outcome = self.scheduler.record_success(feed, items, started)
         if outcome.gap:
@@ -161,14 +182,14 @@ class Ingester:
             )
         )
 
-    def ingest(self, item: RedditItem, scope: str | None = None) -> bool:
+    def ingest(self, item: RedditItem, channel: str | None = None) -> bool:
         """Stores an item unless it's too old, seen before or skipped. Whether it was new."""
         if item.created_utc < time.time() - MAX_ITEM_AGE or not self._seen.add(item.fullname):
             return False
         if reason := self._processor.skip_reason(item):
             self._skipped[reason] += 1
         else:
-            self._writer.add(self._processor.process(item, scope))
+            self._writer.add(self._processor.process(item, channel))
         return True
 
     async def _trees_forever(self) -> None:
@@ -197,7 +218,7 @@ class Ingester:
                 stored_ids, self._client, [comment.fullname for comment in comments]
             )
             new_comments += sum(
-                self.ingest(comment, SEARCH_SCOPE)
+                self.ingest(comment, SEARCH)
                 for comment in comments
                 if comment.fullname not in stored
             )
@@ -216,6 +237,7 @@ class Ingester:
     ) -> tuple[object, ...]:
         return (
             polled_at,
+            PLATFORM,
             feed.name,
             feed.kind,
             feed.background,
@@ -268,7 +290,7 @@ async def run_ingest(config: Config, env: Env, stop: asyncio.Event) -> None:
     client = connect(env)
     if applied := migrate(client):
         log.info("applied migrations: %s", ", ".join(applied))
-    write_groups(client, config)
+    write_channels(client, config)
 
     async with RedditClient(
         env.reddit_client_id,

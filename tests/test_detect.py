@@ -13,14 +13,15 @@ import httpx
 import pytest
 from helpers import make_config
 
-from wgra.config import SAMPLE_SCOPE, Config, Env, Horizon, NotifyConfig
+from wgra.config import Config, Env, Horizon, NotifyConfig
 from wgra.detect.alerts import SENT
 from wgra.detect.replay import replay, report
 from wgra.detect.run import Analyzer
-from wgra.detect.short_term import Detector, Trend, write_trends
+from wgra.detect.short_term import Detector, Trend, load_background, load_scopes, write_trends
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS
+from wgra.ingest.run import write_channels
 from wgra.notify.ntfy import Ntfy
-from wgra.query import latest_trends
+from wgra.query import latest_trends, resolve_scope
 from wgra.store import migrate
 
 # the window of the 24h horizon is Sep 29 12:00 to Sep 30 12:00
@@ -32,7 +33,7 @@ VISION_PRO = [("phrase", "vision pro"), ("word", "vision"), ("word", "pro")]
 
 
 class History:
-    """Comments of synthetic subreddits, as the ingester would write them."""
+    """Comments in synthetic channels, as the ingester would write them."""
 
     def __init__(self) -> None:
         self.items: list[tuple[object, ...]] = []
@@ -41,7 +42,7 @@ class History:
 
     def comments(
         self,
-        subreddit: str,
+        channel: str,
         hour: datetime,
         count: int,
         terms: list[tuple[str, str]] | None = None,
@@ -55,18 +56,20 @@ class History:
             self.items.append(
                 (
                     f"t1_{self._next_id}",
+                    "reddit",
+                    channel,
                     "comment",
-                    subreddit,
                     hour + timedelta(minutes=index % 60),
                     author_hash,
                     "text",
-                    f"/r/{subreddit}/comments/x/{self._next_id}",
+                    f"https://www.reddit.com/{channel}/comments/x/{self._next_id}",
+                    "en",
                     10,
                     [],
                 )
             )
             for kind, term in terms or []:
-                self.terms.append((hour, subreddit, "comment", kind, term, author_hash, 1))
+                self.terms.append((hour, channel, "comment", kind, term, author_hash, 1))
 
     def insert(self, client) -> None:
         client.insert("items", self.items, column_names=list(ITEM_COLUMNS))
@@ -83,31 +86,31 @@ def build_history() -> History:
     history = History()
     for hour in hours(HISTORY_START, END):
         # everyday chatter
-        history.comments("technology", hour, 20)
-        history.comments("programming", hour, 10)
-        history.comments(SAMPLE_SCOPE, hour, 40)
+        history.comments("r/technology", hour, 20)
+        history.comments("r/programming", hour, 10)
+        history.comments("r/all", hour, 40)
         # mentioned as always: never a trend
-        history.comments("technology", hour, 2, [("word", "rust")])
-        history.comments(SAMPLE_SCOPE, hour, 1, [("word", "rust")])
+        history.comments("r/technology", hour, 2, [("word", "rust")])
+        history.comments("r/all", hour, 1, [("word", "rust")])
         # every morning: a trend only if mornings are compared with whole days
         if 6 <= hour.hour < 12:
-            history.comments("technology", hour, 3, [("word", "breakfast")])
+            history.comments("r/technology", hour, 3, [("word", "breakfast")])
 
     # once a day before the window
     for day in range(28):
         daily = HISTORY_START + timedelta(days=day)
-        history.comments("technology", daily, 1, [("word", "pro")])
+        history.comments("r/technology", daily, 1, [("word", "pro")])
         if day % 2:
-            history.comments("technology", daily, 1, [("word", "vision")])
+            history.comments("r/technology", daily, 1, [("word", "vision")])
 
     burst = END - timedelta(hours=3)
     # a new product: the phrase trends, "vision" and "pro" only because of it
-    history.comments("technology", burst, 30, VISION_PRO)
-    # a new name, in both subreddits of the group
-    history.comments("technology", burst, 15, [("word", "newthing")])
-    history.comments("programming", burst, 12, [("word", "newthing")])
+    history.comments("r/technology", burst, 30, VISION_PRO)
+    # a new name, in both channels of the group
+    history.comments("r/technology", burst, 15, [("word", "newthing")])
+    history.comments("r/programming", burst, 12, [("word", "newthing")])
     # one person repeating themselves
-    history.comments("technology", burst, 40, [("word", "spammy")], author=7)
+    history.comments("r/technology", burst, 40, [("word", "spammy")], author=7)
     return history
 
 
@@ -115,9 +118,7 @@ def build_history() -> History:
 def history_client(client):
     migrate(client)
     config = make_config(groups={"tech": ["r/technology", "r/programming"]})
-    client.insert(
-        "subreddit_groups", config.group_memberships(), column_names=["group_name", "subreddit"]
-    )
+    write_channels(client, config)
     build_history().insert(client)
     return client
 
@@ -148,17 +149,38 @@ def test_detects_bursts_new_terms_and_subsumption(history_client):
     assert trends["24h", "r/technology", "pro"].subsumed_by == "vision pro"
     assert trends["24h", "r/technology", "vision"].subsumed_by == "vision pro"
 
-    # the group counts both subreddits, and the term trends in both of them
+    # the group counts both channels, and the term trends in both of them
     newthing = trends["24h", "tech", "newthing"]
     assert newthing.mentions == 27
     assert (newthing.breadth, newthing.members) == (2, 2)
     assert newthing.scope_type == "group"
     assert ("24h", "r/programming", "newthing") in trends
-    assert ("24h", "tracked", "newthing") in trends
+    assert ("24h", "reddit", "newthing") in trends
 
     terms = {term for _, _, term in trends}
     assert "rust" not in terms  # stable
     assert "spammy" not in terms  # one author
+
+
+def test_scopes_are_looked_up_not_told_apart_by_their_names(history_client):
+    scopes = {scope.name: scope for scope in load_scopes(history_client)}
+    # r/_search isn't analyzed
+    assert set(scopes) == {"r/all", "r/programming", "r/technology", "reddit", "tech"}
+    assert (scopes["r/all"].type, scopes["r/all"].background) == ("channel", True)
+    assert scopes["tech"].channels == ("r/programming", "r/technology")
+    assert scopes["reddit"].implicit and not scopes["tech"].implicit
+    assert load_background(history_client) == "r/all"
+    # a channel id doesn't need "r/": what the channels table says counts
+    history_client.insert(
+        "channels",
+        [("hn", "hn", "en", True, False)],
+        column_names=["channel", "platform", "language", "analyzed", "background"],
+    )
+    hn = next(scope for scope in load_scopes(history_client) if scope.name == "hn")
+    assert (hn.type, hn.channels) == ("channel", ("hn",))
+    assert resolve_scope(history_client, "HN") == "hn"
+    assert resolve_scope(history_client, "r/Technology") == "r/technology"
+    assert resolve_scope(history_client, "tech") == "tech"
 
 
 def test_the_6h_window_compares_the_same_hours_of_the_day(history_client):
@@ -204,7 +226,7 @@ def test_analyzer_alerts_once_and_sends_one_digest_per_day(history_client):
 
     first = analyzer.run_once(now)
     alerts = [trend for trend in first.trends if trend.alert == SENT]
-    # the strongest story alerts once, though it trends in r/technology, tech and tracked
+    # the strongest story alerts once, though it trends in r/technology, tech and reddit
     assert [trend.term for trend in alerts] == ["vision pro"]
     assert sent[0]["title"].startswith("vision pro · ")
     assert sent[0]["click"].startswith("https://grafana.test/d/wgra-terms?var-terms=vision+pro")

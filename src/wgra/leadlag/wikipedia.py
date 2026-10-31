@@ -1,4 +1,4 @@
-"""Optional (wikipedia.enabled): does interest on Wikipedia follow reddit's onsets?
+"""Optional (wikipedia.enabled): does interest on Wikipedia follow the events' onsets?
 
 For events whose term names a Wikipedia article, daily pageviews of the article are
 compared with the event's onsets. Free, no key:
@@ -12,9 +12,9 @@ compared with the event's onsets. Free, no key:
 
 Interest on Wikipedia starts on the first day of the event's span with at least
 `min_views` views and `min_ratio` times the median of the 28 days before. The lead is that
-day minus the day of the event's first reddit onset (any scope): positive when reddit was
-first. A sign test over the events with an onset on both says whether reddit leads more
-often than chance.
+day minus the day of the event's first onset (in any scope): positive when the onset was
+first. A sign test over the events with an onset on both says whether the onsets lead
+more often than chance.
 """
 
 from __future__ import annotations
@@ -178,16 +178,16 @@ class Lead:
     term: str
     start: datetime
     article: str
-    reddit_onset: datetime
-    reddit_scope: str
+    first_onset: datetime
+    first_scope: str
     wiki_onset: date | None
 
     @property
     def lead_days(self) -> int | None:
-        """Days from reddit's first onset to Wikipedia's, positive when reddit was first."""
+        """Days from the first onset to Wikipedia's, positive when the onset was first."""
         if self.wiki_onset is None:
             return None
-        return (self.wiki_onset - self.reddit_onset.date()).days
+        return (self.wiki_onset - self.first_onset.date()).days
 
 
 LEAD_COLUMNS = (
@@ -196,8 +196,8 @@ LEAD_COLUMNS = (
     "start",
     "project",
     "article",
-    "reddit_onset",
-    "reddit_scope",
+    "first_onset",
+    "first_scope",
     "wiki_onset",
     "lead_days",
 )
@@ -247,8 +247,8 @@ class WikipediaCheck:
                         lead.start,
                         self.settings.project,
                         lead.article,
-                        lead.reddit_onset,
-                        lead.reddit_scope,
+                        lead.first_onset,
+                        lead.first_scope,
                         lead.wiki_onset,
                         lead.lead_days,
                     )
@@ -313,7 +313,7 @@ class WikipediaCheck:
         span = event_span(event.start, self._config.lead_lag)
         first, last = span.start.date(), (span.end - timedelta(seconds=1)).date()
         views = self._views(article, first - timedelta(days=BASELINE_DAYS), last)
-        reddit = min(
+        first_onset = min(
             (onset for onset in event.onsets if not onset.without), key=lambda onset: onset.at
         )
         return Lead(
@@ -321,8 +321,8 @@ class WikipediaCheck:
             term=event.term,
             start=event.start,
             article=article,
-            reddit_onset=reddit.at,
-            reddit_scope=reddit.scope,
+            first_onset=first_onset.at,
+            first_scope=first_onset.scope,
             wiki_onset=interest_onset(views, first, last, self.settings),
         )
 
@@ -331,22 +331,22 @@ class WikipediaCheck:
 class LeadSummary:
     events: int
     with_onset: int
-    reddit_first: int
+    onset_first: int
     same_day: int
     wiki_first: int
     median_lead: float | None
-    # two-sided sign test of reddit first vs Wikipedia first (same day left out)
+    # two-sided sign test of the onset first vs Wikipedia first (same day left out)
     p_value: float | None
 
 
 def summarize(leads: Sequence[Lead]) -> LeadSummary:
     days = sorted(lead.lead_days for lead in leads if lead.lead_days is not None)
-    reddit_first = sum(1 for value in days if value > 0)
+    onset_first = sum(1 for value in days if value > 0)
     wiki_first = sum(1 for value in days if value < 0)
-    decided = reddit_first + wiki_first
+    decided = onset_first + wiki_first
     p_value = None
     if decided:
-        p_value = min(1.0, 2 * binomial_tail(max(reddit_first, wiki_first), decided, 0.5))
+        p_value = min(1.0, 2 * binomial_tail(max(onset_first, wiki_first), decided, 0.5))
     median = None
     if days:
         middle = len(days) // 2
@@ -354,7 +354,7 @@ def summarize(leads: Sequence[Lead]) -> LeadSummary:
     return LeadSummary(
         events=len(leads),
         with_onset=len(days),
-        reddit_first=reddit_first,
+        onset_first=onset_first,
         same_day=sum(1 for value in days if value == 0),
         wiki_first=wiki_first,
         median_lead=median,
@@ -364,7 +364,7 @@ def summarize(leads: Sequence[Lead]) -> LeadSummary:
 
 def load_leads(client: Client, project: str, since: datetime) -> list[Lead]:
     rows = client.query(
-        "SELECT kind, term, start, article, reddit_onset, reddit_scope, wiki_onset "
+        "SELECT kind, term, start, article, first_onset, first_scope, wiki_onset "
         "FROM wiki_leads FINAL WHERE project = {project:String} "
         "AND start >= toDateTime({since:UInt32}, 'UTC')",
         parameters={"project": project, "since": int(since.timestamp())},
@@ -383,9 +383,9 @@ def summary_text(summary: LeadSummary) -> list[str]:
     if summary.with_onset:
         assert summary.median_lead is not None
         lines.append(
-            f"  reddit first {summary.reddit_first}, same day {summary.same_day}, Wikipedia "
+            f"  onset first {summary.onset_first}, same day {summary.same_day}, Wikipedia "
             f"first {summary.wiki_first}; median lead {summary.median_lead:+.1f} days"
         )
     if summary.p_value is not None:
-        lines.append(f"  sign test (reddit first vs Wikipedia first): p = {summary.p_value:.3f}")
+        lines.append(f"  sign test (onset first vs Wikipedia first): p = {summary.p_value:.3f}")
     return lines

@@ -447,9 +447,7 @@ def cmd_wikipedia(args: argparse.Namespace) -> None:
         finally:
             wikimedia.close()
     leads = load_leads(client, config.wikipedia.project, now - timedelta(days=args.days))
-    print(
-        f"Reddit onsets vs Wikipedia interest ({config.wikipedia.project}), last {args.days} days"
-    )
+    print(f"Onsets vs Wikipedia interest ({config.wikipedia.project}), last {args.days} days")
     for line in summary_text(summarize(leads)):
         print(line)
 
@@ -574,11 +572,21 @@ def cmd_status(_: argparse.Namespace) -> None:
     status = ingestion_status(connect(Env.from_environ(require_reddit=False)))
     print("Feeds, last hour")
     _print_table(
-        ["feed", "polls", "errors", "new items", "gaps", "every s", "items/min", "last poll"],
+        [
+            "platform",
+            "feed",
+            "polls",
+            "errors",
+            "new items",
+            "gaps",
+            "every s",
+            "items/min",
+            "last poll",
+        ],
         status["feeds"],
     )
-    print("\nTracked subreddits, last 24h")
-    _print_table(["subreddit", "comments", "posts"], status["subreddits"])
+    print("\nChannels, last 24h")
+    _print_table(["channel", "platform", "documents", "by type"], status["channels"])
     print("\nStorage")
     _print_table(["table", "rows", "size"], status["tables"])
 
@@ -593,7 +601,6 @@ INTENT_TITLES = {
 
 
 def cmd_intents(args: argparse.Namespace) -> None:
-    config = load_config(args.config)
     client = connect(Env.from_environ(require_reddit=False))
     for kind in args.kind or INTENT_KINDS:
         report = intent_report(client, args.scope, kind, args.days, args.limit)
@@ -604,16 +611,15 @@ def cmd_intents(args: argparse.Namespace) -> None:
             )
             print()
             for example in examples:
-                language = config.language(f"r/{example.permalink.split('/')[2]}")
-                sentence = source_sentence(clean(example.text), example.term, language)
+                sentence = source_sentence(clean(example.text), example.term, example.lang)
                 print(f"  {intent_entity(example.term)}: {sentence or example.text[:200]}")
-                print(f"    https://www.reddit.com{example.permalink}")
+                print(f"    {example.url}")
         print()
 
 
 def cmd_backfill_intents(args: argparse.Namespace) -> None:
     from wgra.ingest.backfill import backfill_intents
-    from wgra.ingest.run import write_groups
+    from wgra.ingest.run import write_channels
 
     config = load_config(args.config)
     env = Env.from_environ(require_reddit=False)
@@ -625,7 +631,7 @@ def cmd_backfill_intents(args: argparse.Namespace) -> None:
         if source_database == env.clickhouse_database:
             raise SystemExit("--copy-items copies into another database (CLICKHOUSE_DB)")
         if not args.dry_run:
-            write_groups(target, config)
+            write_channels(target, config)
     result = backfill_intents(
         connect(env, database=source_database),
         target,
@@ -772,7 +778,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     lead_lag = commands.add_parser(
         "lead-lag",
-        help="learn which subreddits lead others (wgra analyze also runs it once a day)",
+        help="learn which channels lead others (wgra analyze also runs it once a day)",
         description="Turns new trends into events, computes every scope's onset for them "
         "and learns the leader -> follower edges. Without --once, runs it every day after "
         "lead_lag.run_at.",
@@ -785,8 +791,8 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     edges = commands.add_parser("edges", help="the latest leader -> follower edges")
     edges.add_argument("--topic", help="all, or a group (default: every topic)")
-    edges.add_argument("--leader", help="r/subreddit")
-    edges.add_argument("--follower", help="r/subreddit, a group or sample")
+    edges.add_argument("--leader", help="a channel, r/technology")
+    edges.add_argument("--follower", help="a channel (r/technology, r/all) or a group")
     edges.add_argument("--limit", type=int, default=50)
     edges.set_defaults(func=cmd_edges)
 
@@ -814,9 +820,9 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     wikipedia = commands.add_parser(
         "wikipedia",
-        help="do reddit onsets come before interest on Wikipedia?",
+        help="do onsets come before interest on Wikipedia?",
         description="Looks up the Wikipedia articles of closed events' terms and their daily "
-        "pageviews (cached), and compares when interest started there with the reddit onsets. "
+        "pageviews (cached), and compares when interest started there with the events' onsets. "
         "Free, no key. wgra analyze does it daily with wikipedia.enabled.",
     )
     wikipedia.add_argument("--days", type=int, default=90)
@@ -827,7 +833,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     wikipedia.set_defaults(func=cmd_wikipedia)
 
     trends = commands.add_parser("trends", help="the latest trends the analyzer found")
-    trends.add_argument("--scope", help="a group or r/subreddit (default: all)")
+    trends.add_argument("--scope", help="a group or a channel, r/technology (default: all)")
     trends.add_argument("--horizon", default="24h", help="24h, 6h, or long-term: 13w, 26w, 52w")
     trends.add_argument("--limit", type=int, default=30)
     trends.set_defaults(func=cmd_trends)
@@ -843,7 +849,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     replay.add_argument("--to", type=_utc, help="UTC (default: now)")
     replay.add_argument("--step", type=int, default=1, help="hours between runs (default: 1)")
     replay.add_argument("--horizon", action="append", help="only this horizon, repeatable")
-    replay.add_argument("--scope", action="append", help="only this scope, repeatable")
+    replay.add_argument("--scope", action="append", help="only this group or channel, repeatable")
     for name, kind in [
         ("min-mentions", int),
         ("min-authors", int),
@@ -887,13 +893,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         "intents",
         help="why people mention things: switches, alternatives, complaints, needs, "
         "switches considered",
-        description="The most mentioned intents in a group or subreddit over the last days, "
+        description="The most mentioned intents in a group or channel over the last days, "
         "compared with as many days before. Switches are 'x → y'; the other kinds are "
         "stored as 'alternative: x', 'complaint: x', 'need: x', 'considering: x → y' or "
         "'considering: x' (use those with `wgra term`).",
     )
     intents.add_argument(
-        "--scope", default="tracked", help="group or r/subreddit (default: tracked)"
+        "--scope", default="reddit", help="a group or a channel, r/technology (default: reddit)"
     )
     intents.add_argument(
         "--kind", action="append", choices=INTENT_KINDS, help="repeatable (default: all)"
@@ -915,8 +921,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         "candidates",
         help="how much there is to report on, per product and where it comes from",
         description="Per watched product: comments and posts naming it and those with an "
-        "intent about it, from the watchlist's subreddits, the other tracked ones, the r/all "
-        "sample and the radar's search.",
+        "intent about it, from the watchlist's channels, the other tracked subreddits "
+        "(reddit), the r/all sample and the radar's search (r/_search).",
     )
     radar_candidates.add_argument(
         "--watchlist", action="append", help="repeatable (default: every watchlist)"
@@ -952,7 +958,9 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     term = commands.add_parser("term", help="how often a term was mentioned")
     term.add_argument("term")
-    term.add_argument("--scope", default="tracked", help="group or subreddit (default: tracked)")
+    term.add_argument(
+        "--scope", default="reddit", help="a group or a channel, r/technology (default: reddit)"
+    )
     term.add_argument("--days", type=int, default=7)
     term.add_argument("--bucket", choices=["day", "hour", "week"], default="day")
     term.set_defaults(func=cmd_term)

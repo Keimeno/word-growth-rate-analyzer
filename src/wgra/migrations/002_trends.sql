@@ -1,30 +1,30 @@
 -- What the short-term detector found: every 15 minutes, the top trending terms of every
--- scope (a tracked subreddit "r/name" or a group) and horizon (24h, 6h), with the
+-- scope (a channel, "r/technology" or "r/all", or a group) and horizon (24h, 6h), with the
 -- numbers behind the score and what happened with the alert. Running the detector
 -- twice for the same time replaces its rows instead of adding them.
 -- IF NOT EXISTS: the ingester and the analyzer both migrate when they start.
 CREATE TABLE IF NOT EXISTS trends
 (
     horizon            LowCardinality(String),  -- 24h | 6h
-    scope              LowCardinality(String),  -- "r/technology" or a group, "tech"
+    scope              LowCardinality(String),  -- a channel, "r/technology", or a group
     term               String,
     detected_at        DateTime('UTC'),         -- the time the detector ran "as of"
-    scope_type         LowCardinality(String),  -- subreddit | group
-    kind               LowCardinality(String),  -- word | phrase | domain | subreddit
+    scope_type         LowCardinality(String),  -- channel | group
+    kind               LowCardinality(String),  -- word | phrase | domain | subreddit, or an intent
     window_start       DateTime('UTC'),
     window_end         DateTime('UTC'),
-    mentions           UInt64,                  -- y_W: comments and posts in the window
-    total              UInt64,                  -- n_W: all comments and posts in the window
+    mentions           UInt64,                  -- y_W: documents in the window
+    total              UInt64,                  -- n_W: all documents in the window
     reference_mentions UInt64,                  -- y_B: the same in the reference period
     reference_total    UInt64,                  -- n_B
     authors            UInt64,                  -- distinct authors in the window
-    prior              Float64,                 -- α_w, pseudo-mentions from the r/all sample
+    prior              Float64,                 -- α_w, pseudo-mentions from the background
     log_odds           Float64,                 -- δ
     ratio              Float64,                 -- exp(δ), "times its usual share"
     z                  Float64,                 -- δ / σ, the score trends are ranked by
     is_new             Bool,                    -- (almost) never mentioned before
-    breadth            UInt16,                  -- groups: member subreddits where it trends
-    members            UInt16,                  -- groups: member subreddits mentioning it
+    breadth            UInt16,                  -- groups: member channels where it trends
+    members            UInt16,                  -- groups: member channels mentioning it
     subsumed_by        String,                  -- a phrase that explains this burst, or ''
     rank               UInt16,                  -- 1 = highest score in its scope and run
     reference_days     UInt16,                  -- days of history in the reference period

@@ -1,8 +1,8 @@
 """`wgra suggest-subreddits`: untracked subreddits where rising terms show up early or
 often, as candidates for config.yaml. It only prints, the config is never changed.
 
-The r/all sample pools every untracked subreddit into one scope (`_sample`), but its raw
-comments and posts (kept 48 hours) still name the real subreddit in their permalink. For
+The r/all sample pools every untracked subreddit into one channel (r/all), but its raw
+comments and posts (kept 48 hours) still name the real subreddit in their url. For
 the terms trending now (the strongest of the last `hours` in any scope, words and
 phrases, past the detector's warmup), every sampled item mentioning one is found (words
 of the text and of the term matched the way the term explorer does).
@@ -27,8 +27,8 @@ from datetime import datetime, timedelta
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SAMPLE_SCOPE
 from wgra.detect.short_term import as_utc
+from wgra.sources.reddit.channels import SAMPLE, channel_of
 
 # multiSearchAllPositions takes at most 255 needles
 MAX_TERMS = 250
@@ -42,7 +42,7 @@ WHERE detected_at > toDateTime({since:UInt32}, 'UTC') - INTERVAL 7 DAY
       SELECT term FROM trends
       WHERE detected_at > toDateTime({since:UInt32}, 'UTC')
         AND detected_at <= toDateTime({now:UInt32}, 'UTC')
-        AND subsumed_by = '' AND kind IN ('word', 'phrase') AND scope != 'sample'
+        AND subsumed_by = '' AND kind IN ('word', 'phrase') AND scope != {sample:String}
         AND reference_days >= {min_reference_days:UInt16}
       GROUP BY term
       ORDER BY max(z) DESC
@@ -53,7 +53,7 @@ GROUP BY term
 
 # the words of the text and of each term joined by single spaces, so "GPT-5" matches "gpt 5"
 _WORDS = "concat(' ', arrayStringConcat(splitByNonAlpha(lowerUTF8({value})), ' '), ' ')"
-_COMMUNITY = "lowerUTF8(extract(permalink, '^/r/([^/]+)/'))"
+_COMMUNITY = "lowerUTF8(extract(url, '^https://www.reddit.com/r/([^/]+)/'))"
 
 MATCHES_SQL = f"""
 WITH arrayMap(t -> {_WORDS.format(value="t")}, {{terms:Array(String)}}) AS needles
@@ -62,7 +62,7 @@ FROM (
     SELECT {_COMMUNITY} AS community, created_at,
            multiSearchAllPositionsUTF8({_WORDS.format(value="text")}, needles) AS positions
     FROM items
-    WHERE subreddit = {{sample:String}}
+    WHERE channel = {{sample:String}}
       AND created_at > toDateTime({{since:UInt32}}, 'UTC')
       AND created_at <= toDateTime({{now:UInt32}}, 'UTC')
 )
@@ -74,7 +74,7 @@ GROUP BY community, term_index
 ITEMS_SQL = f"""
 SELECT {_COMMUNITY} AS community, count()
 FROM items
-WHERE subreddit = {{sample:String}}
+WHERE channel = {{sample:String}}
   AND created_at > toDateTime({{since:UInt32}}, 'UTC')
   AND created_at <= toDateTime({{now:UInt32}}, 'UTC')
 GROUP BY community
@@ -129,7 +129,7 @@ def suggest(
         "since": int(since.timestamp()),
         "now": int(now.timestamp()),
         "limit": min(terms, MAX_TERMS),
-        "sample": SAMPLE_SCOPE,
+        "sample": SAMPLE,
         "min_reference_days": min_reference_days,
     }
     rising = {
@@ -182,7 +182,7 @@ def suggest(
 def yaml_snippet(candidates: list[Candidate]) -> str:
     """Lines to paste under a group in config.yaml, with why each is suggested."""
     return "\n".join(
-        f"    - {c.subreddit:<24} # {c.terms} rising terms, first for {c.first}, "
+        f"    - {channel_of(c.subreddit):<24} # {c.terms} rising terms, first for {c.first}, "
         f"{c.early} before they trended"
         for c in candidates
     )

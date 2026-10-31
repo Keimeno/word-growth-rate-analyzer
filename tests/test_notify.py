@@ -94,19 +94,19 @@ def query(url: str) -> dict[str, list[str]]:
 
 
 def test_explorer_links_open_the_term_in_its_scope():
-    subreddit = explorer_url(GRAFANA, "vision pro", "r/technology")
-    assert subreddit.startswith(f"{GRAFANA}/d/wgra-terms?")
-    assert query(subreddit) == {
+    # the dashboards' scope variable takes a group or a channel alike
+    channel = explorer_url(GRAFANA, "vision pro", "r/technology")
+    assert channel.startswith(f"{GRAFANA}/d/wgra-terms?")
+    assert query(channel) == {
         "var-terms": ["vision pro"],
-        "var-group": ["tracked"],
-        "var-subreddit": ["technology"],
+        "var-group": ["r/technology"],
         "from": ["now-7d"],
         "to": ["now"],
     }
     group = query(explorer_url(GRAFANA, "für", "de"))
     assert group["var-group"] == ["de"]
     assert group["var-terms"] == ["für"]
-    assert "var-subreddit" not in group
+    assert query(trending_url(GRAFANA, "r/all"))["var-group"] == ["r/all"]
     assert query(trending_url(GRAFANA, "tech", "6h")) == {
         "var-group": ["tech"],
         "var-horizon": ["6h"],
@@ -126,7 +126,7 @@ def test_alert_message():
     )
     assert "New: 312 comments and posts" in new.body
     assert "in the 12 days before" in new.body
-    assert "Trending in 6 of the 9 subreddits" in new.body
+    assert "Trending in 6 of the 9 channels" in new.body
     assert new.tags == ("sparkles",)
 
 
@@ -141,7 +141,7 @@ def test_digest_lists_terms_with_links():
     first, second = message.body.splitlines()
     assert first.startswith("1. [vision pro](https://grafana.example/d/wgra-terms?")
     assert first.endswith(" · 14× · 312 mentions · r/technology")
-    assert second.endswith(" · new · 312 mentions · in 4 subreddits")
+    assert second.endswith(" · new · 312 mentions · in 4 channels")
     assert message.click == trending_url(GRAFANA, "tech")
 
 

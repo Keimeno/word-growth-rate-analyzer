@@ -1,6 +1,6 @@
 """Lead–lag end to end against a real ClickHouse, on ten weeks of synthetic history with a
-planted structure (lead_lag_history.py): r/a leads r/b by 3 days, the sample follows r/a
-by 5 days on two thirds of those terms, r/c bursts at random.
+planted structure (lead_lag_history.py): r/a leads r/b by 3 days, r/all follows r/a by
+5 days on two thirds of those terms, r/c bursts at random.
 
 Uses a throwaway database shared by the tests of this module (conftest.py), skipped when
 ClickHouse isn't reachable locally. Building it runs the detector once a day over the
@@ -16,7 +16,7 @@ import pytest
 from helpers import make_config
 from lead_lag_history import END, GROUPS, LEAD, SAMPLE_LEAD, START, build, detect_daily
 
-from wgra.config import SAMPLE_SCOPE, Env
+from wgra.config import Env
 from wgra.detect.replay import replay, stored_steps
 from wgra.detect.run import Analyzer
 from wgra.detect.short_term import Detector
@@ -28,11 +28,8 @@ from wgra.leadlag.onsets import OnsetFinder
 from wgra.leadlag.run import LeadLag
 from wgra.notify.ntfy import Ntfy
 
-# the tracked group adds nothing here and costs a third of the detector's time
-CONFIG = make_config(
-    groups={group: [f"r/{member}" for member in members] for group, members in GROUPS.items()},
-    detect={"exclude_scopes": ["tracked"]},
-)
+# the reddit group adds nothing here and costs a third of the detector's time
+CONFIG = make_config(groups=GROUPS, detect={"exclude_scopes": ["reddit"]})
 HOURS = 3600
 
 
@@ -73,7 +70,8 @@ def test_recovers_the_planted_lead(history_db):
     assert a_b.probability_low < a_b.probability < a_b.probability_high
 
     # reddit-wide follows r/a on two thirds of its terms, 5 days later
-    a_sample = found["r/a", "sample"]
+    a_sample = found["r/a", "r/all"]
+    assert a_sample.follower_type == "platform"
     assert a_sample.lag_median == pytest.approx(SAMPLE_LEAD.total_seconds() / HOURS, abs=6)
     assert 0.5 < a_sample.hit_rate < 0.8
 
@@ -91,10 +89,9 @@ def test_onsets_are_where_the_bursts_start(history_db):
         event.closed == (event.start + timedelta(days=14) <= END) for event in events.values()
     )
     for burst in history.bursts:
-        scope = "sample" if burst.subreddit == SAMPLE_SCOPE else f"r/{burst.subreddit}"
         onsets = {o.scope: o for o in events[burst.term].onsets if not o.without}
         # 2–4 mentions an hour need a few hours for the onset gates
-        assert burst.start <= onsets[scope].at <= burst.start + timedelta(hours=8), burst
+        assert burst.start <= onsets[burst.channel].at <= burst.start + timedelta(hours=8), burst
     lead = events[history.leading[3]]
     scopes = {(o.scope, o.without) for o in lead.onsets}
     # r/b's burst carries its group, with or without r/d and r/e; r/a's carries "first"
@@ -192,8 +189,8 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
 def test_forecasts_in_the_live_loop(history_db):
     client, history, _ = history_db
     term = history.leading[-1]
-    a_start = history.first_burst("a", term)
-    b_start = history.first_burst("b", term)
+    a_start = history.first_burst("r/a", term)
+    b_start = history.first_burst("r/b", term)
     now = a_start + timedelta(hours=20)
     trends = Detector(client, CONFIG).run(now.replace(minute=0) + timedelta(hours=1), now)
     assert any(t.term == term and t.scope == "r/a" for t in trends)
@@ -236,7 +233,7 @@ def test_forecasts_in_the_live_loop(history_db):
 def test_forecast_alerts_are_off_by_default(history_db):
     client, history, _ = history_db
     term = history.leading[-2]
-    now = history.first_burst("a", term) + timedelta(hours=20)
+    now = history.first_burst("r/a", term) + timedelta(hours=20)
     trends = Detector(client, CONFIG).run(now.replace(minute=0) + timedelta(hours=1), now)
     ntfy, sent = recording_ntfy()
     env = Env("", "", "", b"", "", 0, "", "", "")

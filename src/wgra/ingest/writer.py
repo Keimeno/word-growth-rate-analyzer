@@ -16,9 +16,10 @@ log = logging.getLogger(__name__)
 
 POLL_COLUMNS = (
     "ts",
+    "platform",
     "feed",
     "kind",
-    "background",
+    "sample",
     "status",
     "items",
     "new_items",

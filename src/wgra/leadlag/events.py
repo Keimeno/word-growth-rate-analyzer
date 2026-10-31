@@ -11,11 +11,11 @@ after it: leaders' onsets count up to `max_lag_days` after the first trend, and 
 `max_lag_days` for its followers.
 
 Each event gets a topic, the configured group it trended in most in its first hour: the
-group itself or one of its subreddits with the highest score. Only the first hour, because
+group itself or one of its channels with the highest score. Only the first hour, because
 later trends include the followers': an event the follower picked up would get the
 follower's topic more often, and the topic's edges would look better than a forecast,
 which only knows the leader, can be. Edges are learned per topic too, since a
-subreddit can lead reddit on tech terms and follow on everything else.
+channel can lead reddit on tech terms and follow on everything else.
 """
 
 from __future__ import annotations
@@ -52,8 +52,8 @@ class Sighting:
 class Onset:
     """The first hour a scope's window crossed the onset gates for an event's term.
 
-    `without`: a group measured without one of its subreddits ("r/name"), to see whether
-    the rest of the group follows that subreddit, '' otherwise."""
+    `without`: a group measured without one of its channels ("r/technology"), to see
+    whether the rest of the group follows that channel, '' otherwise."""
 
     scope: str
     without: str
@@ -147,10 +147,10 @@ def _keep_max(scopes: dict[str, float], sighting: Sighting) -> None:
 
 def topic_of(scopes: Mapping[str, float], groups: Mapping[str, Sequence[str]]) -> str:
     """The configured group the event trended in most: the group itself or one of its
-    subreddits with the highest score. Ties go to the smaller group, then by name."""
+    channels with the highest score. Ties go to the smaller group, then by name."""
     best: tuple[float, int, str] | None = None
     for group, members in groups.items():
-        names = {group, *(f"r/{member}" for member in members)}
+        names = {group, *members}
         score = max((z for scope, z in scopes.items() if scope in names), default=None)
         if score is None:
             continue

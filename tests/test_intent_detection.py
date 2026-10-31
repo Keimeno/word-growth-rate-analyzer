@@ -9,11 +9,12 @@ from datetime import UTC, date, datetime, timedelta
 
 from helpers import make_config, make_item
 
-from wgra.config import SAMPLE_SCOPE, IntentsConfig, LongTermConfig
+from wgra.config import IntentsConfig, LongTermConfig
 from wgra.detect.long_term import LongTermDetector
 from wgra.detect.short_term import Detector
-from wgra.ingest.backfill import backfill_intents, real_subreddit
+from wgra.ingest.backfill import backfill_intents
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from wgra.ingest.run import write_channels
 from wgra.leadlag.events import Event
 from wgra.leadlag.onsets import OnsetFinder
 from wgra.query import intent_examples, intent_report
@@ -32,25 +33,27 @@ class Comments:
         self.terms: list[tuple[object, ...]] = []
 
     def add(
-        self, subreddit: str, hour: datetime, count: int, terms: Sequence[tuple[str, str]] = ()
+        self, channel: str, hour: datetime, count: int, terms: Sequence[tuple[str, str]] = ()
     ) -> None:
         for index in range(count):
             number = len(self.items) + 1
             self.items.append(
                 (
                     f"t1_{number}",
+                    "reddit",
+                    channel,
                     "comment",
-                    subreddit,
                     hour + timedelta(minutes=index % 60),
                     number,
                     "text",
-                    f"/r/{subreddit}/comments/x/{number}",
+                    f"https://www.reddit.com/{channel}/comments/x/{number}",
+                    "en",
                     10,
                     sorted(term for kind, term in terms if kind in INTENT_KINDS),
                 )
             )
             for kind, term in terms:
-                self.terms.append((hour, subreddit, "comment", kind, term, number, 1))
+                self.terms.append((hour, channel, "comment", kind, term, number, 1))
 
     def insert(self, client) -> None:
         client.insert("items", self.items, column_names=list(ITEM_COLUMNS))
@@ -63,9 +66,7 @@ def hours(start: datetime, end: datetime) -> list[datetime]:
 
 def setup(client) -> None:
     migrate(client)
-    client.insert(
-        "subreddit_groups", CONFIG.group_memberships(), column_names=["group_name", "subreddit"]
-    )
+    write_channels(client, CONFIG)
 
 
 # short term: the 24h window ends Sep 30 12:00
@@ -77,17 +78,17 @@ def short_term_history(client) -> None:
     setup(client)
     comments = Comments()
     for hour in hours(START, END):
-        comments.add("technology", hour, 20)
-        comments.add("programming", hour, 10)
-        comments.add(SAMPLE_SCOPE, hour, 40)
+        comments.add("r/technology", hour, 20)
+        comments.add("r/programming", hour, 10)
+        comments.add("r/all", hour, 40)
         if hour.hour == 9:
             # complained about every day: never a trend
-            comments.add("technology", hour, 1, [("complaint", "complaint: reddit")])
+            comments.add("r/technology", hour, 1, [("complaint", "complaint: reddit")])
     burst = END - timedelta(hours=3)
     # four people switching: rare for words, news for a switch
-    comments.add("technology", burst, 4, [("switch", FLOW), ("word", "notion")])
+    comments.add("r/technology", burst, 4, [("switch", FLOW), ("word", "notion")])
     # and the word bursting much harder
-    comments.add("technology", burst, 30, [("word", "notion")])
+    comments.add("r/technology", burst, 30, [("word", "notion")])
     comments.insert(client)
 
 
@@ -137,19 +138,20 @@ def long_term_history(client) -> None:
     for offset in range((WEEKS_END - WEEKS_START).days):
         day = WEEKS_START + timedelta(days=offset)
         week = offset // 7
-        totals.append((datetime(day.year, day.month, day.day), "technology", "comment", 2000, 0))
+        day_start = datetime(day.year, day.month, day.day)
+        totals.append((day_start, "r/technology", "comment", 2000, 0))
         if day.weekday() == 0:
             # one more switch every week: 1 to 14 a week, far below the 20 words need
-            terms.append((day, "technology", "comment", "switch", FLOW, week + 1, week + 1))
+            terms.append((day, "r/technology", "comment", "switch", FLOW, week + 1, week + 1))
         # a word growing too, with the volume words need
-        terms.append((day, "technology", "comment", "word", "obsidian", 5 + week, 5 + week))
+        terms.append((day, "r/technology", "comment", "word", "obsidian", 5 + week, 5 + week))
     client.insert(
-        "scope_hourly", totals, column_names=["hour", "subreddit", "source", "docs", "tokens"]
+        "scope_hourly", totals, column_names=["hour", "channel", "doc_type", "docs", "tokens"]
     )
     client.insert(
         "term_daily",
         terms,
-        column_names=["day", "subreddit", "source", "kind", "term", "occurrences", "docs"],
+        column_names=["day", "channel", "doc_type", "kind", "term", "occurrences", "docs"],
     )
 
 
@@ -186,10 +188,10 @@ def test_onsets_use_the_gates_of_the_kind(client):
     setup(client)
     comments = Comments()
     for hour in hours(EVENT - timedelta(days=33), EVENT + timedelta(days=1)):
-        comments.add("technology", hour, 20)
-        comments.add(SAMPLE_SCOPE, hour, 20)
+        comments.add("r/technology", hour, 20)
+        comments.add("r/all", hour, 20)
     comments.add(
-        "technology", EVENT - timedelta(hours=2), 4, [("switch", FLOW), ("word", "newword")]
+        "r/technology", EVENT - timedelta(hours=2), 4, [("switch", FLOW), ("word", "newword")]
     )
     comments.insert(client)
 
@@ -211,13 +213,13 @@ def test_intent_report_and_examples(client):
     now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     comments = Comments()
     for day in range(14):
-        comments.add("technology", now - timedelta(days=day), 100)
+        comments.add("r/technology", now - timedelta(days=day), 100)
     complaint = [("complaint", "complaint: reddit")]
     # 6 complaints this week (4 in the last 48 hours), 2 the week before
     for day in (0, 1, 3):
-        comments.add("technology", now - timedelta(days=day), 2, complaint)
-    comments.add("programming", now - timedelta(days=9), 2, complaint)
-    comments.add("technology", now - timedelta(hours=1), 1, [("complaint", "complaint: teams")])
+        comments.add("r/technology", now - timedelta(days=day), 2, complaint)
+    comments.add("r/programming", now - timedelta(days=9), 2, complaint)
+    comments.add("r/technology", now - timedelta(hours=1), 1, [("complaint", "complaint: teams")])
     comments.insert(client)
 
     report = intent_report(client, "tech", "complaint", days=7, today=now.date())
@@ -262,7 +264,7 @@ def test_the_pipeline_counts_intents_and_remembers_them_with_the_item():
     assert not {kind for _, _, _, kind, *_ in row.term_rows} & set(INTENT_KINDS)
 
 
-def test_german_patterns_follow_the_subreddit_language():
+def test_german_patterns_follow_the_channels_language():
     processor = Processor(make_config(), b"key")
     text = "Ich bin von Windows zu Linux gewechselt."
     german = processor.process(make_item(1, subreddit="de", text=text))
@@ -293,10 +295,9 @@ def test_backfill_counts_the_intents_of_items_stored_before(client):
 
     def counts() -> dict[tuple[str, str, str], int]:
         rows = client.query(
-            "SELECT subreddit, kind, term, sum(docs) FROM term_hourly "
-            "GROUP BY subreddit, kind, term"
+            "SELECT channel, kind, term, sum(docs) FROM term_hourly GROUP BY channel, kind, term"
         ).result_rows
-        return {(sub, kind, term): docs for sub, kind, term, docs in rows}
+        return {(channel, kind, term): docs for channel, kind, term, docs in rows}
 
     before = counts()
     dry = backfill_intents(
@@ -311,15 +312,10 @@ def test_backfill_counts_the_intents_of_items_stored_before(client):
     ((hour,),) = client.query("SELECT hour FROM term_hourly WHERE kind = 'alternative'").result_rows
     assert hour.replace(tzinfo=UTC) == (now - timedelta(hours=1)).replace(minute=0, second=0)
     after = counts()
-    assert after["technology", "alternative", "alternative: lastpass"] == 1
-    assert after[SAMPLE_SCOPE, "complaint", "complaint: reddit"] == 1
+    assert after["r/technology", "alternative", "alternative: lastpass"] == 1
+    assert after["r/all", "complaint", "complaint: reddit"] == 1
     # the words were counted at ingest, not again
     assert {key: n for key, n in after.items() if key[1] not in INTENT_KINDS} == before
     # items ingested after the new ingester started are its own
     late = backfill_intents(client, client, CONFIG, now - timedelta(days=1), client.database)
     assert late.items == 0
-
-
-def test_real_subreddit():
-    assert real_subreddit("/r/AskReddit/comments/abc/title/def/") == "askreddit"
-    assert real_subreddit("") == ""

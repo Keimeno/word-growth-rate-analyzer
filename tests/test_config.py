@@ -5,9 +5,6 @@ import yaml
 from helpers import make_config
 
 from wgra.config import (
-    SAMPLE_GROUP,
-    SAMPLE_SCOPE,
-    TRACKED_GROUP,
     Channel,
     Env,
     load_config,
@@ -45,12 +42,13 @@ def test_background_channels_count_bigrams_and_intents_by_their_setting():
     assert config.counts_intents("r/technology") and config.counts_intents("r/_search")
 
 
-def test_group_memberships_include_tracked_and_sample():
+def test_group_memberships_include_the_platforms_group():
     memberships = make_config().group_memberships()
-    assert (TRACKED_GROUP, "technology") in memberships
-    assert (TRACKED_GROUP, "de") in memberships
-    assert (SAMPLE_GROUP, SAMPLE_SCOPE) in memberships
-    assert ("tech", "technology") in memberships
+    assert ("reddit", "r/technology") in memberships
+    assert ("reddit", "r/de") in memberships
+    assert ("tech", "r/technology") in memberships
+    # the platform channels aren't tracked
+    assert not {channel for _, channel in memberships} & {"r/all", "r/_search"}
 
 
 def test_languages_default_to_english():
@@ -62,8 +60,23 @@ def test_languages_default_to_english():
 
 def test_scope_pools_untracked_subreddits():
     config = make_config()
-    assert config.scope("technology") == "technology"
-    assert config.scope("askreddit") == SAMPLE_SCOPE
+    assert config.scope("technology") == "r/technology"
+    assert config.scope("askreddit") == "r/all"
+
+
+def test_scopes_named_in_settings_must_exist():
+    assert make_config().scope_names() >= {"tech", "de", "reddit", "r/de", "r/all", "r/_search"}
+    with pytest.raises(ValueError, match=r"notify\.skip_scopes: no channel or group 'sample'"):
+        make_config(notify={"skip_scopes": ["sample"]})
+    with pytest.raises(ValueError, match=r"detect\.scopes: no channel or group 'r/rust'"):
+        make_config(detect={"scopes": {"r/Rust": {"min_mentions": 5}}})
+
+
+def test_every_document_type_is_counted_by_default():
+    assert make_config().doc_types() == ("comment", "post")
+    config = make_config(detect={"doc_types": ["comment"]})
+    assert config.detect.doc_types == ("comment",)
+    assert config.doc_types() == ("comment",)
 
 
 @pytest.mark.parametrize(
@@ -130,7 +143,7 @@ def test_detect_thresholds_with_per_scope_overrides():
             "prior_weight": 0.1,
             "horizons": {"12h": {"window_hours": 12, "reference_days": 14}},
             "scopes": {"r/DE": {"min_mentions": 5}},
-            "exclude_scopes": ["sample"],
+            "exclude_scopes": ["r/all"],
         },
         notify={"digest_time": "07:30", "timezone": "Europe/Berlin", "skip_scopes": []},
     )
@@ -143,7 +156,7 @@ def test_detect_thresholds_with_per_scope_overrides():
     assert [(h.name, h.window_hours, h.reference_days) for h in detect.horizons] == [
         ("12h", 12, 14)
     ]
-    assert detect.exclude_scopes == ("sample",)
+    assert detect.exclude_scopes == ("r/all",)
     assert config.notify.timezone == "Europe/Berlin"
     assert config.notify.skip_scopes == ()
 
@@ -183,13 +196,13 @@ def test_long_term_defaults_and_overrides():
             "horizons": [26, 13, 13],
             "group_rate": "pooled",
             "run_at": "01:15",
-            "exclude_scopes": ["r/DE", "tracked"],
+            "exclude_scopes": ["r/DE", "reddit"],
         },
         notify={"report_day": "Sunday", "report_time": "18:00", "report_size": 3},
     )
     assert config.long_term.horizons == (13, 26)
     assert config.long_term.group_rate == "pooled"
-    assert config.long_term.exclude_scopes == ("r/de", "tracked")
+    assert config.long_term.exclude_scopes == ("r/de", "reddit")
     assert (config.notify.report_day, config.notify.report_time) == ("sunday", "18:00")
 
 
@@ -240,15 +253,15 @@ def test_kind_thresholds_go_on_top_of_scope_thresholds():
     config = make_config(
         detect={
             "min_mentions": 12,
-            "scopes": {"r/de_EDV": {"min_mentions": 5, "min_authors": 2}},
+            "scopes": {"r/DE": {"min_mentions": 5, "min_authors": 2}},
             "kind_thresholds": {"switch": {"min_mentions": 2}, "domain": {"min_ratio": 3}},
         }
     )
     detect = config.detect
     # what a kind sets wins, the rest comes from the scope
-    assert detect.thresholds_for("r/de_edv", "switch").min_mentions == 2
-    assert detect.thresholds_for("r/de_edv", "switch").min_authors == 3
-    assert detect.thresholds_for("r/de_edv", "word").min_authors == 2
+    assert detect.thresholds_for("r/de", "switch").min_mentions == 2
+    assert detect.thresholds_for("r/de", "switch").min_authors == 3
+    assert detect.thresholds_for("r/de", "word").min_authors == 2
     assert detect.thresholds_for("tech", "domain").min_ratio == 3
     # the other intents keep their defaults
     assert detect.thresholds_for("tech", "need").min_mentions == 3

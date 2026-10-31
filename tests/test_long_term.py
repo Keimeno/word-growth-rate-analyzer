@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from helpers import make_config
 
-from wgra.config import SAMPLE_SCOPE, Config, Env, LongTermConfig
+from wgra.config import Config, Env, LongTermConfig
 from wgra.detect.long_term import (
     LongTermDetector,
     LongTermTrend,
@@ -28,6 +28,7 @@ from wgra.detect.long_term import (
 )
 from wgra.detect.run import Analyzer
 from wgra.detect.short_term import load_scopes
+from wgra.ingest.run import write_channels
 from wgra.notify.ntfy import Ntfy
 from wgra.store import migrate
 
@@ -78,11 +79,11 @@ class History:
         self.rng = np.random.default_rng(42)
         self.terms: list[tuple[object, ...]] = []
         self.totals: list[tuple[object, ...]] = []
-        # (subreddit, term, day) -> mentions, for checking the weekly shares
+        # (channel, term, day) -> mentions, for checking the weekly shares
         self.mentions: dict[tuple[str, str, date], int] = {}
         self.comments: dict[tuple[str, date], int] = {}
 
-    def subreddit(
+    def channel(
         self,
         name: str,
         per_day: Callable[[date], int],
@@ -105,24 +106,24 @@ class History:
         client.insert(
             "scope_hourly",
             self.totals,
-            column_names=["hour", "subreddit", "source", "docs", "tokens"],
+            column_names=["hour", "channel", "doc_type", "docs", "tokens"],
         )
         client.insert(
             "term_daily",
             self.terms,
-            column_names=["day", "subreddit", "source", "kind", "term", "occurrences", "docs"],
+            column_names=["day", "channel", "doc_type", "kind", "term", "occurrences", "docs"],
         )
 
-    def weekly_share(self, subreddit: str, term: str, monday: date) -> float:
+    def weekly_share(self, channel: str, term: str, monday: date) -> float:
         week = days(monday, monday + timedelta(weeks=1))
-        mentions = sum(self.mentions.get((subreddit, term, day), 0) for day in week)
-        return 1000 * mentions / sum(self.comments[subreddit, day] for day in week)
+        mentions = sum(self.mentions.get((channel, term, day), 0) for day in week)
+        return 1000 * mentions / sum(self.comments[channel, day] for day in week)
 
 
 def build_history() -> History:
     history = History()
-    history.subreddit(
-        "big",
+    history.channel(
+        "r/big",
         # busier on weekends
         lambda day: 70_000 if day.weekday() >= 5 else 50_000,
         {
@@ -144,13 +145,13 @@ def build_history() -> History:
             "macro": constant(5.0),
         },
     )
-    history.subreddit("small", lambda day: 2_000, {"macro": exponential(5.0, 20.0)})
-    history.subreddit(
-        "late", lambda day: 3_000, {"late riser": exponential(0.5, 8.0)}, start=LATE_START
+    history.channel("r/small", lambda day: 2_000, {"macro": exponential(5.0, 20.0)})
+    history.channel(
+        "r/late", lambda day: 3_000, {"late riser": exponential(0.5, 8.0)}, start=LATE_START
     )
     # the current week: a burst that a run as of Monday morning must not see yet
     for day in days(END, END + timedelta(days=7)):
-        history.terms.append((day, "big", "comment", "word", "flat", 50_000, 50_000))
+        history.terms.append((day, "r/big", "comment", "word", "flat", 50_000, 50_000))
     return history
 
 
@@ -170,11 +171,7 @@ def config_for_tests(**long_term: Any) -> Config:
 @pytest.fixture
 def history_client(client, history):
     migrate(client)
-    client.insert(
-        "subreddit_groups",
-        config_for_tests().group_memberships(),
-        column_names=["group_name", "subreddit"],
-    )
+    write_channels(client, config_for_tests())
     history.insert(client)
     return client
 
@@ -229,7 +226,7 @@ def test_classifies_trends_in_every_window(history_client):
     assert emerging.start_share < 0.1 < 1.0 < emerging.end_share
 
 
-def test_group_share_is_the_average_of_its_subreddits(history_client, history):
+def test_group_share_is_the_average_of_its_channels(history_client, history):
     result = LongTermDetector(history_client, config_for_tests()).run(AS_OF)
     found = categories(result.trends)
     # growing in small, flat in the 25 times bigger big: the average of the two grows
@@ -241,8 +238,8 @@ def test_group_share_is_the_average_of_its_subreddits(history_client, history):
     first_monday = END - timedelta(weeks=52)
     expected = [
         (
-            history.weekly_share("big", "macro", monday)
-            + history.weekly_share("small", "macro", monday)
+            history.weekly_share("r/big", "macro", monday)
+            + history.weekly_share("r/small", "macro", monday)
         )
         / 2
         for monday in (first_monday + timedelta(weeks=week) for week in range(52))
@@ -252,7 +249,7 @@ def test_group_share_is_the_average_of_its_subreddits(history_client, history):
     # pooled, small's growth disappears in big's mentions
     pooled = LongTermDetector(history_client, config_for_tests(group_rate="pooled")).run(AS_OF)
     assert ("52w", "tech", "macro") not in categories(pooled.trends)
-    # a subreddit is a subreddit either way
+    # a channel is a channel either way
     assert categories(pooled.trends)["52w", "r/small", "macro"] == "mainstreaming"
 
 
@@ -264,14 +261,14 @@ def test_windows_need_enough_history(history_client):
     assert insufficient["r/late", 52] == 19
     assert insufficient["other", 52] == 19
     assert ("r/late", 13) not in insufficient
-    # nothing at all in the sample
-    assert insufficient["sample", 13] == 0
+    # nothing at all in r/all
+    assert insufficient["r/all", 13] == 0
     found = categories(result.trends)
     assert found["13w", "r/late", "late riser"] in ("emerging", "mainstreaming")
-    # tracked is big, small and late: for 52 weeks without late (2 of 3 have the history)
-    tracked = [t for t in result.trends if t.scope == "tracked"]
-    assert {t.members for t in tracked if t.horizon == "52w"} == {2}
-    assert {t.members for t in tracked if t.horizon == "13w"} == {3}
+    # reddit is big, small and late: for 52 weeks without late (2 of 3 have the history)
+    reddit = [t for t in result.trends if t.scope == "reddit"]
+    assert {t.members for t in reddit if t.horizon == "52w"} == {2}
+    assert {t.members for t in reddit if t.horizon == "13w"} == {3}
 
     # a year earlier there is no history at all
     early = LongTermDetector(history_client, config_for_tests()).run(AS_OF - timedelta(weeks=60))
@@ -391,10 +388,9 @@ def test_report_lists_each_term_once_at_its_strongest(history_client):
 def test_no_data_at_all(client):
     migrate(client)
     config = config_for_tests()
-    client.insert(
-        "subreddit_groups", config.group_memberships(), column_names=["group_name", "subreddit"]
-    )
+    write_channels(client, config)
     result = LongTermDetector(client, config).run(AS_OF)
     assert not result.trends
-    assert {gap.scope for gap in result.insufficient} >= {"r/big", "tech", "sample"}
-    assert SAMPLE_SCOPE not in {gap.scope for gap in result.insufficient}
+    assert {gap.scope for gap in result.insufficient} >= {"r/big", "tech", "r/all"}
+    # r/_search isn't analyzed
+    assert "r/_search" not in {gap.scope for gap in result.insufficient}

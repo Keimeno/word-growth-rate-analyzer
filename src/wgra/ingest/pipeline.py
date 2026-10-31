@@ -10,24 +10,26 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from wgra.config import SAMPLE_SCOPE, Config
+from wgra.config import Config
 from wgra.reddit.models import RedditItem
-from wgra.sources.reddit.channels import channel_of
+from wgra.sources.reddit.channels import PLATFORM, channel_of
 from wgra.text import extract_terms
 from wgra.text.intents import INTENT_KINDS, configure_names
 
 ITEM_COLUMNS = (
     "id",
-    "source",
-    "subreddit",
+    "platform",
+    "channel",
+    "doc_type",
     "created_at",
     "author_hash",
     "text",
-    "permalink",
+    "url",
+    "lang",
     "token_count",
     "intents",
 )
-TERM_COLUMNS = ("hour", "subreddit", "source", "kind", "term", "author_hash", "occurrences")
+TERM_COLUMNS = ("hour", "channel", "doc_type", "kind", "term", "author_hash", "occurrences")
 
 DELETED_AUTHOR = "[deleted]"
 DELETED_TEXTS = frozenset({"[deleted]", "[removed]"})
@@ -101,21 +103,17 @@ class Processor:
             return "duplicate"
         return None
 
-    def process(self, item: RedditItem, scope: str | None = None) -> ProcessedItem:
-        """The rows to store for an item, its counts under `scope` if given (the search's).
-        Otherwise untracked subreddits only reach us through the background sample, and
-        their counts are pooled (the permalink still names the real subreddit)."""
-        scope = scope or self._config.scope(item.subreddit)
-        intents = self._config.intents
+    def process(self, item: RedditItem, channel: str | None = None) -> ProcessedItem:
+        """The rows to store for an item, its counts in `channel` if given (the search's).
+        Otherwise untracked subreddits only reach us through the r/all sample, and their
+        counts are pooled in r/all (the url still names the real subreddit)."""
+        channel = channel or self._config.scope(item.subreddit)
+        language = self._config.language(channel_of(item.subreddit))
         terms = extract_terms(
             item.text,
-            language=self._config.language(channel_of(item.subreddit)),
-            max_ngram=(
-                self._config.platforms.reddit.sample.max_ngram
-                if scope == SAMPLE_SCOPE
-                else self._config.ingest.max_ngram
-            ),
-            intents=intents.enabled and (intents.sample or scope != SAMPLE_SCOPE),
+            language=language,
+            max_ngram=self._config.max_ngram(channel),
+            intents=self._config.counts_intents(channel),
         )
         created_at = datetime.fromtimestamp(item.created_utc, UTC)
         hour = created_at.replace(minute=0, second=0, microsecond=0)
@@ -123,18 +121,20 @@ class Processor:
 
         item_row = (
             item.fullname,
+            PLATFORM,
+            channel,
             item.source,
-            scope,
             created_at,
             author_hash,
             item.text[:MAX_STORED_TEXT],
-            item.permalink,
+            f"https://www.reddit.com{item.permalink}",
+            language,
             terms.token_count,
             # the intents' terms, so dashboards can show the comments behind an intent
             sorted(term for kind, term in terms.counts if kind in INTENT_KINDS),
         )
         term_rows = [
-            (hour, scope, item.source, kind, term, author_hash, occurrences)
+            (hour, channel, item.source, kind, term, author_hash, occurrences)
             for (kind, term), occurrences in terms.counts.items()
         ]
         return ProcessedItem(item_row=item_row, term_rows=term_rows)

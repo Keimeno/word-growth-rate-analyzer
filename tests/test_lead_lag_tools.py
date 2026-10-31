@@ -11,7 +11,7 @@ import httpx
 import pytest
 from helpers import make_config
 
-from wgra.config import SAMPLE_SCOPE, WikipediaConfig
+from wgra.config import WikipediaConfig
 from wgra.detect.short_term import TREND_COLUMNS
 from wgra.ingest.pipeline import ITEM_COLUMNS
 from wgra.leadlag.events import Event, Onset, write_events
@@ -35,7 +35,7 @@ def trend_row(term: str, kind: str, detected_at: datetime, z: float, reference_d
         "scope": "r/technology",
         "term": term,
         "detected_at": detected_at,
-        "scope_type": "subreddit",
+        "scope_type": "channel",
         "kind": kind,
         "window_start": detected_at - timedelta(hours=24),
         "window_end": detected_at,
@@ -69,12 +69,14 @@ class Items:
             self.rows.append(
                 (
                     f"t1_{number}",
+                    "reddit",
+                    "r/all",
                     "comment",
-                    SAMPLE_SCOPE,
                     at,
                     number,
                     text,
-                    f"/r/{subreddit}/comments/x{number}/title/c{number}/",
+                    f"https://www.reddit.com/r/{subreddit}/comments/x{number}/title/c{number}/",
+                    "en",
                     10,
                     [],
                 )
@@ -116,7 +118,7 @@ def test_suggests_untracked_subreddits_that_are_early(client):
     assert (first.terms, first.first, first.early, first.mentions) == (2, 2, 2, 8)
     assert sorted(first.examples) == ["ollama", "vision pro"]
     assert first.items == 13
-    assert "    - localllama2" in yaml_snippet(result.candidates)
+    assert "    - r/localllama2" in yaml_snippet(result.candidates)
 
     # with the warmup trends, the subreddit mentioning those shows up too
     loose = suggest(client, ["technology"], NOW, min_terms=1, min_reference_days=0)
@@ -229,7 +231,7 @@ def lead(days: int | None) -> Lead:
 def test_summary_counts_who_was_first():
     summary = summarize([lead(2), lead(3), lead(0), lead(-1), lead(None), lead(1)])
     assert (summary.events, summary.with_onset) == (6, 5)
-    assert (summary.reddit_first, summary.same_day, summary.wiki_first) == (3, 1, 1)
+    assert (summary.onset_first, summary.same_day, summary.wiki_first) == (3, 1, 1)
     assert summary.median_lead == 1
     # two-sided sign test, 3 of 4 decided ones: 2 · P(X ≥ 3 | 4, 0.5) = 0.625
     assert summary.p_value == pytest.approx(0.625)
@@ -239,7 +241,7 @@ def test_wikipedia_check_caches_and_compares(client):
     migrate(client)
     config = make_config(wikipedia={"enabled": True})
     start = (NOW - timedelta(days=30)).replace(minute=0, second=0)
-    reddit_onset = start - timedelta(hours=2)
+    first_onset = start - timedelta(hours=2)
     events = [
         Event(
             "word",
@@ -247,15 +249,15 @@ def test_wikipedia_check_caches_and_compares(client):
             start,
             start,
             {"r/technology": 8.0},
-            onsets=[Onset("r/technology", "", reddit_onset, 10, 4.0, 5.0)],
+            onsets=[Onset("r/technology", "", first_onset, 10, 4.0, 5.0)],
             onsets_until=NOW,
             closed=True,
         )
         for term in ("ollama", "nothinghere")
     ]
-    write_events(client, events, config.subreddit_groups)
-    rising = reddit_onset.date() + timedelta(days=2)
-    views = {reddit_onset.date() + timedelta(days=offset): 50 for offset in range(-40, 20)}
+    write_events(client, events, config.groups)
+    rising = first_onset.date() + timedelta(days=2)
+    views = {first_onset.date() + timedelta(days=offset): 50 for offset in range(-40, 20)}
     views |= {rising + timedelta(days=offset): 600 for offset in range(4)}
     fake = FakeWikimedia(views)
     check = WikipediaCheck(client, config, wikimedia(fake))
@@ -263,7 +265,7 @@ def test_wikipedia_check_caches_and_compares(client):
     [found] = check.run(NOW, days=90, max_events=10)
     assert (found.term, found.article, found.wiki_onset) == ("ollama", "Ollama", rising)
     assert found.lead_days == 2
-    assert found.reddit_scope == "r/technology"
+    assert found.first_scope == "r/technology"
     requests = len(fake.requests)
     assert requests == 2  # the titles, then one article's views
 
@@ -278,4 +280,4 @@ def test_wikipedia_check_caches_and_compares(client):
 
     [stored] = load_leads(client, "en.wikipedia", NOW - timedelta(days=90))
     assert stored.lead_days == 2
-    assert summarize([stored]).reddit_first == 1
+    assert summarize([stored]).onset_first == 1

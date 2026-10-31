@@ -5,7 +5,7 @@ is in one corpus against another. Here the two corpora are the window W (the las
 and the reference period B before it (28 days), and the counts are documents: comments
 and posts that mention the term (y) out of all comments and posts (n). For a single
 term the Dirichlet prior is a Beta(α, β) prior on "a document mentions it", with the
-term's share π_w in the r/all sample as its mean:
+term's share π_w in the platform's background (for Reddit the r/all sample) as its mean:
 
     α_c = m_c · π_w + floor          m_W = κ · n_W
     β_c = m_c · (1 − π_w) + floor    m_B = κ · n_B + max(n_W − n_B, 0)
@@ -19,20 +19,21 @@ its usual share" figure that's shown.
 Two changes to the paper's formula, which adds the same α_w = α0 · π_w to both sides:
 
 * The paper compares corpora of similar size. Here B is 28 times W, and the same
-  pseudo-counts would pull the small window toward the reddit-wide share far harder than
-  the reference: a term that's common on reddit but rare in a subreddit would look like
-  it's rising while nothing changes. So each side gets pseudo-counts in proportion to its
-  size (m_c = κ · n_c). A term whose share doesn't change scores 0, whatever its reddit-wide
-  share. The prior blends both shares with the reddit-wide share by the same amount,
-  which damps bursts of terms that are common on reddit but rare in the scope (likely
-  spill-over from elsewhere) and leaves the scope's own vocabulary alone.
+  pseudo-counts would pull the small window toward the platform-wide share far harder
+  than the reference: a term that's common on the platform but rare in a channel would
+  look like it's rising while nothing changes. So each side gets pseudo-counts in
+  proportion to its size (m_c = κ · n_c). A term whose share doesn't change scores 0,
+  whatever its platform-wide share. The prior blends both shares with the platform-wide
+  share by the same amount, which damps bursts of terms that are common on the platform
+  but rare in the scope (likely spill-over from elsewhere) and leaves the scope's own
+  vocabulary alone.
 * The floor gives every term a pseudo-mention, so a term that never appeared in the
-  sample or the reference period still gets a finite score: brand-new names are what we
+  background or the reference period still gets a finite score: brand-new names are what we
   want to find. Without it, σ would be infinite for them.
 
-While a scope has less history than one window (the first day), the reddit-wide share
+While a scope has less history than one window (the first day), the platform-wide share
 stands in for the missing part: max(n_W − n_B, 0) pseudo-documents, as if the scope had
-a window's worth of history at the reddit-wide share. On the first day this shows what's
+a window's worth of history at the platform-wide share. On the first day this shows what's
 distinctive for a scope, and it fades out as real history comes in. Alerts wait for a
 few days of history anyway (DetectConfig.min_reference_days).
 """
@@ -54,18 +55,18 @@ PHRASE = "phrase"
 
 @dataclass(frozen=True, slots=True)
 class Prior:
-    """The background the prior comes from, the r/all sample."""
+    """The background the prior comes from: the platform's background channel, r/all."""
 
-    # documents in the sample, over the prior period
+    # documents in the background, over the prior period
     total: int
     # κ: how many documents the prior is worth, as a share of a side's documents
     weight: float
     floor: float
 
-    def pseudo_counts(self, sample_mentions: int, documents: float) -> tuple[float, float]:
+    def pseudo_counts(self, background_mentions: int, documents: float) -> tuple[float, float]:
         """(α, β): pseudo-documents with and without the term, out of `documents`."""
         # the term and scope tables are written separately, never trust them to add up
-        share = min(sample_mentions / self.total, 1.0) if self.total else 0.0
+        share = min(background_mentions / self.total, 1.0) if self.total else 0.0
         return documents * share + self.floor, documents * (1 - share) + self.floor
 
 
@@ -121,7 +122,7 @@ class Counts:
     total: int
     reference_mentions: int
     reference_total: int
-    sample_mentions: int = 0
+    background_mentions: int = 0
 
     def score(self, prior: Prior) -> Score:
         # see "the first day" above
@@ -131,9 +132,9 @@ class Counts:
             self.total,
             self.reference_mentions,
             self.reference_total,
-            prior.pseudo_counts(self.sample_mentions, prior.weight * self.total),
+            prior.pseudo_counts(self.background_mentions, prior.weight * self.total),
             prior.pseudo_counts(
-                self.sample_mentions, prior.weight * self.reference_total + missing_history
+                self.background_mentions, prior.weight * self.reference_total + missing_history
             ),
         )
 
@@ -143,12 +144,12 @@ def score_arrays(
     total: NDArray[np.float64],
     reference_mentions: NDArray[np.float64],
     reference_total: NDArray[np.float64],
-    sample_mentions: float,
+    background_mentions: float,
     prior: Prior,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """(δ, z) of `Counts.score` for many windows at once, for example every hour of a term's
     series (the onsets in leadlag/onsets.py). The same formula, element by element."""
-    share = min(sample_mentions / prior.total, 1.0) if prior.total else 0.0
+    share = min(background_mentions / prior.total, 1.0) if prior.total else 0.0
     window_documents = prior.weight * total
     reference_documents = prior.weight * reference_total + np.maximum(total - reference_total, 0)
     alpha = window_documents * share + prior.floor
@@ -228,7 +229,7 @@ def subsumed_by(
             counts.reference_mentions - sum(p.counts.reference_mentions for p in shortest), 0
         ),
         reference_total=counts.reference_total,
-        sample_mentions=counts.sample_mentions,
+        background_mentions=counts.background_mentions,
     )
     if passes(residual.score(prior), residual.mentions, None, thresholds):
         return None
@@ -238,7 +239,7 @@ def subsumed_by(
 def breadth(
     member_counts: Iterable[Counts], prior: Prior, min_z: float, min_mentions: int
 ) -> tuple[int, int]:
-    """(subreddits where the term bursts, subreddits mentioning it) within a group."""
+    """(channels where the term bursts, channels mentioning it) within a group."""
     bursting = mentioning = 0
     for counts in member_counts:
         if counts.mentions == 0:

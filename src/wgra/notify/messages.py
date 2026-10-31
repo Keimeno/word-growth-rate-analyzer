@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
-from wgra.config import SAMPLE_GROUP, TRACKED_GROUP
 from wgra.notify.ntfy import Message
 
 TERM_EXPLORER_UID = "wgra-terms"
@@ -34,12 +33,10 @@ class TrendSummary:
 
 
 def explorer_url(grafana_url: str, term: str, scope: str, weeks: int | None = None) -> str:
-    """The term explorer, showing the term in the scope over the last week, or weekly
-    shares over the last `weeks` weeks (a group's as the average of its subreddits')."""
-    if scope.startswith("r/"):
-        variables = {"var-group": TRACKED_GROUP, "var-subreddit": scope.removeprefix("r/")}
-    else:
-        variables = {"var-group": scope}
+    """The term explorer, showing the term in the scope (a group or a channel, the
+    dashboards' scope variable takes either) over the last week, or weekly shares over the
+    last `weeks` weeks (a group's as the average of its channels')."""
+    variables = {"var-group": scope}
     if weeks:
         variables |= {"var-bucket": "week", "var-rate": "macro"}
     since = f"now-{weeks}w" if weeks else "now-7d"
@@ -48,8 +45,7 @@ def explorer_url(grafana_url: str, term: str, scope: str, weeks: int | None = No
 
 
 def trending_url(grafana_url: str, scope: str, horizon: str = "24h") -> str:
-    group = TRACKED_GROUP if scope.startswith("r/") else scope
-    query = {"var-group": group, "var-horizon": horizon}
+    query = {"var-group": scope, "var-horizon": horizon}
     return f"{grafana_url}/d/{TRENDING_UID}?{urlencode(query)}"
 
 
@@ -76,9 +72,7 @@ def alert_message(trend: TrendSummary, grafana_url: str) -> Message:
             f"{trend.authors} people in the last {trend.horizon}."
         )
     if trend.breadth:
-        lines.append(
-            f"Trending in {trend.breadth} of the {trend.members} subreddits mentioning it."
-        )
+        lines.append(f"Trending in {trend.breadth} of the {trend.members} channels mentioning it.")
     lines.append(f"Score {trend.z:.1f}")
     explorer = explorer_url(grafana_url, trend.term, trend.scope)
     return Message(
@@ -103,7 +97,7 @@ def digest_message(
         if trend.scope != group:
             details.append(trend.scope)
         if trend.breadth > 1:
-            details.append(f"in {trend.breadth} subreddits")
+            details.append(f"in {trend.breadth} channels")
         url = explorer_url(grafana_url, trend.term, trend.scope)
         lines.append(f"{number}. [{trend.term}]({url}) · {' · '.join(details)}")
     return Message(
@@ -197,11 +191,8 @@ class ForecastSummary:
     edge_hits: int
     # hours
     lag_median: float
-
-
-def scope_text(scope: str) -> str:
-    """How a scope reads in a message: the sample is reddit-wide."""
-    return "reddit-wide (the r/all sample)" if scope == SAMPLE_GROUP else scope
+    # how the follower reads, when not by its name: "reddit-wide (the r/all sample)"
+    follower_label: str = ""
 
 
 def early_warning_url(grafana_url: str) -> str:
@@ -213,7 +204,7 @@ def _duration(hours: float) -> str:
 
 
 def forecast_message(forecast: ForecastSummary, grafana_url: str) -> Message:
-    follower = scope_text(forecast.follower)
+    follower = forecast.follower_label or forecast.follower
     window = (forecast.due_by - forecast.leader_onset).total_seconds() / 3600
     lines = [
         f"Rising in {forecast.leader} since {forecast.leader_onset:%a %H:%M} UTC.",

@@ -16,7 +16,8 @@ from collections.abc import Iterable, Sequence
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SEARCH_SCOPE, RadarConfig
+from wgra.config import RadarConfig
+from wgra.sources.reddit.channels import SEARCH
 
 # a post that asks or tells about a switch: "Alternatives to Notion?", "Obsidian vs Notion",
 # "Leaving Evernote", "Moving from OneNote to Obsidian", "Wechsel von Notion zu Obsidian"
@@ -49,8 +50,8 @@ def wants_tree(title: str, products: re.Pattern[str]) -> bool:
 DUE_TREES_SQL = """
 SELECT DISTINCT id, text
 FROM items
-WHERE subreddit = {scope:String}
-  AND source = 'post'
+WHERE channel = {channel:String}
+  AND doc_type = 'post'
   AND created_at BETWEEN now() - toIntervalSecond({oldest:UInt32})
                      AND now() - toIntervalSecond({newest:UInt32})
 """
@@ -64,7 +65,7 @@ def due_trees(client: Client, radar: RadarConfig, done: Sequence[str] | set[str]
     rows = client.query(
         DUE_TREES_SQL,
         parameters={
-            "scope": SEARCH_SCOPE,
+            "channel": SEARCH,
             "oldest": newest + TREE_WINDOW_HOURS * 3600,
             "newest": newest,
         },

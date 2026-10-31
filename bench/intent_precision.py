@@ -30,7 +30,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from wgra.config import Env, load_config
-from wgra.ingest.backfill import real_subreddit
 from wgra.radar.candidates import RADAR_KINDS, products_of
 from wgra.store import connect
 from wgra.text.intents import INTENT_KINDS, configure_names, extractor, sentences_as_written
@@ -55,13 +54,12 @@ def sample(args: argparse.Namespace) -> None:
     found: dict[str, list[dict[str, object]]] = defaultdict(list)
     items = 0
     with client.query_rows_stream(
-        "SELECT id, subreddit, created_at, permalink, text FROM items FINAL "
+        "SELECT id, channel, created_at, url, lang, text FROM items FINAL "
         "WHERE created_at > toDateTime({since:UInt32}, 'UTC')",
         parameters={"since": int(args.since.timestamp())},
     ) as stream:
-        for item_id, scope, created_at, permalink, text in stream:
+        for item_id, channel, created_at, url, language, text in stream:
             items += 1
-            language = config.language(f"r/{real_subreddit(permalink)}")
             extract = extractor(language)
             for sentence, tokens in sentences_as_written(clean(text), language):
                 for pattern, term in extract.matches(tokens):
@@ -75,8 +73,8 @@ def sample(args: argparse.Namespace) -> None:
                             **({"products": products} if watchlist else {}),
                             "pattern": pattern.label,
                             "language": language,
-                            "scope": scope,
-                            "subreddit": real_subreddit(permalink),
+                            "channel": channel,
+                            "url": url,
                             "created_at": f"{created_at:%Y-%m-%d %H:%M}",
                             "id": item_id,
                             "sentence": " ".join(sentence.split()),

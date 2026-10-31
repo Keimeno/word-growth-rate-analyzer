@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 
 from helpers import make_config, make_item
 
-from wgra.config import SAMPLE_SCOPE
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor, RecentKeys
 
 
@@ -56,7 +55,9 @@ def test_process_builds_item_and_term_rows():
 
     item_row = dict(zip(ITEM_COLUMNS, processed.item_row, strict=True))
     assert item_row["id"] == "t1_16"
-    assert (item_row["source"], item_row["subreddit"]) == ("comment", "de")
+    assert (item_row["platform"], item_row["channel"]) == ("reddit", "r/de")
+    assert (item_row["doc_type"], item_row["lang"]) == ("comment", "de")
+    assert item_row["url"] == "https://www.reddit.com/r/de/comments/x/42"
     assert item_row["created_at"] == datetime(2026, 10, 10, 14, 35, 12, tzinfo=UTC)
     assert item_row["author_hash"] == p.author_hash("someone")
     assert item_row["token_count"] == 5
@@ -66,7 +67,7 @@ def test_process_builds_item_and_term_rows():
     }
     e_auto = rows["word", "e-auto"]
     assert e_auto["hour"] == datetime(2026, 10, 10, 14, tzinfo=UTC)
-    assert (e_auto["subreddit"], e_auto["source"]) == ("de", "comment")
+    assert (e_auto["channel"], e_auto["doc_type"]) == ("r/de", "comment")
     assert e_auto["author_hash"] == item_row["author_hash"]
     assert e_auto["occurrences"] == 2
     # german stopwords: "das" and "ist" can't start or end a phrase
@@ -79,10 +80,10 @@ def test_untracked_subreddits_are_pooled_into_the_sample_with_bigrams_only():
         make_item(7, subreddit="askreddit", text="the right to repair movement")
     )
     item_row = dict(zip(ITEM_COLUMNS, processed.item_row, strict=True))
-    assert item_row["subreddit"] == SAMPLE_SCOPE
-    assert item_row["permalink"].startswith("/r/askreddit/")
+    assert item_row["channel"] == "r/all"
+    assert item_row["url"].startswith("https://www.reddit.com/r/askreddit/")
 
-    assert {row[1] for row in processed.term_rows} == {SAMPLE_SCOPE}
+    assert {row[1] for row in processed.term_rows} == {"r/all"}
     terms = {(row[3], row[4]) for row in processed.term_rows}
     assert ("phrase", "repair movement") in terms
     assert ("phrase", "right to repair") not in terms
@@ -92,5 +93,5 @@ def test_tracked_subreddits_keep_their_name_and_trigrams():
     processed = processor().process(
         make_item(8, subreddit="technology", text="the right to repair movement")
     )
-    assert {row[1] for row in processed.term_rows} == {"technology"}
+    assert {row[1] for row in processed.term_rows} == {"r/technology"}
     assert ("phrase", "right to repair") in {(row[3], row[4]) for row in processed.term_rows}

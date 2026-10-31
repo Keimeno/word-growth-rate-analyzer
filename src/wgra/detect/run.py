@@ -27,7 +27,6 @@ from wgra.detect.short_term import (
     as_utc,
     load_scopes,
     next_hour,
-    subreddit_scope,
     write_trends,
 )
 from wgra.leadlag.forecasts import Forecast, decide_forecast_alerts, write_forecasts
@@ -63,7 +62,8 @@ def summary(trend: Trend) -> TrendSummary:
     )
 
 
-def forecast_summary(forecast: Forecast) -> ForecastSummary:
+def forecast_summary(forecast: Forecast, config: Config) -> ForecastSummary:
+    follower = config.channel(forecast.follower)
     return ForecastSummary(
         term=forecast.term,
         leader=forecast.leader,
@@ -78,6 +78,7 @@ def forecast_summary(forecast: Forecast) -> ForecastSummary:
         edge_events=forecast.edge_events,
         edge_hits=forecast.edge_hits,
         lag_median=forecast.lag_median,
+        follower_label=follower.label if follower else "",
     )
 
 
@@ -97,7 +98,7 @@ class RunResult:
 def digest_trends(
     client: Client, group: Scope, now: datetime, size: int, min_reference_days: int
 ) -> list[TrendSummary]:
-    """The group's strongest trends of the last 24 hours, in the group or its subreddits."""
+    """The group's strongest trends of the last 24 hours, in the group or its channels."""
     rows = client.query(
         """
         SELECT term, argMax(scope, z), argMax(horizon, z), max(z), argMax(ratio, z),
@@ -115,7 +116,7 @@ def digest_trends(
         parameters={
             "since": int((now - timedelta(hours=24)).timestamp()),
             "now": int(now.timestamp()),
-            "scopes": [group.name, *map(subreddit_scope, group.subreddits)],
+            "scopes": [group.name, *group.channels],
             "min_reference_days": min_reference_days,
             "size": size,
         },
@@ -207,7 +208,9 @@ class Analyzer:
                 if self._ntfy is None:
                     forecast.alert = MUTED
                     continue
-                message = forecast_message(forecast_summary(forecast), self._env.grafana_url)
+                message = forecast_message(
+                    forecast_summary(forecast, self._config), self._env.grafana_url
+                )
                 ok = self._send("forecast", forecast.follower, forecast.term, message)
                 forecast.alert = SENT if ok else FAILED
         write_forecasts(self._client, step.new + step.resolved)
@@ -323,7 +326,7 @@ class Analyzer:
                 continue
             week, trends = report_trends(
                 self._client,
-                [group.name, *map(subreddit_scope, group.subreddits)],
+                [group.name, *group.channels],
                 notify.report_size,
             )
             if week is None or not trends:

@@ -6,6 +6,7 @@ import pytest
 from helpers import make_config, make_item
 
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from wgra.ingest.run import write_channels
 from wgra.query import term_series
 from wgra.store import migrate, split_statements
 
@@ -21,7 +22,6 @@ def test_migrations_are_applied_once(client):
         "002_trends",
         "003_long_term_trends",
         "004_lead_lag",
-        "005_intents",
     ]
     assert migrate(client) == []
 
@@ -30,9 +30,7 @@ def test_views_count_docs_occurrences_and_distinct_authors(client):
     migrate(client)
     config = make_config()
     processor = Processor(config, b"key")
-    client.insert(
-        "subreddit_groups", config.group_memberships(), column_names=["group_name", "subreddit"]
-    )
+    write_channels(client, config)
 
     created = int(datetime(2026, 10, 10, 14, 5, tzinfo=UTC).timestamp())
     items = [
@@ -52,7 +50,7 @@ def test_views_count_docs_occurrences_and_distinct_authors(client):
 
     hourly = client.query(
         "SELECT hour, sum(docs), sum(occurrences), uniqCombinedMerge(12)(authors) FROM term_hourly "
-        "WHERE subreddit = 'technology' AND term = 'rust' GROUP BY hour"
+        "WHERE channel = 'r/technology' AND term = 'rust' GROUP BY hour"
     ).result_rows
     # 3 comments mention rust, 5 times in total, written by 2 people
     assert hourly == [(datetime(2026, 10, 10, 14), 3, 5, 2)]
@@ -64,7 +62,7 @@ def test_views_count_docs_occurrences_and_distinct_authors(client):
 
     scope = client.query(
         "SELECT hour, sum(docs), sum(tokens), uniqCombinedMerge(12)(authors) FROM scope_hourly "
-        "WHERE subreddit = 'technology' GROUP BY hour ORDER BY hour"
+        "WHERE channel = 'r/technology' GROUP BY hour ORDER BY hour"
     ).result_rows
     assert scope == [
         (datetime(2026, 10, 10, 14), 3, 10, 2),

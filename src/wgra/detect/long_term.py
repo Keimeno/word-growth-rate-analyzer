@@ -1,13 +1,13 @@
 """Long-term trends: which terms grow or fade steadily over months, per scope.
 
 Once a day (`wgra analyze`, after midnight UTC) or on demand (`wgra long-term --once`),
-for every scope (each tracked subreddit, each group) and window (13, 26 and 52 weeks)
-whose subreddits have enough history:
+for every scope (each analyzed channel, each group) and window (13, 26 and 52 weeks)
+whose channels have enough history:
 
-1. Weekly shares: comments and posts mentioning the term per week (ISO weeks, Monday to
-   Sunday, UTC, the current partial week left out) divided by all comments and posts
-   (scope_hourly). A group's share is the average of its subreddits' shares (macro), or
-   all mentions divided by all comments (pooled), see `long_term.group_rate`.
+1. Weekly shares: documents mentioning the term per week (ISO weeks, Monday to Sunday,
+   UTC, the current partial week left out) divided by all documents (scope_hourly). A
+   group's share is the average of its channels' shares (macro), or all mentions divided
+   by all documents (pooled), see `long_term.group_rate`.
 2. ClickHouse, for every term above the volume floor: least squares of the log share over
    the week index (simpleLinearRegression). The terms growing or shrinking fastest, by the
    t of the fit, are the candidates.
@@ -131,7 +131,7 @@ class Window:
     scope: Scope
     weeks: int
     end: date
-    # the subreddits whose history covers the window, the others are left out
+    # the channels whose history covers the window, the others are left out
     members: tuple[str, ...]
 
     @property
@@ -158,11 +158,11 @@ class Candidate:
     window: Window
     kind: str
     term: str
-    # comments and posts mentioning it in the window, in all members together
+    # documents mentioning it in the window, in all members together
     mentions: int
     # its share per week (macro or pooled), NaN for weeks without data
     shares: list[float]
-    # comments and posts per week in all members together
+    # documents per week in all members together
     totals: list[float]
     ols_slope: float
 
@@ -186,7 +186,7 @@ class LongTermResult:
     insufficient: list[Insufficient] = field(default_factory=list)
     # terms that got the robust statistics
     candidates: int = 0
-    # the first complete week of data in any tracked subreddit, None without data
+    # the first complete week of data in any channel, None without data
     first_week: date | None = None
     seconds: float = 0.0
 
@@ -196,21 +196,22 @@ class LongTermResult:
         return sum(stats.above_floor for stats in self.windows)
 
 
-# when each subreddit's collection started (a start after a replay's weeks is 0 weeks)
-FIRST_COMMENTS_SQL = """
-SELECT subreddit, min(hour) FROM scope_hourly WHERE source = 'comment' GROUP BY subreddit
+# when each channel's collection started (a start after a replay's weeks is 0 weeks), from
+# any type of document
+FIRST_DATA_SQL = """
+SELECT channel, min(hour) FROM scope_hourly GROUP BY channel
 """
 
 WEEKLY_TOTALS_SQL = """
-SELECT subreddit, intDiv(toDate(hour) - {start:Date}, 7) AS week, sum(docs)
+SELECT channel, intDiv(toDate(hour) - {start:Date}, 7) AS week, sum(docs)
 FROM scope_hourly
-WHERE source IN {sources:Array(String)}
+WHERE doc_type IN {doc_types:Array(String)}
   AND hour >= toDateTime({start:Date}, 'UTC') AND hour < toDateTime({end:Date}, 'UTC')
-GROUP BY subreddit, week
+GROUP BY channel, week
 """
 
 TERMS = (
-    "subreddit IN {members:Array(String)} AND source IN {sources:Array(String)} "
+    "channel IN {members:Array(String)} AND doc_type IN {doc_types:Array(String)} "
     "AND kind IN {kinds:Array(String)} AND day >= {start:Date} AND day < {end:Date}"
 )
 # a row's mentions as an array over the weeks of the window, at its week. Summed up per
@@ -221,29 +222,29 @@ WEEKLY = (
 )
 
 # Per scope and window, in two passes over the term_daily rows of the scope's
-# subreddits. Both group them by (subreddit, term, kind), the order of the table's key,
+# channels. Both group them by (channel, term, kind), the order of the table's key,
 # so ClickHouse aggregates them as they stream by instead of holding the millions of
 # terms of a year in memory (with small blocks: the parts are read side by side).
 #
-# 1. The terms above the volume floor. For a group of k subreddits, a term above it in
-#    all of them together has at least 1/k of it in one of them: those are found per
-#    subreddit, then counted exactly.
-# 2. Their mentions per week and subreddit (the primary index skips most of the rest).
+# 1. The terms above the volume floor. For a group of k channels, a term above it in all
+#    of them together has at least 1/k of it in one of them: those are found per
+#    channel, then counted exactly.
+# 2. Their mentions per week and channel (the primary index skips most of the rest).
 # The floor of the term's kind: intents are far rarer than words.
 _FLOOR = (
     "transform(toString(kind), {{floor_kinds:Array(String)}}, {{kind_{0}:Array(UInt64)}}, "
     "toUInt64({{{0}:UInt64}}))"
 )
-SUBREDDIT_FLOOR = f"""
+CHANNEL_FLOOR = f"""
     above_floor AS (
         SELECT kind, term FROM term_daily WHERE {TERMS}
-        GROUP BY subreddit, term, kind HAVING sum(docs) >= {_FLOOR.format("min_total")}
+        GROUP BY channel, term, kind HAVING sum(docs) >= {_FLOOR.format("min_total")}
     ),"""
 GROUP_FLOOR = f"""
     candidates AS (
         SELECT DISTINCT kind, term FROM (
-            SELECT subreddit, term, kind FROM term_daily WHERE {TERMS}
-            GROUP BY subreddit, term, kind HAVING sum(docs) >= {_FLOOR.format("member_min")}
+            SELECT channel, term, kind FROM term_daily WHERE {TERMS}
+            GROUP BY channel, term, kind HAVING sum(docs) >= {_FLOOR.format("member_min")}
         )
     ),
     above_floor AS (
@@ -255,14 +256,14 @@ GROUP_FLOOR = f"""
 FIRST_PASS = f"""
 WITH{{floor}}
     per_member AS (
-        SELECT subreddit, kind, term, sumForEach({WEEKLY}) AS by_week
+        SELECT channel, kind, term, sumForEach({WEEKLY}) AS by_week
         FROM term_daily
         WHERE {TERMS} AND (kind, term) IN (SELECT kind, term FROM above_floor)
-        GROUP BY subreddit, term, kind
+        GROUP BY channel, term, kind
     ),
-    -- comments and posts per week of each member, a table of k rows
+    -- documents per week of each member, a table of k rows
     member_totals AS (
-        SELECT pair.1 AS subreddit, pair.2 AS totals
+        SELECT pair.1 AS channel, pair.2 AS totals
         FROM (SELECT arrayJoin(arrayZip({{members:Array(String)}},
                                         {{totals:Array(Array(Float64))}})) AS pair)
     ),
@@ -275,13 +276,13 @@ WITH{{floor}}
                sumForEach(if({{macro:Bool}},
                              arrayMap((y, n) -> toFloat32(if(n > 0, y / n, 0)), by_week, totals),
                              arrayMap(y -> toFloat32(y), by_week))) AS weekly_sum
-        FROM per_member INNER JOIN member_totals USING subreddit
+        FROM per_member INNER JOIN member_totals USING channel
         GROUP BY kind, term
     )
 SELECT kind, term, mentions, shares, ols_slope, terms_above_floor
 FROM (
     SELECT kind, term, mentions,
-           -- pooled: comments and posts per week in all members, active: members with any
+           -- pooled: documents per week in all members, active: members with any
            arrayMap((s, n, k) -> if(n = 0, nan, if({{macro:Bool}}, s / k, s / n)),
                     weekly_sum, {{pooled:Array(Float64)}}, {{active:Array(UInt16)}}) AS shares,
            -- the weeks with data, and the log share in them (pseudo-mentions for zero weeks)
@@ -306,7 +307,7 @@ SETTINGS optimize_aggregation_in_order = 1, max_block_size = 8192
 
 
 def first_pass_sql(group: bool) -> str:
-    return FIRST_PASS.replace("{floor}", GROUP_FLOOR if group else SUBREDDIT_FLOOR)
+    return FIRST_PASS.replace("{floor}", GROUP_FLOOR if group else CHANNEL_FLOOR)
 
 
 class LongTermDetector:
@@ -335,30 +336,31 @@ class LongTermDetector:
         if not horizons:
             return result
 
-        first_comments = {
-            subreddit: as_utc(first)
-            for subreddit, first in self._client.query(FIRST_COMMENTS_SQL).result_rows
+        first_data = {
+            channel: as_utc(first)
+            for channel, first in self._client.query(FIRST_DATA_SQL).result_rows
         }
-        result.first_week = min(map(first_full_week, first_comments.values()), default=None)
+        result.first_week = min(map(first_full_week, first_data.values()), default=None)
         longest_start = end - timedelta(weeks=horizons[-1])
         totals: dict[str, list[float]] = defaultdict(lambda: [0.0] * horizons[-1])
-        for subreddit, week, docs in self._client.query(
+        for channel, week, docs in self._client.query(
             WEEKLY_TOTALS_SQL,
             parameters={
                 "start": longest_start,
                 "end": end,
-                "sources": list(self._config.detect.sources),
+                "doc_types": list(self._config.doc_types()),
             },
         ).result_rows:
-            totals[subreddit][week] = float(docs)
+            totals[channel][week] = float(docs)
 
         candidates: list[Candidate] = []
         for weeks in horizons:
             for scope in scopes:
                 history = {
-                    sub: history_weeks(first_comments.get(sub), end) for sub in scope.subreddits
+                    channel: history_weeks(first_data.get(channel), end)
+                    for channel in scope.channels
                 }
-                members = tuple(sub for sub in scope.subreddits if history[sub] >= weeks)
+                members = tuple(channel for channel in scope.channels if history[channel] >= weeks)
                 if not members or len(members) < self.settings.min_member_share * len(history):
                     result.insufficient.append(
                         Insufficient(scope.name, weeks, self.available(history))
@@ -367,7 +369,9 @@ class LongTermDetector:
                 window = Window(scope, weeks, end, members)
                 # the window's weeks are the last ones of the longest window's
                 offset = horizons[-1] - weeks
-                found, stats = self.first_pass(window, [totals[sub][offset:] for sub in members])
+                found, stats = self.first_pass(
+                    window, [totals[channel][offset:] for channel in members]
+                )
                 candidates += found
                 result.windows.append(stats)
                 log.debug(
@@ -385,7 +389,7 @@ class LongTermDetector:
         return result
 
     def available(self, history: dict[str, int]) -> int:
-        """Weeks of history of a scope: the most that enough of its subreddits have."""
+        """Weeks of history of a scope: the most that enough of its channels have."""
         weeks = sorted(history.values(), reverse=True)
         needed = max(math.ceil(self.settings.min_member_share * len(weeks)), 1)
         return weeks[needed - 1] if len(weeks) >= needed else 0
@@ -419,7 +423,7 @@ class LongTermDetector:
                 "weeks": window.weeks,
                 "start": window.start,
                 "end": window.end,
-                "sources": list(self._config.detect.sources),
+                "doc_types": list(self._config.doc_types()),
                 "kinds": kinds,
                 "min_total": min_total,
                 "member_min": math.ceil(min_total / members),

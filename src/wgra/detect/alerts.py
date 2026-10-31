@@ -3,12 +3,12 @@
 Only the strongest trends alert, at most a handful per day, and a story alerts once:
 
 * alert-worthy: a score of at least `alert_min_z` with `alert_min_authors` people, or,
-  for a group, trending in `alert_min_breadth` of its subreddits at once (and in a good
+  for a group, trending in `alert_min_breadth` of its channels at once (and in a good
   share of those mentioning it: 6 of 9 is a story, 3 of 31 isn't)
 * warmup: no alerts until a scope has `min_reference_days` of history, before that
   everything looks new
 * one alert per term and run, for the scope and horizon with the highest score.
-  "openai" bursting in r/OpenAI, tech and tracked is one story, not three alerts
+  "openai" bursting in r/openai, tech and reddit is one story, not three alerts
 * cooldown: a term isn't alerted again within `cooldown_hours` unless its score has
   doubled since its last alert. It applies across scopes, for the same reason
 * daily cap: at most `max_alerts_per_day` alerts in any 24 hours. The rest still show

@@ -1,5 +1,5 @@
--- What the long-term detector found: every day, for every scope (a tracked subreddit
--- "r/name" or a group) and window (13, 26, 52 weeks), the terms that grow, fade or had a
+-- What the long-term detector found: every day, for every scope (a channel,
+-- "r/technology", or a group) and window (13, 26, 52 weeks), the terms that grow, fade or had a
 -- one-off burst over the complete weeks before the run, with the statistics behind the
 -- category. Flat terms aren't stored.
 --
@@ -14,18 +14,18 @@
 CREATE TABLE IF NOT EXISTS long_term_trends
 (
     horizon      LowCardinality(String),  -- 13w | 26w | 52w
-    scope        LowCardinality(String),  -- "r/technology" or a group, "tech"
+    scope        LowCardinality(String),  -- a channel, "r/technology", or a group
     term         String,
     week         Date,                    -- the Monday the analyzed weeks end before
     detected_at  DateTime('UTC'),         -- the time the detector ran "as of"
-    scope_type   LowCardinality(String),  -- subreddit | group
-    kind         LowCardinality(String),  -- word | phrase | domain | subreddit
+    scope_type   LowCardinality(String),  -- channel | group
+    kind         LowCardinality(String),  -- word | phrase | domain | subreddit, or an intent
     category     LowCardinality(String),  -- emerging | mainstreaming | fading | one-off
     window_start Date,                    -- the Monday of the first analyzed week
     weeks        UInt16,                  -- weeks with data in the window
-    members      UInt16,                  -- subreddits averaged (groups), or 1
-    mentions     UInt64,                  -- comments and posts mentioning it in the window
-    total        UInt64,                  -- all comments and posts in the window
+    members      UInt16,                  -- channels averaged (groups), or 1
+    mentions     UInt64,                  -- documents mentioning it in the window
+    total        UInt64,                  -- all documents in the window
     growth       Float64,                 -- per month, exp(Theil–Sen slope × 4.35)
     slope        Float64,                 -- Theil–Sen slope of the log share, per week
     ols_growth   Float64,                 -- per month, the least squares first pass

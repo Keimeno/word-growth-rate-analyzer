@@ -32,7 +32,6 @@ from wgra.detect.short_term import (
     Trend,
     as_utc,
     load_scopes,
-    subreddit_scope,
 )
 from wgra.leadlag.evaluate import Step
 from wgra.leadlag.events import Sighting, load_sightings
@@ -137,12 +136,11 @@ def stored_steps(
 
 
 def groups_of(scope: str, scopes: Sequence[Scope]) -> list[str]:
-    """The groups a trend counts for: the group itself, or the groups of its subreddit."""
+    """The groups a trend counts for: the group itself, or the groups of its channel."""
     return [
         group.name
         for group in scopes
-        if group.type == GROUP
-        and (group.name == scope or scope in map(subreddit_scope, group.subreddits))
+        if group.type == GROUP and (group.name == scope or scope in group.channels)
     ]
 
 

@@ -4,7 +4,7 @@ import pytest
 from helpers import make_config
 
 from wgra.config import Horizon
-from wgra.detect.short_term import GROUP, SUBREDDIT, Detector, Scope, Window, next_hour, prior_days
+from wgra.detect.short_term import CHANNEL, GROUP, Detector, Scope, Window, next_hour, prior_days
 
 
 def test_live_runs_include_the_current_hour():
@@ -37,9 +37,9 @@ def test_prior_days_end_with_the_windows_last_day():
 
 def test_stopwords_are_never_trends_in_any_language_of_the_scope():
     detector = Detector(None, make_config())  # type: ignore[arg-type]
-    german = detector.stopwords(Scope("r/de", SUBREDDIT, ("de",)))
-    english = detector.stopwords(Scope("r/technology", SUBREDDIT, ("technology",)))
-    mixed = detector.stopwords(Scope("tracked", GROUP, ("de", "technology")))
+    german = detector.stopwords(Scope("r/de", CHANNEL, ("r/de",)))
+    english = detector.stopwords(Scope("r/technology", CHANNEL, ("r/technology",)))
+    mixed = detector.stopwords(Scope("reddit", GROUP, ("r/de", "r/technology")))
     assert {"the", "und", "war"} <= german
     assert "the" in english
     assert "war" not in english

@@ -14,20 +14,10 @@ import yaml
 from wgra.sources.reddit import channels as reddit_channels
 from wgra.text.intents import INTENT_KINDS
 
-# every tracked subreddit is also part of this group, so dashboards and queries can
-# always fall back to "everything we track completely"
-TRACKED_GROUP = "tracked"
-# Everything the background sample finds in subreddits we don't track is counted under
-# this one name. Per subreddit, a sample of a few percent would be far too thin to say
-# anything, and thousands of tiny subreddits would mostly add rows that are counted
-# once. Subreddit names can't start with an underscore, so it can't clash with one.
-SAMPLE_SCOPE = "_sample"
-SAMPLE_GROUP = "sample"
-# Posts naming a watched product anywhere on reddit, found by search, and the comment
-# trees under some of them (the churn radar, docs/CHURN-RADAR.md §2.2). Search isn't a
-# complete stream, so these counts aren't shares of anything: the scope is in no group,
-# so the detectors never see it, only the radar counts it.
-SEARCH_SCOPE = "_search"
+# The platforms and the kinds of documents each has. Every platform's tracked channels
+# also form a group named like the platform ("reddit": every tracked subreddit), so
+# dashboards and queries can always fall back to "everything we track completely".
+PLATFORM_DOC_TYPES = {reddit_channels.PLATFORM: reddit_channels.DOC_TYPES}
 
 # what the text says: words, phrases, linked domains, mentioned subreddits. The intents
 # behind it (switches, alternatives, complaints, needs) are kinds of terms too.
@@ -151,7 +141,8 @@ class DetectConfig:
     thresholds: Thresholds = field(default_factory=Thresholds)
     # per scope ("tech", "r/de_EDV"), only the thresholds that differ
     scope_thresholds: dict[str, Thresholds] = field(default_factory=dict)
-    sources: tuple[str, ...] = ("comment", "post")
+    # the kinds of documents counted (comment, post), empty for every type of every platform
+    doc_types: tuple[str, ...] = ()
     kinds: tuple[str, ...] = KINDS
     # per kind, only the thresholds that differ (on top of the scope's): intents are far
     # rarer than words, a switch between two products is news at 3 mentions a day
@@ -168,7 +159,7 @@ class DetectConfig:
     prior_floor: float = 1.0
     # a term with at most this many mentions in the reference period is "new"
     new_max_reference: int = 2
-    # breadth of a group trend: member subreddits where the term has z above this
+    # breadth of a group trend: member channels where the term has z above this
     breadth_min_z: float = 3.0
     breadth_min_mentions: int = 3
     # stored per scope and horizon on every run, by score: the words, phrases, domains and
@@ -198,23 +189,23 @@ POOLED = "pooled"
 class LongTermConfig:
     """Long-term trends on weekly shares, see docs/ARCHITECTURE.md §4.3."""
 
-    # windows in weeks, each runs once every scope's subreddits have that many complete
+    # windows in weeks, each runs once every scope's channels have that many complete
     # weeks of history (Monday to Sunday, UTC)
     horizons: tuple[int, ...] = (13, 26, 52)
     # when `wgra analyze` runs it every day, UTC. Posts are polled every 15 minutes, so
     # the last ones of Sunday are in by then.
     run_at: str = "00:30"
     # the volume floor: comments and posts mentioning the term per week, on average over
-    # the window and in all of the scope's subreddits together
+    # the window and in all of the scope's channels together
     min_mentions_per_week: float = 20
     # per kind, where it differs: intents are far rarer than words
     kind_min_mentions_per_week: dict[str, float] = field(
         default_factory=lambda: _intent_defaults(2.0)
     )
-    # a group's weekly share: "macro" averages its subreddits' shares, so a big subreddit
+    # a group's weekly share: "macro" averages its channels' shares, so a big channel
     # doesn't drown out the small ones; "pooled" divides all mentions by all comments
     group_rate: str = MACRO
-    # a group is analyzed over its subreddits with history for the whole window, if at
+    # a group is analyzed over its channels with history for the whole window, if at
     # least this share of them have it
     min_member_share: float = 0.5
     # the first pass (least squares in ClickHouse) picks the terms growing or shrinking by
@@ -250,7 +241,7 @@ class NotifyConfig:
     # instant alerts, only for the strongest trends
     alert_min_z: float = 10.0
     alert_min_authors: int = 20
-    # or for a group, when the term trends in this many of its subreddits at once, and in
+    # or for a group, when the term trends in this many of its channels at once, and in
     # this share of those mentioning it
     alert_min_breadth: int = 3
     alert_min_breadth_share: float = 0.3
@@ -258,7 +249,7 @@ class NotifyConfig:
     # a term isn't alerted again within this time unless its score doubles
     cooldown_hours: int = 72
     # scopes that never alert and get no digest (they're still scored and shown)
-    skip_scopes: tuple[str, ...] = ("sample",)
+    skip_scopes: tuple[str, ...] = (reddit_channels.SAMPLE,)
     # one digest per group every day at this local time
     digest_time: str = "08:00"
     timezone: str = "UTC"
@@ -272,7 +263,7 @@ class NotifyConfig:
 
 @dataclass(frozen=True)
 class LeadLagConfig:
-    """Which subreddits pick up terms before others, see docs/ARCHITECTURE.md §4.6."""
+    """Which channels pick up terms before others, see docs/ARCHITECTURE.md §4.6."""
 
     enabled: bool = True
     # when `wgra analyze` relearns the edges every day, UTC
@@ -368,11 +359,11 @@ _PRODUCT_RESERVED = ("→", ":", "·")
 
 @dataclass(frozen=True)
 class Watchlist:
-    """Products of one category and the subreddits where the category talks, see
+    """Products of one category and the channels where the category talks, see
     docs/CHURN-RADAR.md §2.1."""
 
     name: str
-    # the group of config.yaml whose subreddits are the category's, tracked completely
+    # the group of config.yaml whose channels are the category's, tracked completely
     group: str
     # canonical name -> every name it's written as, lowercase, the canonical one first
     products: dict[str, tuple[str, ...]]
@@ -482,6 +473,19 @@ class Config:
     def language(self, channel: str) -> str:
         return self.languages.get(channel.lower(), "en")
 
+    def doc_types(self) -> tuple[str, ...]:
+        """The kinds of documents the detectors count: detect.doc_types, or every type of
+        every platform."""
+        return self.detect.doc_types or tuple(
+            doc_type for types in PLATFORM_DOC_TYPES.values() for doc_type in types
+        )
+
+    def scope_names(self) -> frozenset[str]:
+        """Every scope: each channel, each group, each platform's group."""
+        return frozenset(
+            [*self._channels, *self.groups, *(name for name, _ in self.group_memberships())]
+        )
+
     def max_ngram(self, channel: str) -> int:
         """The longest phrase counted in a channel: background channels have their own."""
         info = self._channels.get(channel)
@@ -500,30 +504,23 @@ class Config:
         return tuple(map(reddit_channels.subreddit_of, self.tracked(reddit_channels.PLATFORM)))
 
     def scope(self, subreddit: str) -> str:
-        """Where an item's counts go: its subreddit if tracked, the sample otherwise."""
-        return subreddit if subreddit in self._tracked else SAMPLE_SCOPE
+        """Where an item's counts go: its subreddit's channel if tracked, the sample's
+        otherwise."""
+        channel = reddit_channels.channel_of(subreddit)
+        return channel if channel in self._tracked else reddit_channels.SAMPLE
 
     @cached_property
     def _tracked(self) -> frozenset[str]:
-        return frozenset(self.subreddits)
-
-    @cached_property
-    def subreddit_groups(self) -> dict[str, tuple[str, ...]]:
-        """The groups with subreddit names, as stored until the storage has channels."""
-        return {
-            group: tuple(map(reddit_channels.subreddit_of, channels))
-            for group, channels in self.groups.items()
-        }
+        return frozenset(self.tracked(reddit_channels.PLATFORM))
 
     def group_memberships(self) -> list[tuple[str, str]]:
-        """(group, subreddit) pairs, including the implicit "tracked" and "sample" groups."""
+        """(group, channel) pairs, including each platform's group of its tracked channels
+        ("reddit")."""
         pairs = [
-            (group, reddit_channels.subreddit_of(channel))
-            for group, channels in self.groups.items()
-            for channel in channels
+            (group, channel) for group, channels in self.groups.items() for channel in channels
         ]
-        pairs += [(TRACKED_GROUP, sub) for sub in self.subreddits]
-        pairs.append((SAMPLE_GROUP, SAMPLE_SCOPE))
+        for platform in PLATFORM_DOC_TYPES:
+            pairs += [(platform, channel) for channel in self.tracked(platform)]
         return sorted(set(pairs))
 
 
@@ -547,9 +544,10 @@ def parse_groups(raw: dict[str, Any]) -> dict[str, tuple[str, ...]]:
     if not any(groups.values()):
         raise ValueError("config: at least one group with channels is required")
     for group, channels in groups.items():
-        if group.lower() == reddit_channels.PLATFORM:
+        if group.lower() in PLATFORM_DOC_TYPES:
             raise ValueError(
-                f"config: the group name '{group}' is reserved, it's every tracked subreddit"
+                f"config: the group name '{group}' is reserved, it's every tracked channel of "
+                "the platform"
             )
         if reddit_channels.is_channel(group.strip().removeprefix("/").lower()):
             raise ValueError(
@@ -594,7 +592,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
         for channel in channels or ()
     }
 
-    return Config(
+    config = Config(
         groups=groups,
         languages=languages,
         platforms=parse_platforms(raw.get("platforms") or {}),
@@ -608,6 +606,24 @@ def parse_config(raw: dict[str, Any]) -> Config:
         wikipedia=WikipediaConfig(**(raw.get("wikipedia") or {})),
         radar=parse_radar(raw.get("radar") or {}, groups),
     )
+    _check_scopes(config)
+    return config
+
+
+def _check_scopes(config: Config) -> None:
+    """Scopes named in the settings must exist: a channel id or a group."""
+    known = config.scope_names()
+    named = {
+        "detect.scopes": config.detect.scope_thresholds,
+        "detect.exclude_scopes": config.detect.exclude_scopes,
+        "long_term.exclude_scopes": config.long_term.exclude_scopes,
+        "notify.skip_scopes": config.notify.skip_scopes,
+    }
+    for where, scopes in named.items():
+        if unknown := sorted(set(scopes) - known):
+            raise ValueError(
+                f"config: {where}: no channel or group {', '.join(map(repr, unknown))}"
+            )
 
 
 def _check_time(name: str, value: str) -> None:
@@ -662,7 +678,7 @@ def parse_detect(raw: dict[str, Any]) -> DetectConfig:
         if not horizons:
             raise ValueError("config: detect.horizons needs at least one horizon")
         detect = replace(detect, horizons=horizons)
-    for name in ("sources", "kinds"):
+    for name in ("doc_types", "kinds"):
         if name in raw:
             raw[name] = tuple(raw[name] or ())
     if "exclude_scopes" in raw:

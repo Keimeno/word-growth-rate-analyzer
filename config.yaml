@@ -97,8 +97,8 @@ intents:
   enabled: true
   sample: true               # also in the r/all sample (reddit-wide, and the prior)
 
-# Short-term trends (`wgra analyze`). Every 15 minutes, every tracked subreddit and every
-# group is scored: how much more of the conversation mentions a term in the window than
+# Short-term trends (`wgra analyze`). Every 15 minutes, every channel (each tracked
+# subreddit, and r/all) and every group is scored: how much more of the conversation mentions a term in the window than
 # in the reference period before it. See docs/ARCHITECTURE.md §4.2.
 detect:
   interval_minutes: 15
@@ -111,7 +111,7 @@ detect:
   min_authors: 5       # different people, so one spammer can't make a trend
   min_ratio: 2         # times its usual share
   min_z: 3             # strength of the evidence (the score trends are ranked by)
-  # the same per scope, a group or "r/<subreddit>", only what differs
+  # the same per scope, a group or a channel ("r/<subreddit>"), only what differs
   scopes:
     r/de_edv: {min_mentions: 5, min_authors: 3}
   # and per kind, on top of the scope's: intents are far rarer than words, a switch
@@ -139,13 +139,13 @@ detect:
 # Long-term trends: once a day, `wgra analyze` looks at weekly shares (comments and posts
 # mentioning a term per week, divided by all of them) over the last 13, 26 and 52 complete
 # weeks, Monday to Sunday UTC, and classifies the terms that grow or fade steadily. A
-# window starts once a scope's subreddits have that many weeks of history. See
+# window starts once a scope's channels have that many weeks of history. See
 # docs/ARCHITECTURE.md §4.3.
 long_term:
   horizons: [13, 26, 52]   # weeks
   run_at: "00:30"          # UTC, every day; the results change when a week completes
   # the volume floor: mentions per week on average over the window, in all of a scope's
-  # subreddits together. Rarer terms are too noisy to tell a trend from chance.
+  # channels together. Rarer terms are too noisy to tell a trend from chance.
   min_mentions_per_week: 20
   # per kind, where it differs: intents are far rarer than words. Candidates are picked
   # separately for words and phrases and for each intent kind.
@@ -155,7 +155,7 @@ long_term:
     complaint: 2
     need: 2
     considering: 2
-  # a group's weekly share: macro averages its subreddits' shares (each counts the same,
+  # a group's weekly share: macro averages its channels' shares (each counts the same,
   # so r/technology doesn't drown out r/hardware), pooled divides all mentions by all
   # comments and posts
   group_rate: macro
@@ -180,8 +180,8 @@ long_term:
   # stored per scope, window and category, the fastest growing or fading first
   max_per_category: 25
 
-# Lead–lag early warning: which subreddits pick up terms before others, and forecasts of
-# which current bursts will reach other subreddits, groups or all of reddit (the sample).
+# Lead–lag early warning: which channels pick up terms before others, and forecasts of
+# which current bursts will reach other channels, groups or all of reddit (r/all).
 # Once a day `wgra analyze` turns new trends into events, finds every scope's onset (the
 # first hour its last 24h crossed the gates below against its own 28 days before) and
 # learns the leader -> follower edges; after every detection run it makes forecasts. Edges
@@ -233,7 +233,7 @@ forecast:
   alert_min_events: 10
   alert_max_per_day: 2
 
-# Optional: do reddit onsets come before interest on Wikipedia? Compares the daily
+# Optional: do onsets come before interest on Wikipedia? Compares the daily
 # pageviews (Wikimedia's free API, no key, cached in ClickHouse) of the articles that
 # events' terms name with the onsets. `wgra wikipedia` runs it on demand.
 wikipedia:
@@ -251,8 +251,8 @@ notify:
   # instant alerts only for the strongest trends, and at most this many per day
   alert_min_z: 10
   alert_min_authors: 20
-  # or when a term trends in this many subreddits of a group at once, and in this share
-  # of the group's subreddits mentioning it (6 of 9 is a story, 3 of 31 isn't)
+  # or when a term trends in this many channels of a group at once, and in this share
+  # of the group's channels mentioning it (6 of 9 is a story, 3 of 31 isn't)
   alert_min_breadth: 3
   alert_min_breadth_share: 0.3
   max_alerts_per_day: 5
@@ -263,19 +263,19 @@ notify:
   timezone: Europe/Berlin
   digest_size: 10
   # one report of long-term trends per group every week: the fastest emerging,
-  # mainstreaming and fading terms of the group and its subreddits (none while there's
+  # mainstreaming and fading terms of the group and its channels (none while there's
   # less than 13 weeks of history)
   report_day: monday
   report_time: "08:00"
   report_size: 5
   # scored and shown in Grafana, but no alerts, digests or reports
-  skip_scopes: [sample]
+  skip_scopes: [r/all]
 
 # The churn radar (docs/CHURN-RADAR.md): per watchlist, who leaves which product, for what
-# and why. A watchlist's subreddits are a group above, tracked completely. Its products'
+# and why. A watchlist's channels are a group above, tracked completely. Its products'
 # single-word names count as names in intents in any case ("switched from evernote to
 # obsidian"). With search, posts naming a product anywhere on reddit are collected too,
-# under the scope `_search` that no detector sees, and the comment trees of those that ask
+# in the channel r/_search that no detector sees, and the comment trees of those that ask
 # or tell about a switch. `wgra radar candidates` shows how much there is per product.
 radar:
   enabled: true

@@ -1,4 +1,4 @@
-"""Edges: leader subreddit -> follower scope, learned from the onsets of past events.
+"""Edges: leader channel -> follower scope, learned from the onsets of past events.
 
 For each ordered pair, over the events of the training period:
 
@@ -22,10 +22,11 @@ For each ordered pair, over the events of the training period:
 An edge is stored when it has `min_events` and `min_hits`, the leader was first in at
 least `min_lead_share` of the events where both crossed, and both q-values are at most
 `max_q`, for a topic's edge `max_q` divided by the number of topics: each topic is another
-look at the same data. Followers: the other
-tracked subreddits, the configured groups (without the leader's own counts when it's one of
-their subreddits) and the r/all sample ("sample", reddit-wide). Edges are learned over all
-events (topic "all") and per topic, the group an event trended in most.
+look at the same data. Leaders: the analyzed channels that aren't a platform's background
+(the tracked subreddits). Followers: the other analyzed channels, the background among
+them (r/all, reddit-wide), and the configured groups (without the leader's own counts when
+it's one of their channels). Edges are learned over all events (topic "all") and per
+topic, the group an event trended in most.
 
 Nothing an edge is learned from is after `as_of`: onsets count once their hour is over,
 misses once the follow window is, base rates from events whose span is over. Replays learn
@@ -46,18 +47,20 @@ from typing import Any
 import numpy as np
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import SAMPLE_SCOPE, LeadLagConfig
-from wgra.detect.short_term import SUBREDDIT, Scope, as_utc, load_scopes, subreddit_scope
+from wgra.config import LeadLagConfig
+from wgra.detect.short_term import CHANNEL, Scope, as_utc, load_scopes
 from wgra.detect.trend_stats import benjamini_hochberg
 from wgra.leadlag.events import HOUR, Event, event_span
-from wgra.leadlag.onsets import SAMPLE, split_scopes
+from wgra.leadlag.onsets import split_scopes
 from wgra.leadlag.stats import binomial_tail, posterior
 
 log = logging.getLogger(__name__)
 
 ALL = "all"
+CHANNEL_FOLLOWER = CHANNEL
 GROUP_FOLLOWER = "group"
-SAMPLE_FOLLOWER = "sample"
+# a platform's background channel: the whole platform (r/all, reddit-wide)
+PLATFORM_FOLLOWER = "platform"
 
 
 @dataclass(frozen=True)
@@ -73,44 +76,50 @@ class Follower:
 
 
 class Network:
-    """Who can lead whom: tracked subreddits lead, subreddits, groups and the sample follow."""
+    """Who can lead whom: channels lead, channels, groups and the platforms follow."""
 
     def __init__(
         self,
-        subreddits: Sequence[str],
+        channels: Sequence[str],
         groups: Mapping[str, Sequence[str]],
         first_data: Mapping[str, datetime],
+        backgrounds: Iterable[str] = (),
     ):
-        """`first_data`: each subreddit's (and the sample's) first hour with comments."""
-        self.subreddits = list(subreddits)
+        """`first_data`: each channel's first hour with documents. `backgrounds`: the
+        channels that are a platform's background (r/all), they follow but don't lead."""
+        self.channels = list(channels)
         self.groups = {group: tuple(members) for group, members in groups.items()}
         self._first_data = dict(first_data)
-        self.leaders = [subreddit_scope(subreddit) for subreddit in self.subreddits]
+        self.backgrounds = frozenset(backgrounds)
+        self.leaders = [channel for channel in self.channels if channel not in self.backgrounds]
         self._followers = {leader: self._followers_of(leader) for leader in self.leaders}
 
     @classmethod
     def load(cls, client: Client, scopes: Sequence[Scope] | None = None) -> Network:
-        subreddits, groups = split_scopes(load_scopes(client) if scopes is None else scopes)
-        rows = client.query(
-            "SELECT subreddit, min(hour) FROM scope_hourly WHERE source = 'comment' "
-            "GROUP BY subreddit"
-        ).result_rows
-        return cls(subreddits, groups, {subreddit: as_utc(hour) for subreddit, hour in rows})
+        scopes = load_scopes(client) if scopes is None else scopes
+        channels, groups = split_scopes(scopes)
+        rows = client.query("SELECT channel, min(hour) FROM scope_hourly GROUP BY channel")
+        return cls(
+            channels,
+            groups,
+            {channel: as_utc(hour) for channel, hour in rows.result_rows},
+            [scope.name for scope in scopes if scope.background],
+        )
 
     def _followers_of(self, leader: str) -> list[Follower]:
         followers = [
-            Follower(subreddit_scope(subreddit), SUBREDDIT)
-            for subreddit in self.subreddits
-            if subreddit_scope(subreddit) != leader
+            Follower(
+                channel, PLATFORM_FOLLOWER if channel in self.backgrounds else CHANNEL_FOLLOWER
+            )
+            for channel in self.channels
+            if channel != leader
         ]
         for group, members in self.groups.items():
-            scopes = {subreddit_scope(member) for member in members}
-            if leader in scopes:
-                if len(scopes) > 1:
+            if leader in members:
+                if len(set(members)) > 1:
                     followers.append(Follower(group, GROUP_FOLLOWER, without=leader))
             else:
                 followers.append(Follower(group, GROUP_FOLLOWER))
-        followers.append(Follower(SAMPLE, SAMPLE_FOLLOWER))
         return followers
 
     def followers(self, leader: str) -> list[Follower]:
@@ -120,14 +129,13 @@ class Network:
         return {f.key for followers in self._followers.values() for f in followers}
 
     def data_from(self, key: tuple[str, str]) -> datetime | None:
-        """The first hour with data of a follower (a group's: of any of its subreddits)."""
+        """The first hour with data of a follower (a group's: of any of its channels)."""
         scope, without = key
-        if scope == SAMPLE:
-            members: Iterable[str] = (SAMPLE_SCOPE,)
-        elif scope in self.groups:
-            members = (m for m in self.groups[scope] if subreddit_scope(m) != without)
-        else:
-            members = (scope.removeprefix("r/"),)
+        members: Iterable[str] = (
+            (member for member in self.groups[scope] if member != without)
+            if scope in self.groups
+            else (scope,)
+        )
         starts = [self._first_data[m] for m in members if m in self._first_data]
         return min(starts) if starts else None
 

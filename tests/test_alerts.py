@@ -28,13 +28,13 @@ def test_only_strong_or_broad_trends_alert():
     assert not alert_worthy(make_trend(z=12, authors=10), NOTIFY)
     assert not alert_worthy(make_trend(z=12, subsumed_by="vision pro"), NOTIFY)
 
-    # bursting in many subreddits of a group at once is a story even with a lower score
+    # bursting in many channels of a group at once is a story even with a lower score
     def group_trend(breadth: int, members: int):
         return make_trend(z=6, scope="tech", scope_type="group", breadth=breadth, members=members)
 
     assert alert_worthy(group_trend(6, 9), NOTIFY)
     assert not alert_worthy(group_trend(2, 2), NOTIFY)
-    # but not when it's a few of the many subreddits mentioning it
+    # but not when it's a few of the many channels mentioning it
     assert not alert_worthy(group_trend(3, 31), NOTIFY)
 
 
@@ -88,6 +88,6 @@ def test_daily_cap():
 
 
 def test_skipped_scopes_never_alert():
-    trend = make_trend(scope="sample", scope_type="group")
-    assert decide([trend], notify=NotifyConfig(skip_scopes=("sample",))) == []
+    trend = make_trend(scope="r/all", scope_type="channel")
+    assert decide([trend], notify=NotifyConfig(skip_scopes=("r/all",))) == []
     assert trend.alert == SKIPPED

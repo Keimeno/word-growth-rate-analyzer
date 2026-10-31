@@ -1,9 +1,9 @@
--- Lead–lag early warning (docs/ARCHITECTURE.md §4.6): which subreddits pick up terms
+-- Lead–lag early warning (docs/ARCHITECTURE.md §4.6): which channels pick up terms
 -- before other scopes, and forecasts of which current bursts will reach them.
 -- IF NOT EXISTS: the ingester and the analyzer both migrate when they start.
 
 -- An event: a term trending somewhere (in `trends`, not subsumed, z >= event_min_z), and
--- every scope's onset for it, the first hour the scope's share of comments and posts
+-- every scope's onset for it, the first hour the scope's share of documents
 -- mentioning the term crossed the onset gates. Kept forever (unlike `trends`, 90 days):
 -- they're what the edges are learned from. An event's onsets are recomputed until its
 -- span is over (`closed`), every rewrite replaces the row.
@@ -19,9 +19,9 @@ CREATE TABLE IF NOT EXISTS lead_lag_events
     -- the scopes it trended in, with their highest score, and those of its first hour
     scopes        Map(LowCardinality(String), Float32),
     first_scopes  Map(LowCardinality(String), Float32),
-    -- scope: "r/name", a group, or "sample" (reddit-wide). without: a group measured
-    -- without one of its subreddits ("r/name"), to see whether the rest of the group follows
-    -- that subreddit; '' otherwise. at: the hour the window ending with it crossed.
+    -- scope: a channel ("r/technology", "r/all") or a group. without: a group measured
+    -- without one of its channels, to see whether the rest of the group follows that
+    -- channel; '' otherwise. at: the hour the window ending with it crossed.
     onsets        Array(Tuple(scope String, without String, at DateTime('UTC'),
                               mentions UInt32, ratio Float32, z Float32)),
     onsets_until  DateTime('UTC'),          -- the data the onsets were computed from ends here
@@ -32,7 +32,7 @@ ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toYYYYMM(start)
 ORDER BY (kind, term, start);
 
--- Leader subreddit -> follower scope, learned every day from the events of the training
+-- Leader channel -> follower scope, learned every day from the events of the training
 -- period. Only pairs that pass the edge gates are stored: associated (the follower crosses
 -- after the leader more often than its base rate) and directed (the follower mostly comes
 -- second). A follower group the leader belongs to is measured without the leader's own
@@ -42,9 +42,9 @@ CREATE TABLE IF NOT EXISTS propagation_edges
     day              Date,                    -- the UTC day of the run, rows are kept per day
     computed_at      DateTime('UTC'),
     topic            LowCardinality(String),  -- 'all', or the group the events trended in
-    leader           LowCardinality(String),  -- "r/name"
-    follower         LowCardinality(String),  -- "r/name", a group, or "sample"
-    follower_type    LowCardinality(String),  -- subreddit | group | sample
+    leader           LowCardinality(String),  -- a channel, "r/technology"
+    follower         LowCardinality(String),  -- a channel or a group
+    follower_type    LowCardinality(String),  -- channel | group | platform (r/all)
     without_leader   Bool,
     leader_onsets    UInt32,                  -- the leader's onsets in the training events
     events           UInt32,                  -- n: those the follower hadn't started before
@@ -142,10 +142,10 @@ CREATE TABLE IF NOT EXISTS wiki_leads
     start         DateTime('UTC'),
     project       LowCardinality(String),
     article       String,
-    reddit_onset  DateTime('UTC'),           -- the event's first onset in any scope
-    reddit_scope  LowCardinality(String),
+    first_onset   DateTime('UTC'),           -- the event's first onset in any scope
+    first_scope   LowCardinality(String),
     wiki_onset    Nullable(Date),            -- the first day of elevated views, if any
-    lead_days     Nullable(Float64),         -- wiki onset (start of day) − reddit onset
+    lead_days     Nullable(Float64),         -- wiki onset (start of day) − first onset
     updated_at    DateTime64(3, 'UTC') DEFAULT now64(3)
 )
 ENGINE = ReplacingMergeTree(updated_at)
