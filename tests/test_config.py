@@ -8,6 +8,7 @@ from wgra.config import (
     SAMPLE_GROUP,
     SAMPLE_SCOPE,
     TRACKED_GROUP,
+    Channel,
     Env,
     load_config,
     parse_config,
@@ -15,10 +16,33 @@ from wgra.config import (
 from wgra.text.intents import INTENT_KINDS
 
 
-def test_subreddit_names_are_normalized_and_deduplicated():
-    config = parse_config({"groups": {"a": ["r/Rust", "/r/golang", "rust"], "b": ["Rust"]}})
-    assert config.groups == {"a": ("golang", "rust"), "b": ("rust",)}
+def test_channel_ids_are_lowercase_and_deduplicated():
+    config = parse_config({"groups": {"a": ["r/Rust", "/r/golang", "r/rust"], "b": ["R/Rust"]}})
+    assert config.groups == {"a": ("r/golang", "r/rust"), "b": ("r/rust",)}
+    assert config.tracked("reddit") == ("r/golang", "r/rust")
     assert config.subreddits == ("golang", "rust")
+
+
+def test_channels_have_their_platform_language_and_role():
+    config = make_config()
+    channels = {channel.id: channel for channel in config.channels()}
+    assert set(channels) == {"r/de", "r/programming", "r/technology", "r/all", "r/_search"}
+    assert channels["r/de"] == Channel("r/de", "reddit", "de")
+    # the r/all sample is reddit's platform channel, the prior of every reddit scope
+    assert channels["r/all"].analyzed and channels["r/all"].background
+    assert channels["r/all"].label == "reddit-wide (the r/all sample)"
+    # search results aren't shares of anything, the detectors don't see them
+    assert not channels["r/_search"].analyzed and not channels["r/_search"].background
+    assert config.channel("r/askreddit") is None
+    assert config.tracked("reddit") == ("r/de", "r/programming", "r/technology")
+
+
+def test_background_channels_count_bigrams_and_intents_by_their_setting():
+    config = make_config(intents={"sample": False})
+    assert (config.max_ngram("r/all"), config.max_ngram("r/technology")) == (2, 3)
+    assert config.max_ngram("r/_search") == 3
+    assert not config.counts_intents("r/all")
+    assert config.counts_intents("r/technology") and config.counts_intents("r/_search")
 
 
 def test_group_memberships_include_tracked_and_sample():
@@ -31,8 +55,9 @@ def test_group_memberships_include_tracked_and_sample():
 
 def test_languages_default_to_english():
     config = make_config()
-    assert config.language("de") == "de"
-    assert config.language("technology") == "en"
+    assert config.language("r/de") == "de"
+    assert config.language("r/technology") == "en"
+    assert config.language("r/all") == "en"
 
 
 def test_scope_pools_untracked_subreddits():
@@ -41,10 +66,47 @@ def test_scope_pools_untracked_subreddits():
     assert config.scope("askreddit") == SAMPLE_SCOPE
 
 
-@pytest.mark.parametrize("name", [TRACKED_GROUP, SAMPLE_GROUP])
-def test_reserved_group_names(name):
-    with pytest.raises(ValueError, match="reserved"):
-        parse_config({"groups": {name: ["rust"]}})
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ({"groups": {"a": ["rust"]}}, "groups.a: 'rust' isn't a channel id, write r/rust"),
+        ({"groups": {"a": ["r/"]}}, "isn't a channel id, like r/technology"),
+        (
+            {"groups": {"a": ["r/de"]}, "languages": {"de": ["de"]}},
+            "languages.de: 'de' isn't a channel id, write r/de",
+        ),
+        ({"groups": {"r/rust": ["r/rust"]}}, "named like a channel"),
+        ({"groups": {"reddit": ["r/rust"]}}, "'reddit' is reserved"),
+        ({"groups": {"a": ["r/_search"]}}, "r/_search can't be in a group"),
+    ],
+)
+def test_channel_and_group_errors_say_what_to_write(raw, message):
+    with pytest.raises(ValueError, match=message):
+        parse_config(raw)
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ({"background": {"requests_per_minute": 20}}, "background is now platforms.reddit"),
+        ({"ingest": {"requests_per_minute": 90}}, "ingest.requests_per_minute is now in"),
+        ({"platforms": {"hn": {}}}, "platforms: unknown hn"),
+    ],
+)
+def test_reddit_settings_are_under_platforms(raw, message):
+    with pytest.raises(ValueError, match=message):
+        parse_config({"groups": {"a": ["r/rust"]}, **raw})
+
+
+def test_reddit_platform_settings():
+    config = make_config(
+        platforms={"reddit": {"requests_per_minute": 60, "sample": {"requests_per_minute": 0}}}
+    )
+    reddit = config.platforms.reddit
+    assert (reddit.requests_per_minute, reddit.max_subreddits_per_feed) == (60, 25)
+    assert (reddit.sample.requests_per_minute, reddit.sample.max_ngram) == (0, 2)
+    assert config.platforms.enabled() == ["reddit"]
+    assert make_config(platforms={"reddit": {"enabled": False}}).platforms.enabled() == []
 
 
 def test_a_group_is_required():

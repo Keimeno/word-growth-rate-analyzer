@@ -61,7 +61,7 @@ def item_intents(config: Config, scope: str, permalink: str, text: str) -> Count
     intents = config.intents
     if not intents.enabled or (scope == SAMPLE_SCOPE and not intents.sample):
         return Counter()
-    return extract_intents(clean(text), config.language(real_subreddit(permalink)))
+    return extract_intents(clean(text), config.language(f"r/{real_subreddit(permalink)}"))
 
 
 def backfill_intents(

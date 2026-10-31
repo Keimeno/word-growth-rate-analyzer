@@ -253,7 +253,7 @@ def test_wikipedia_check_caches_and_compares(client):
         )
         for term in ("ollama", "nothinghere")
     ]
-    write_events(client, events, config.groups)
+    write_events(client, events, config.subreddit_groups)
     rising = reddit_onset.date() + timedelta(days=2)
     views = {reddit_onset.date() + timedelta(days=offset): 50 for offset in range(-40, 20)}
     views |= {rising + timedelta(days=offset): 600 for offset in range(4)}

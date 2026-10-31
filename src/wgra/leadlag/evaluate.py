@@ -213,7 +213,7 @@ def evaluate(
             if current is None:
                 continue
             for forecast in decide(
-                current, leaders, edges, at, config.groups, settings, config.forecast
+                current, leaders, edges, at, config.subreddit_groups, settings, config.forecast
             ):
                 made.setdefault(forecast.key, forecast)
 

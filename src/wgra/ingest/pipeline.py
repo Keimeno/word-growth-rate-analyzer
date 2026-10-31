@@ -12,6 +12,7 @@ from typing import Any
 
 from wgra.config import SAMPLE_SCOPE, Config
 from wgra.reddit.models import RedditItem
+from wgra.sources.reddit.channels import channel_of
 from wgra.text import extract_terms
 from wgra.text.intents import INTENT_KINDS, configure_names
 
@@ -108,9 +109,9 @@ class Processor:
         intents = self._config.intents
         terms = extract_terms(
             item.text,
-            language=self._config.language(item.subreddit),
+            language=self._config.language(channel_of(item.subreddit)),
             max_ngram=(
-                self._config.background.max_ngram
+                self._config.platforms.reddit.sample.max_ngram
                 if scope == SAMPLE_SCOPE
                 else self._config.ingest.max_ngram
             ),

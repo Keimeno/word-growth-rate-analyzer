@@ -1,80 +1,88 @@
-# What to track. Every subreddit listed in a group is tracked completely (every comment
-# and post), a subreddit can be in several groups. Groups only matter for analysis:
-# dashboards and `wgra term --scope <group>` aggregate over them. All tracked
-# subreddits together also form the group "tracked".
+# Where documents come from. Reddit is the only platform so far: the tracked subreddits,
+# every comment and post, and a sample of r/all. See docs/CROSS-PLATFORM.md.
+platforms:
+  reddit:
+    enabled: true
+    # reddit's free tier allows 100 requests per minute per client id
+    requests_per_minute: 90
+    max_subreddits_per_feed: 25
+    # A sample of all of reddit, the channel r/all: the "normal" vocabulary trends are
+    # compared against. Reddit only returns the last second or two of r/all, so this is
+    # always a sample.
+    sample:
+      requests_per_minute: 20
+      max_ngram: 2           # words and two-word phrases, the sample is only the background
+
+ingest:
+  max_ngram: 3               # the longest phrase counted, in words
+
+# What to track. A group lists channels: a subreddit is "r/<name>", every subreddit listed
+# in a group is tracked completely (every comment and post), and a subreddit can be in
+# several groups. Groups only matter for analysis: dashboards and `wgra term --scope
+# <group>` aggregate over them. All tracked subreddits together also form the group
+# "reddit".
 #
 # Changes take effect when the ingester restarts. New subreddits are counted from then
 # on, nothing is backfilled.
 groups:
   tech:
-    - technology
-    - programming
-    - hardware
-    - gadgets
-    - LocalLLaMA
-    - MachineLearning
-    - artificial
-    - OpenAI
-    - ClaudeAI
-    - singularity
-    - webdev
-    - ExperiencedDevs
-    - cscareerquestions
-    - apple
-    - Android
-    - linux
-    - selfhosted
-    - homelab
-    - buildapc
+    - r/technology
+    - r/programming
+    - r/hardware
+    - r/gadgets
+    - r/LocalLLaMA
+    - r/MachineLearning
+    - r/artificial
+    - r/OpenAI
+    - r/ClaudeAI
+    - r/singularity
+    - r/webdev
+    - r/ExperiencedDevs
+    - r/cscareerquestions
+    - r/apple
+    - r/Android
+    - r/linux
+    - r/selfhosted
+    - r/homelab
+    - r/buildapc
   science:
-    - science
-    - space
-    - Futurology
+    - r/science
+    - r/space
+    - r/Futurology
   news:
-    - news
-    - worldnews
-    - europe
+    - r/news
+    - r/worldnews
+    - r/europe
   finance:
-    - investing
-    - stocks
-    - wallstreetbets
-    - personalfinance
-    - CryptoCurrency
-    - Economics
+    - r/investing
+    - r/stocks
+    - r/wallstreetbets
+    - r/personalfinance
+    - r/CryptoCurrency
+    - r/Economics
   gaming:
-    - gaming
-    - Games
-    - pcgaming
+    - r/gaming
+    - r/Games
+    - r/pcgaming
   de:
-    - de
-    - Finanzen
-    - de_EDV
+    - r/de
+    - r/Finanzen
+    - r/de_EDV
   # note-taking: the churn radar's pilot watchlist (radar: at the end), the products' own
   # subreddits and those of the category
   pkm:
-    - Notion
-    - ObsidianMD
-    - Evernote
-    - OneNote
-    - logseq
-    - PKMS
-    - NoteTaking
-    - Zettelkasten
+    - r/Notion
+    - r/ObsidianMD
+    - r/Evernote
+    - r/OneNote
+    - r/logseq
+    - r/PKMS
+    - r/NoteTaking
+    - r/Zettelkasten
 
-# Stopwords for phrases depend on the language. Unlisted subreddits are english.
+# Stopwords for phrases depend on the language. Unlisted channels are english.
 languages:
-  de: [de, Finanzen, de_EDV]
-
-# A sample of all of reddit, the "normal" vocabulary trends are compared against.
-# Reddit only returns the last second or two of r/all, so this is always a sample.
-background:
-  subreddit: all
-  requests_per_minute: 20
-
-ingest:
-  # reddit's free tier allows 100 requests per minute per client id
-  requests_per_minute: 90
-  max_subreddits_per_feed: 25
+  de: [r/de, r/Finanzen, r/de_EDV]
 
 # Intents: why people mention things, counted like words under kinds and terms of their
 # own. "switch": "notion → obsidian" (switched from Notion to Obsidian), "alternative":

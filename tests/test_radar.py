@@ -13,7 +13,7 @@ from wgra.text.intents import configure_names, extract_intents
 from wgra.text.terms import clean
 
 PKM = {
-    "groups": {"tech": ["technology"], "pkm": ["Notion", "ObsidianMD"]},
+    "groups": {"tech": ["r/technology"], "pkm": ["r/Notion", "r/ObsidianMD"]},
     "radar": {
         "enabled": True,
         "watchlists": {
@@ -63,7 +63,7 @@ def test_single_word_names_count_only_while_the_radar_is_on():
 
 def test_searches_merge_products_of_several_watchlists():
     radar = make_config(
-        groups={"a": ["x"], "b": ["y"]},
+        groups={"a": ["r/x"], "b": ["r/y"]},
         radar={
             "enabled": True,
             "watchlists": {

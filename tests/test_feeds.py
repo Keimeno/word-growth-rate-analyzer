@@ -1,5 +1,5 @@
 import pytest
-from helpers import make_config, make_item
+from helpers import make_config, make_item, no_sample
 
 from wgra.ingest.feeds import FeedScheduler, build_feeds, observed_rate
 
@@ -13,7 +13,7 @@ def listing(newest_id: int, count: int, seconds_apart: float, newest_time: int =
 
 
 def test_subreddits_are_packed_into_comment_and_post_feeds():
-    config = make_config(ingest={"max_subreddits_per_feed": 2})
+    config = make_config(platforms={"reddit": {"max_subreddits_per_feed": 2}})
     feeds = build_feeds(config)
     assert [(feed.name, feed.subreddits) for feed in feeds] == [
         ("comments-1", ("de", "programming")),
@@ -28,7 +28,7 @@ def test_subreddits_are_packed_into_comment_and_post_feeds():
 
 
 def test_background_feed_can_be_disabled():
-    feeds = build_feeds(make_config(background={"requests_per_minute": 0}))
+    feeds = build_feeds(make_config(platforms=no_sample()))
     assert not any(feed.background for feed in feeds)
 
 
@@ -40,7 +40,7 @@ def test_observed_rate_uses_the_listing_time_span():
 
 
 def test_busy_feeds_are_polled_often_enough_to_see_half_a_listing_per_poll():
-    config = make_config(background={"requests_per_minute": 0})
+    config = make_config(platforms=no_sample())
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
     comments = feeds[0]
@@ -52,20 +52,19 @@ def test_busy_feeds_are_polled_often_enough_to_see_half_a_listing_per_poll():
 
 
 def test_quiet_feeds_are_polled_at_the_maximum_interval():
-    config = make_config(background={"requests_per_minute": 0})
+    config = make_config(platforms=no_sample())
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
     posts = feeds[1]
 
     # one post per hour
     scheduler.record_success(posts, listing(1000, 100, seconds_apart=3600), now=0)
-    assert posts.interval == config.ingest.max_post_poll_interval
+    assert posts.interval == config.platforms.reddit.max_post_poll_interval
 
 
 def test_intervals_stretch_when_the_budget_is_exceeded():
     config = make_config(
-        background={"requests_per_minute": 0},
-        ingest={"requests_per_minute": 10, "max_subreddits_per_feed": 100},
+        platforms=no_sample(requests_per_minute=10, max_subreddits_per_feed=100),
     )
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
@@ -75,15 +74,18 @@ def test_intervals_stretch_when_the_budget_is_exceeded():
     scheduler.record_success(comments, listing(10_000, 100, seconds_apart=0.02), now=0)
     scheduler.record_success(posts, listing(1000, 100, seconds_apart=3600), now=0)
 
-    demand = 60 / config.ingest.min_poll_interval + 60 / config.ingest.max_post_poll_interval
+    demand = (
+        60 / config.platforms.reddit.min_poll_interval
+        + 60 / config.platforms.reddit.max_post_poll_interval
+    )
     scale = demand / 10
-    assert comments.interval == pytest.approx(config.ingest.min_poll_interval * scale)
+    assert comments.interval == pytest.approx(config.platforms.reddit.min_poll_interval * scale)
     total = sum(60 / feed.interval for feed in feeds)
     assert total == pytest.approx(10)
 
 
 def test_a_full_listing_of_unseen_items_is_a_gap_and_speeds_up_polling():
-    config = make_config(background={"requests_per_minute": 0})
+    config = make_config(platforms=no_sample())
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
     comments = feeds[0]
@@ -104,7 +106,7 @@ def test_a_full_listing_of_unseen_items_is_a_gap_and_speeds_up_polling():
 
 
 def test_background_feed_reports_how_far_reddit_ids_advanced():
-    config = make_config(background={"requests_per_minute": 20})
+    config = make_config(platforms={"reddit": {"sample": {"requests_per_minute": 20}}})
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
     background = feeds[-1]
@@ -142,9 +144,9 @@ def test_next_feed_is_the_one_due_first():
     assert scheduler.next_feed() is feeds[-1]
 
 
-def radar_config(**overrides: object):
+def radar_config(**reddit: object):
     return make_config(
-        background={"requests_per_minute": 0},
+        platforms=no_sample(**reddit),
         radar={
             "enabled": True,
             "search_interval_minutes": 15,
@@ -152,7 +154,6 @@ def radar_config(**overrides: object):
                 "pkm": {"group": "tech", "products": {"notion": ["Notion AI"], "apple notes": []}}
             },
         },
-        **overrides,
     )
 
 
@@ -167,7 +168,7 @@ def test_watched_products_get_search_feeds():
 
 
 def test_searches_poll_at_a_fixed_interval_and_take_their_share_of_the_budget():
-    config = radar_config(ingest={"requests_per_minute": 10, "max_subreddits_per_feed": 1})
+    config = radar_config(requests_per_minute=10, max_subreddits_per_feed=1)
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
     search = next(feed for feed in feeds if feed.search)

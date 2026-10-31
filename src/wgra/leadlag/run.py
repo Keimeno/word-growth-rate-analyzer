@@ -128,7 +128,7 @@ class LeadLag:
         sightings, events = self.update_events(now)
         OnsetFinder(self._client, self._config).find(events, until)
         if write:
-            write_events(self._client, events, self._config.groups)
+            write_events(self._client, events, self._config.subreddit_groups)
 
         training = load_events(self._client, now - timedelta(days=self.settings.training_days), now)
         if not write:
@@ -212,7 +212,7 @@ class LeadLag:
             if forecast.event_key in events:
                 needed[forecast.event_key] = events[forecast.event_key]
         OnsetFinder(self._client, self._config).find(list(needed.values()), next_hour(now))
-        write_events(self._client, list(needed.values()), self._config.groups)
+        write_events(self._client, list(needed.values()), self._config.subreddit_groups)
 
         known = {f.key for f in load_forecasts(self._client, event_keys=current.keys())}
         step = ForecastStep(terms=len(needed))
@@ -223,7 +223,7 @@ class LeadLag:
                 leaders,
                 index,
                 now,
-                self._config.groups,
+                self._config.subreddit_groups,
                 self.settings,
                 self._config.forecast,
             )

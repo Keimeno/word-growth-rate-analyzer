@@ -114,7 +114,7 @@ def candidates(
         parameters={
             "search": SEARCH_SCOPE,
             "sample": SAMPLE_SCOPE,
-            "watchlist": list(config.groups[watchlist.group]),
+            "watchlist": list(config.subreddit_groups[watchlist.group]),
             "hours": days * 24,
             "text_kinds": [kind for kind in TEXT_KINDS if kind != "subreddit"],
             "intent_kinds": list(RADAR_KINDS),

@@ -481,28 +481,30 @@ type instead.
 ```python
 @dataclass(frozen=True, slots=True)
 class Item:
-    id: str                    # unique within its platform: "t1_abc"
-    platform: str              # "reddit"
-    channel: str               # where its counts go: "r/technology", "r/all", "r/_search"
-    doc_type: str              # comment | post
-    author: str                # as the platform writes it
+    id: str  # unique within its platform: "t1_abc"
+    platform: str  # "reddit"
+    channel: str  # where its counts go: "r/technology", "r/all", "r/_search"
+    doc_type: str  # comment | post
+    author: str  # as the platform writes it
     created_at: datetime
     text: str
     url: str
-    lang: str                  # the channel's language, unless the item says otherwise
-    skip: str | None = None    # why the source drops it: bot, moderation, deleted
+    lang: str  # the channel's language, unless the item says otherwise
+    skip: str | None = None  # why the source drops it: bot, moderation, deleted
 
 
 class Sink(Protocol):
     """The shared part: dedup, terms, intents, buffered writes."""
 
-    client: Client                 # for restart state and lookups, like seed_state today
-    def add(self, item: Item) -> bool: ...   # False when skipped
+    client: Client  # for restart state and lookups, like seed_state today
+
+    def add(self, item: Item) -> bool: ...  # False when skipped
     def add_poll(self, poll: Poll) -> None: ...
 
 
 class Source(Protocol):
     platform: str
+
     async def run(self, sink: Sink, stop: asyncio.Event) -> None: ...
 ```
 

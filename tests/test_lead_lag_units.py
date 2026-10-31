@@ -526,7 +526,7 @@ def test_config():
         {"lead_lag": {"unknown": 1}},
     ):
         with pytest.raises((ValueError, TypeError)):
-            parse_config({"groups": {"tech": ["technology"]}, **bad})
+            parse_config({"groups": {"tech": ["r/technology"]}, **bad})
 
 
 def test_forecast_message():

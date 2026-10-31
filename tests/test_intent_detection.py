@@ -21,7 +21,7 @@ from wgra.store import migrate
 from wgra.text.intents import INTENT_KINDS
 
 FLOW = "notion → obsidian"
-CONFIG = make_config(groups={"tech": ["technology", "programming"]})
+CONFIG = make_config(groups={"tech": ["r/technology", "r/programming"]})
 
 
 class Comments:

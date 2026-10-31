@@ -604,7 +604,7 @@ def cmd_intents(args: argparse.Namespace) -> None:
             )
             print()
             for example in examples:
-                language = config.language(example.permalink.split("/")[2])
+                language = config.language(f"r/{example.permalink.split('/')[2]}")
                 sentence = source_sentence(clean(example.text), example.term, language)
                 print(f"  {intent_entity(example.term)}: {sentence or example.text[:200]}")
                 print(f"    https://www.reddit.com{example.permalink}")

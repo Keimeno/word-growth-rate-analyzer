@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
+from wgra.sources.reddit import channels as reddit_channels
 from wgra.text.intents import INTENT_KINDS
 
 # every tracked subreddit is also part of this group, so dashboards and queries can
@@ -47,14 +48,7 @@ def _intent_defaults[T](value: T) -> dict[str, T]:
 
 @dataclass(frozen=True)
 class IngestConfig:
-    # reddit allows 100 requests per minute per OAuth client, keep some headroom
-    requests_per_minute: float = 90
-    # subreddits are polled together as multireddits (r/a+b+c), this caps the url length
-    max_subreddits_per_feed: int = 25
-    min_poll_interval: float = 2.0
-    max_comment_poll_interval: float = 300.0
-    max_post_poll_interval: float = 900.0
-    # longest phrase (in words) that is counted
+    # longest phrase (in words) that is counted, background channels have their own
     max_ngram: int = 3
 
 
@@ -65,20 +59,60 @@ class IntentsConfig:
     docs/ARCHITECTURE.md §4.7."""
 
     enabled: bool = True
-    # also in the r/all sample: reddit-wide intents, and the prior for scoring them
+    # also in background channels (the r/all sample): platform-wide intents, and the prior
+    # for scoring them
     sample: bool = True
 
 
 @dataclass(frozen=True)
-class BackgroundConfig:
-    """A sample of all of reddit, used as the "normal" vocabulary to compare against."""
+class RedditSampleConfig:
+    """A sample of all of reddit, the channel r/all: the "normal" vocabulary to compare
+    against."""
 
-    subreddit: str = "all"
-    # 0 disables the background sample
+    # 0 disables the sample
     requests_per_minute: float = 20
     # the sample is only the "normal" vocabulary to compare against, trigrams of thousands
     # of unrelated subreddits would mostly be stored once and never looked at again
     max_ngram: int = 2
+
+
+@dataclass(frozen=True)
+class RedditConfig:
+    enabled: bool = True
+    # reddit allows 100 requests per minute per OAuth client, keep some headroom
+    requests_per_minute: float = 90
+    # subreddits are polled together as multireddits (r/a+b+c), this caps the url length
+    max_subreddits_per_feed: int = 25
+    min_poll_interval: float = 2.0
+    max_comment_poll_interval: float = 300.0
+    max_post_poll_interval: float = 900.0
+    sample: RedditSampleConfig = field(default_factory=RedditSampleConfig)
+
+
+@dataclass(frozen=True)
+class PlatformsConfig:
+    """Where documents come from, each platform a source of its own."""
+
+    reddit: RedditConfig = field(default_factory=RedditConfig)
+
+    def enabled(self) -> list[str]:
+        return [reddit_channels.PLATFORM] if self.reddit.enabled else []
+
+
+@dataclass(frozen=True)
+class Channel:
+    """What's collected and counted, a tracked subreddit or the r/all sample. Its id
+    carries its platform ("r/technology"), so ids of different platforms can't clash."""
+
+    id: str
+    platform: str
+    language: str = "en"
+    # the detectors see it: not r/_search, whose counts aren't shares of anything
+    analyzed: bool = True
+    # the platform channel, its whole platform: the prior of its platform's scores
+    background: bool = False
+    # how it reads in messages, when not by its id
+    label: str = ""
 
 
 @dataclass(frozen=True)
@@ -395,10 +429,11 @@ class RadarConfig:
 
 @dataclass(frozen=True)
 class Config:
+    # group -> the ids of its channels ("r/technology")
     groups: dict[str, tuple[str, ...]]
-    # subreddit -> language code, subreddits without an entry are english
+    # channel -> language code, channels without an entry are english
     languages: dict[str, str] = field(default_factory=dict)
-    background: BackgroundConfig = field(default_factory=BackgroundConfig)
+    platforms: PlatformsConfig = field(default_factory=PlatformsConfig)
     ingest: IngestConfig = field(default_factory=IngestConfig)
     intents: IntentsConfig = field(default_factory=IntentsConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
@@ -410,11 +445,59 @@ class Config:
     radar: RadarConfig = field(default_factory=RadarConfig)
 
     @cached_property
-    def subreddits(self) -> tuple[str, ...]:
-        return tuple(sorted({sub for subs in self.groups.values() for sub in subs}))
+    def _channels(self) -> dict[str, Channel]:
+        listed = sorted({channel for channels in self.groups.values() for channel in channels})
+        channels = {
+            channel: Channel(channel, reddit_channels.PLATFORM, self.language(channel))
+            for channel in listed
+        }
+        channels[reddit_channels.SAMPLE] = Channel(
+            reddit_channels.SAMPLE,
+            reddit_channels.PLATFORM,
+            self.language(reddit_channels.SAMPLE),
+            background=True,
+            label=reddit_channels.SAMPLE_LABEL,
+        )
+        channels[reddit_channels.SEARCH] = Channel(
+            reddit_channels.SEARCH, reddit_channels.PLATFORM, analyzed=False
+        )
+        return channels
 
-    def language(self, subreddit: str) -> str:
-        return self.languages.get(subreddit.lower(), "en")
+    def channels(self) -> tuple[Channel, ...]:
+        """Every channel: those the groups list, and each platform's own (r/all, r/_search)."""
+        return tuple(self._channels.values())
+
+    def channel(self, channel: str) -> Channel | None:
+        return self._channels.get(channel)
+
+    def tracked(self, platform: str) -> tuple[str, ...]:
+        """The channels of a platform that groups list, collected completely: for reddit
+        the tracked subreddits."""
+        return tuple(
+            channel.id
+            for channel in self._channels.values()
+            if channel.platform == platform and channel.analyzed and not channel.background
+        )
+
+    def language(self, channel: str) -> str:
+        return self.languages.get(channel.lower(), "en")
+
+    def max_ngram(self, channel: str) -> int:
+        """The longest phrase counted in a channel: background channels have their own."""
+        info = self._channels.get(channel)
+        if info is not None and info.background:
+            return self.platforms.reddit.sample.max_ngram
+        return self.ingest.max_ngram
+
+    def counts_intents(self, channel: str) -> bool:
+        info = self._channels.get(channel)
+        background = info is not None and info.background
+        return self.intents.enabled and (self.intents.sample or not background)
+
+    @cached_property
+    def subreddits(self) -> tuple[str, ...]:
+        """The names of the tracked subreddits, for collecting them."""
+        return tuple(map(reddit_channels.subreddit_of, self.tracked(reddit_channels.PLATFORM)))
 
     def scope(self, subreddit: str) -> str:
         """Where an item's counts go: its subreddit if tracked, the sample otherwise."""
@@ -424,40 +507,98 @@ class Config:
     def _tracked(self) -> frozenset[str]:
         return frozenset(self.subreddits)
 
+    @cached_property
+    def subreddit_groups(self) -> dict[str, tuple[str, ...]]:
+        """The groups with subreddit names, as stored until the storage has channels."""
+        return {
+            group: tuple(map(reddit_channels.subreddit_of, channels))
+            for group, channels in self.groups.items()
+        }
+
     def group_memberships(self) -> list[tuple[str, str]]:
         """(group, subreddit) pairs, including the implicit "tracked" and "sample" groups."""
-        pairs = [(group, sub) for group, subs in self.groups.items() for sub in subs]
+        pairs = [
+            (group, reddit_channels.subreddit_of(channel))
+            for group, channels in self.groups.items()
+            for channel in channels
+        ]
         pairs += [(TRACKED_GROUP, sub) for sub in self.subreddits]
         pairs.append((SAMPLE_GROUP, SAMPLE_SCOPE))
         return sorted(set(pairs))
 
 
-def _normalize_subreddit(name: str) -> str:
-    return name.strip().removeprefix("/").removeprefix("r/").lower()
+def _channel_id(name: object, where: str) -> str:
+    """A channel id as config.yaml writes it, lowercase. Bare names are an error, they're
+    subreddits or groups."""
+    channel = str(name).strip().removeprefix("/").lower()
+    if reddit_channels.is_channel(channel):
+        return channel
+    hint = f"write r/{channel}" if channel and "/" not in channel else "like r/technology"
+    raise ValueError(f"config: {where}: '{name}' isn't a channel id, {hint}")
+
+
+def parse_groups(raw: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    groups = {
+        str(group): tuple(
+            sorted({_channel_id(channel, f"groups.{group}") for channel in channels or ()})
+        )
+        for group, channels in raw.items()
+    }
+    if not any(groups.values()):
+        raise ValueError("config: at least one group with channels is required")
+    for group, channels in groups.items():
+        if group.lower() == reddit_channels.PLATFORM:
+            raise ValueError(
+                f"config: the group name '{group}' is reserved, it's every tracked subreddit"
+            )
+        if reddit_channels.is_channel(group.strip().removeprefix("/").lower()):
+            raise ValueError(
+                f"config: the group '{group}' is named like a channel, give it another name"
+            )
+        if reddit_channels.SEARCH in channels:
+            raise ValueError(
+                f"config: groups.{group}: {reddit_channels.SEARCH} can't be in a group, the "
+                "detectors don't see it"
+            )
+    return groups
+
+
+# where the reddit keys of before the platforms section went
+_MOVED = {"background": "platforms.reddit.sample"}
+
+
+def parse_platforms(raw: dict[str, Any]) -> PlatformsConfig:
+    raw = dict(raw)
+    reddit = dict(raw.pop("reddit", None) or {})
+    if raw:
+        raise ValueError(f"config: platforms: unknown {', '.join(sorted(raw))}")
+    sample = RedditSampleConfig(**(reddit.pop("sample", None) or {}))
+    return PlatformsConfig(reddit=RedditConfig(sample=sample, **reddit))
+
+
+def parse_ingest(raw: dict[str, Any]) -> IngestConfig:
+    moved = sorted(set(raw) & set(RedditConfig.__dataclass_fields__))
+    if moved:
+        raise ValueError(f"config: ingest.{moved[0]} is now in platforms.reddit")
+    return IngestConfig(**raw)
 
 
 def parse_config(raw: dict[str, Any]) -> Config:
-    groups = {
-        str(group): tuple(sorted({_normalize_subreddit(sub) for sub in subs}))
-        for group, subs in (raw.get("groups") or {}).items()
-    }
-    if not any(groups.values()):
-        raise ValueError("config: at least one group with subreddits is required")
-    for reserved in (TRACKED_GROUP, SAMPLE_GROUP):
-        if reserved in groups:
-            raise ValueError(f"config: the group name '{reserved}' is reserved")
-
+    for old, new in _MOVED.items():
+        if old in raw:
+            raise ValueError(f"config: {old} is now {new}")
+    groups = parse_groups(raw.get("groups") or {})
     languages = {
-        _normalize_subreddit(sub): str(language)
-        for language, subs in (raw.get("languages") or {}).items()
-        for sub in subs
+        _channel_id(channel, f"languages.{language}"): str(language)
+        for language, channels in (raw.get("languages") or {}).items()
+        for channel in channels or ()
     }
 
     return Config(
         groups=groups,
         languages=languages,
-        background=BackgroundConfig(**(raw.get("background") or {})),
-        ingest=IngestConfig(**(raw.get("ingest") or {})),
+        platforms=parse_platforms(raw.get("platforms") or {}),
+        ingest=parse_ingest(raw.get("ingest") or {}),
         intents=IntentsConfig(**(raw.get("intents") or {})),
         detect=parse_detect(raw.get("detect") or {}),
         long_term=parse_long_term(raw.get("long_term") or {}),
@@ -476,9 +617,9 @@ def _check_time(name: str, value: str) -> None:
 
 
 def _normalize_scope(scope: str) -> str:
-    """Groups by name, subreddits as "r/name" (lowercase, like everywhere else)."""
+    """Groups by name, channels by their id (lowercase, like everywhere else)."""
     scope = scope.strip().removeprefix("/")
-    return f"r/{_normalize_subreddit(scope)}" if scope.lower().startswith("r/") else scope
+    return scope.lower() if reddit_channels.is_channel(scope.lower()) else scope
 
 
 def _per_kind(name: str, raw: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:

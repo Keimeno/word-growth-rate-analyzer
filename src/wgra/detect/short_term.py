@@ -322,7 +322,7 @@ class Detector:
         """Single words that are never a trend: stopwords in every language of the scope.
 
         "war" is a stopword in German ("was"), but not in r/worldnews."""
-        languages = {self._config.language(sub) for sub in scope.subreddits}
+        languages = {self._config.language(f"r/{sub}") for sub in scope.subreddits}
         return frozenset.intersection(*(stopwords(language) for language in languages))
 
     def score_scope(

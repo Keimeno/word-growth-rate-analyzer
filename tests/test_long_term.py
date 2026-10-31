@@ -161,7 +161,7 @@ def history() -> History:
 
 def config_for_tests(**long_term: Any) -> Config:
     config = make_config(
-        groups={"tech": ["big", "small"], "other": ["late"]},
+        groups={"tech": ["r/big", "r/small"], "other": ["r/late"]},
         notify={"report_day": "monday", "report_time": "08:00", "timezone": "UTC"},
     )
     return replace(config, long_term=replace(LongTermConfig(), **long_term))

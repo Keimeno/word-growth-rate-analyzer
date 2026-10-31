@@ -29,7 +29,10 @@ from wgra.leadlag.run import LeadLag
 from wgra.notify.ntfy import Ntfy
 
 # the tracked group adds nothing here and costs a third of the detector's time
-CONFIG = make_config(groups=GROUPS, detect={"exclude_scopes": ["tracked"]})
+CONFIG = make_config(
+    groups={group: [f"r/{member}" for member in members] for group, members in GROUPS.items()},
+    detect={"exclude_scopes": ["tracked"]},
+)
 HOURS = 3600
 
 

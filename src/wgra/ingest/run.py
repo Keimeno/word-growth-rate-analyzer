@@ -274,6 +274,6 @@ async def run_ingest(config: Config, env: Env, stop: asyncio.Event) -> None:
         env.reddit_client_id,
         env.reddit_client_secret,
         env.reddit_user_agent,
-        config.ingest.requests_per_minute,
+        config.platforms.reddit.requests_per_minute,
     ) as reddit:
         await Ingester(config, env, reddit, client).run(stop)

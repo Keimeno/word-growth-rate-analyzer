@@ -61,7 +61,7 @@ def sample(args: argparse.Namespace) -> None:
     ) as stream:
         for item_id, scope, created_at, permalink, text in stream:
             items += 1
-            language = config.language(real_subreddit(permalink))
+            language = config.language(f"r/{real_subreddit(permalink)}")
             extract = extractor(language)
             for sentence, tokens in sentences_as_written(clean(text), language):
                 for pattern, term in extract.matches(tokens):

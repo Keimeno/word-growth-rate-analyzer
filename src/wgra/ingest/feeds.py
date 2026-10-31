@@ -27,6 +27,7 @@ from wgra.config import Config
 from wgra.ingest.search import search_query
 from wgra.reddit.client import LISTING_LIMIT
 from wgra.reddit.models import RedditItem
+from wgra.sources.reddit.channels import SAMPLE, subreddit_of
 
 FeedKind = Literal["comments", "posts"]
 
@@ -92,18 +93,17 @@ def build_feeds(config: Config, subreddits: Sequence[str] | None = None) -> list
     subreddits = config.subreddits if subreddits is None else subreddits
     feeds = []
     for index, chunk in enumerate(
-        batched(subreddits, config.ingest.max_subreddits_per_feed, strict=False)
+        batched(subreddits, config.platforms.reddit.max_subreddits_per_feed, strict=False)
     ):
         for kind in ("comments", "posts"):
             feeds.append(Feed(name=f"{kind}-{index + 1}", kind=kind, subreddits=chunk))
 
-    background = config.background
-    if background.requests_per_minute > 0:
+    if config.platforms.reddit.sample.requests_per_minute > 0:
         feeds.append(
             Feed(
-                name=f"background-{background.subreddit}",
+                name=f"background-{subreddit_of(SAMPLE)}",
                 kind="comments",
-                subreddits=(background.subreddit,),
+                subreddits=(subreddit_of(SAMPLE),),
                 background=True,
             )
         )
@@ -133,13 +133,13 @@ def observed_rate(items: Sequence[RedditItem]) -> float | None:
 class FeedScheduler:
     def __init__(self, feeds: list[Feed], config: Config):
         self.feeds = feeds
-        self._ingest = config.ingest
-        background_budget = config.background.requests_per_minute if self._background else 0
+        self._reddit = config.platforms.reddit
+        background_budget = self._reddit.sample.requests_per_minute if self._background else 0
         self._background_interval = 60.0 / background_budget if background_budget else 0.0
         self._search_interval = config.radar.search_interval_minutes * 60
         search_budget = sum(60.0 / self._search_interval for feed in feeds if feed.search)
         self._tracked_budget = max(
-            config.ingest.requests_per_minute - background_budget - search_budget, 1.0
+            self._reddit.requests_per_minute - background_budget - search_budget, 1.0
         )
 
     @property
@@ -194,13 +194,13 @@ class FeedScheduler:
 
     def _desired_interval(self, feed: Feed) -> float:
         maximum = (
-            self._ingest.max_comment_poll_interval
+            self._reddit.max_comment_poll_interval
             if feed.kind == "comments"
-            else self._ingest.max_post_poll_interval
+            else self._reddit.max_post_poll_interval
         )
         if not feed.rate:
             return maximum
-        return min(max(TARGET_NEW_ITEMS / feed.rate, self._ingest.min_poll_interval), maximum)
+        return min(max(TARGET_NEW_ITEMS / feed.rate, self._reddit.min_poll_interval), maximum)
 
     def _budget_scale(self) -> float:
         """Stretch all tracked intervals when they'd need more than the budget."""

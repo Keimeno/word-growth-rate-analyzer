@@ -5,10 +5,15 @@ from wgra.detect.short_term import Trend
 from wgra.reddit.models import RedditItem
 
 
+def no_sample(**reddit: object) -> dict[str, object]:
+    """config.yaml's platforms section without the r/all sample."""
+    return {"reddit": {"sample": {"requests_per_minute": 0}, **reddit}}
+
+
 def make_config(**overrides: object) -> Config:
     raw: dict[str, object] = {
-        "groups": {"tech": ["technology", "programming"], "de": ["de"]},
-        "languages": {"de": ["de"]},
+        "groups": {"tech": ["r/technology", "r/programming"], "de": ["r/de"]},
+        "languages": {"de": ["r/de"]},
     }
     raw.update(overrides)
     return parse_config(raw)

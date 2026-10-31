@@ -114,7 +114,7 @@ def build_history() -> History:
 @pytest.fixture
 def history_client(client):
     migrate(client)
-    config = make_config(groups={"tech": ["technology", "programming"]})
+    config = make_config(groups={"tech": ["r/technology", "r/programming"]})
     client.insert(
         "subreddit_groups", config.group_memberships(), column_names=["group_name", "subreddit"]
     )
@@ -123,7 +123,7 @@ def history_client(client):
 
 
 def config_for_tests() -> Config:
-    config = make_config(groups={"tech": ["technology", "programming"]})
+    config = make_config(groups={"tech": ["r/technology", "r/programming"]})
     # "vision pro" has 30 authors, "newthing" 27: only the first alerts
     notify = NotifyConfig(alert_min_z=5, alert_min_authors=28, digest_time="08:00")
     return replace(config, notify=notify)
