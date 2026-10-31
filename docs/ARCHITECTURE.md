@@ -1355,6 +1355,13 @@ Still open:
 * Intent-specific alerts, e.g. an outage: "complaint: x" bursting across subreddits. Alerts
   already include intents, but at the words' alert gates (z ≥ 10, 20 authors).
 
+### Churn radar (planned, not started)
+
+A weekly report per product and its competitors: switches, people considering leaving,
+complaints, reasons and missing features, with the threads behind them. Built on intents
+without paid APIs or a model. The plan, its phases and go/no-go gates are in
+[CHURN-RADAR.md](CHURN-RADAR.md).
+
 ### Phase 5: hardening and cutover
 
 * Done 2026-10-31: v2 moved to the repository root, v1's code and its deployment
