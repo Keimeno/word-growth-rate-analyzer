@@ -15,13 +15,37 @@
     "to": "now"
   },
   "templating": {
-    "list": []
+    "list": [
+      {
+        "type": "query",
+        "name": "platform",
+        "label": "Platform",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT platform FROM channels ORDER BY platform",
+        "definition": "SELECT DISTINCT platform FROM channels ORDER BY platform",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
   },
   "panels": [
     {
       "type": "stat",
       "title": "Comments + posts stored, last 24h",
-      "description": "From tracked subreddits, without the r/all sample.",
+      "description": "From the tracked channels of the selected platforms, without their samples (r/all).",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -41,7 +65,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(docs) FROM scope_hourly WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = 'tracked') AND hour >= now() - INTERVAL 24 HOUR",
+          "rawSql": "SELECT sum(docs) FROM scope_hourly WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name IN (${platform:singlequote})) AND hour >= now() - INTERVAL 24 HOUR",
           "refId": "A"
         }
       ],
@@ -84,7 +108,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT count() FROM polls WHERE ts > now() - INTERVAL 10 MINUTE",
+          "rawSql": "SELECT count() FROM polls WHERE platform IN (${platform:singlequote}) AND ts > now() - INTERVAL 10 MINUTE",
           "refId": "A"
         }
       ],
@@ -127,7 +151,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(gap) FROM polls WHERE ts > now() - INTERVAL 24 HOUR",
+          "rawSql": "SELECT sum(gap) FROM polls WHERE platform IN (${platform:singlequote}) AND ts > now() - INTERVAL 24 HOUR",
           "refId": "A"
         }
       ],
@@ -184,7 +208,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(new_items) / sum(id_span) FROM polls WHERE background AND id_span > 0 AND $__timeFilter(ts)",
+          "rawSql": "SELECT sum(new_items) / sum(id_span) FROM polls WHERE platform = 'reddit' AND sample AND id_span > 0 AND $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -229,7 +253,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, feed, sum(new_items) / ($__interval_s / 60) AS per_minute\nFROM polls\nWHERE $__timeFilter(ts)\nGROUP BY time, feed\nORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, feed, sum(new_items) / ($__interval_s / 60) AS per_minute\nFROM polls\nWHERE platform IN (${platform:singlequote}) AND $__timeFilter(ts)\nGROUP BY time, feed\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -284,7 +308,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time,\n       count() / ($__interval_s / 60) AS requests,\n       countIf(status != 200) / ($__interval_s / 60) AS errors,\n       sum(gap) / ($__interval_s / 60) AS gaps\nFROM polls\nWHERE $__timeFilter(ts)\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time,\n       count() / ($__interval_s / 60) AS requests,\n       countIf(status != 200) / ($__interval_s / 60) AS errors,\n       sum(gap) / ($__interval_s / 60) AS gaps\nFROM polls\nWHERE platform IN (${platform:singlequote}) AND $__timeFilter(ts)\nGROUP BY time\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -338,7 +362,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT feed, count() AS polls, countIf(status != 200) AS errors, sum(new_items) AS new_items,\n       sum(gap) AS gaps, round(avg(interval_s), 1) AS poll_every_s,\n       round(argMax(rate, ts) * 60) AS items_per_minute, max(ts) AS last_poll\nFROM polls\nWHERE ts > now() - INTERVAL 1 HOUR\nGROUP BY feed\nORDER BY feed",
+          "rawSql": "SELECT platform, feed, count() AS polls, countIf(status != 200) AS errors,\n       sum(new_items) AS new_items, sum(gap) AS gaps, round(avg(interval_s), 1) AS poll_every_s,\n       round(argMax(rate, ts) * 60) AS items_per_minute, max(ts) AS last_poll\nFROM polls\nWHERE platform IN (${platform:singlequote}) AND ts > now() - INTERVAL 1 HOUR\nGROUP BY platform, feed\nORDER BY platform, feed",
           "refId": "A"
         }
       ],
@@ -383,8 +407,8 @@
     },
     {
       "type": "table",
-      "title": "Tracked subreddits, last 24h",
-      "description": "",
+      "title": "Channels, last 24h",
+      "description": "Every channel of config.yaml: the tracked ones, the samples (r/all) and the radar's search (r/_search). authors adds up per type: a person writing a comment and a post counts twice.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -404,7 +428,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT subreddit,\n       sumIf(docs, source = 'comment') AS comments,\n       sumIf(docs, source = 'post') AS posts,\n       uniqCombinedMerge(12)(authors) AS authors\nFROM scope_hourly\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = 'tracked') AND hour >= now() - INTERVAL 24 HOUR\nGROUP BY subreddit\nORDER BY comments DESC",
+          "rawSql": "SELECT c.channel AS channel, c.platform AS platform, sum(s.docs) AS documents,\n       arrayStringConcat(\n           arraySort(groupArrayIf(concat(s.doc_type, ' ', toString(s.docs)), s.docs > 0)), ', '\n       ) AS by_type,\n       sum(s.authors) AS authors\nFROM channels AS c\nLEFT JOIN (\n    SELECT channel, doc_type, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors\n    FROM scope_hourly\n    WHERE hour >= now() - INTERVAL 24 HOUR\n    GROUP BY channel, doc_type\n) AS s ON s.channel = c.channel\nWHERE c.platform IN (${platform:singlequote})\nGROUP BY c.channel, c.platform\nORDER BY c.platform, documents DESC, c.channel",
           "refId": "A"
         }
       ],

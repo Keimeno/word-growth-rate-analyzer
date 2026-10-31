@@ -19,32 +19,32 @@
       {
         "type": "query",
         "name": "group",
-        "label": "Group",
+        "label": "Group or channel",
         "datasource": {
           "type": "grafana-clickhouse-datasource",
           "uid": "clickhouse"
         },
-        "query": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
-        "definition": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "query": "SELECT name FROM (SELECT DISTINCT group_name AS name, 0 AS position, group_name IN (SELECT platform FROM channels) AS platform FROM channel_groups UNION ALL SELECT channel, 1, false FROM channels WHERE analyzed) ORDER BY position, platform DESC, name",
+        "definition": "SELECT name FROM (SELECT DISTINCT group_name AS name, 0 AS position, group_name IN (SELECT platform FROM channels) AS platform FROM channel_groups UNION ALL SELECT channel, 1, false FROM channels WHERE analyzed) ORDER BY position, platform DESC, name",
         "refresh": 1,
         "multi": false,
         "includeAll": false,
         "sort": 0,
         "current": {
-          "text": "tracked",
-          "value": "tracked"
+          "text": "reddit",
+          "value": "reddit"
         }
       },
       {
         "type": "query",
-        "name": "subreddit",
-        "label": "Subreddits",
+        "name": "channel",
+        "label": "Channels",
         "datasource": {
           "type": "grafana-clickhouse-datasource",
           "uid": "clickhouse"
         },
-        "query": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
-        "definition": "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} ORDER BY subreddit",
+        "query": "SELECT channel FROM (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) ORDER BY channel",
+        "definition": "SELECT channel FROM (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) ORDER BY channel",
         "refresh": 1,
         "multi": true,
         "includeAll": true,
@@ -60,34 +60,28 @@
         }
       },
       {
-        "type": "custom",
-        "name": "source",
-        "label": "Source",
-        "query": "comment,post",
-        "options": [
-          {
-            "text": "comment",
-            "value": "comment",
-            "selected": true
-          },
-          {
-            "text": "post",
-            "value": "post",
-            "selected": true
-          }
-        ],
+        "type": "query",
+        "name": "doc_type",
+        "label": "Type",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "query": "SELECT DISTINCT doc_type FROM scope_hourly ORDER BY doc_type",
+        "definition": "SELECT DISTINCT doc_type FROM scope_hourly ORDER BY doc_type",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "sort": 0,
+        "allValue": "$__all",
         "current": {
           "text": [
-            "comment",
-            "post"
+            "All"
           ],
           "value": [
-            "comment",
-            "post"
+            "$__all"
           ]
-        },
-        "multi": true,
-        "includeAll": false
+        }
       },
       {
         "type": "custom",
@@ -254,7 +248,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
           "refId": "A"
         }
       ],
@@ -297,7 +291,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'considering' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'considering' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
           "refId": "A"
         }
       ],
@@ -340,7 +334,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'alternative' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'alternative' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
           "refId": "A"
         }
       ],
@@ -383,7 +377,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'complaint' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'complaint' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
           "refId": "A"
         }
       ],
@@ -426,7 +420,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(docs) FROM term_daily WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'need' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
+          "rawSql": "SELECT sum(docs) FROM term_daily WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'need' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)",
           "refId": "A"
         }
       ],
@@ -449,7 +443,7 @@
     {
       "type": "stat",
       "title": "Counting intents since",
-      "description": "The first day with intents, in any subreddit: they're extracted at ingest, so there is no history before the ingester started extracting them (plus the 48 hours of raw text before, with wgra backfill-intents).",
+      "description": "The first day with intents, in any channel: they're extracted at ingest, so there is no history before the ingester started extracting them (plus the 48 hours of raw text before, with wgra backfill-intents).",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -492,7 +486,7 @@
     {
       "type": "table",
       "title": "Top switching flows (x → y)",
-      "description": "Someone switched from x to y, in the selected subreddits and time range: 'switched from Notion to Obsidian', 'dropped ChatGPT for Claude', 'we replaced our Jira with Linear', 'the Jenkins to GitHub Actions migration'. mentions: comments and posts (each counts once), authors: different people. the other way: the mentions of y → x, who is winning. per_10k: per 10,000 comments and posts. Click a flow for the comments behind it (last 48 hours) or the term explorer.",
+      "description": "Someone switched from x to y, in the selected channels and time range: 'switched from Notion to Obsidian', 'dropped ChatGPT for Claude', 'we replaced our Jira with Linear', 'the Jenkins to GitHub Actions migration'. mentions: comments and posts (each counts once), authors: different people. the other way: the mentions of y → x, who is winning. per_10k: per 10,000 comments and posts. Click a flow for the comments behind it (last 48 hours) or the term explorer.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -512,7 +506,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(toDate($__fromTime), 'UTC') AND hour < toDateTime(toDate($__toTime) + 1, 'UTC')) AS total,\n    flows AS (\n        SELECT term, sum(docs) AS mentions, uniqCombinedMerge(12)(authors) AS authors\n        FROM term_daily\n        WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\n        GROUP BY term\n    )\nSELECT\n    splitByString(' → ', f.term)[1] AS from,\n    splitByString(' → ', f.term)[2] AS to,\n    f.mentions AS mentions,\n    f.authors AS authors,\n    r.mentions AS `the other way`,\n    round(10000 * f.mentions / total, 2) AS per_10k,\n    f.term AS term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM flows AS f\nLEFT JOIN flows AS r\n    ON r.term = concat(splitByString(' → ', f.term)[2], ' → ', splitByString(' → ', f.term)[1])\nWHERE f.authors >= ${min_authors:raw}\nORDER BY mentions DESC, authors DESC, from\nLIMIT 50",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND hour >= toDateTime(toDate($__fromTime), 'UTC') AND hour < toDateTime(toDate($__toTime) + 1, 'UTC')) AS total,\n    flows AS (\n        SELECT term, sum(docs) AS mentions, uniqCombinedMerge(12)(authors) AS authors\n        FROM term_daily\n        WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\n        GROUP BY term\n    )\nSELECT\n    splitByString(' → ', f.term)[1] AS from,\n    splitByString(' → ', f.term)[2] AS to,\n    f.mentions AS mentions,\n    f.authors AS authors,\n    r.mentions AS `the other way`,\n    round(10000 * f.mentions / total, 2) AS per_10k,\n    f.term AS term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM flows AS f\nLEFT JOIN flows AS r\n    ON r.term = concat(splitByString(' → ', f.term)[2], ' → ', splitByString(' → ', f.term)[1])\nWHERE f.authors >= ${min_authors:raw}\nORDER BY mentions DESC, authors DESC, from\nLIMIT 50",
           "refId": "A"
         },
         {
@@ -523,7 +517,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\nGROUP BY time, term\nORDER BY time",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'switch' AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\nGROUP BY time, term\nORDER BY time",
           "refId": "B"
         }
       ],
@@ -757,7 +751,7 @@
     {
       "type": "table",
       "title": "Rising: alternatives sought",
-      "description": "Alternatives people look for or use instead: 'alternatives to LastPass', 'a good Plex alternative', 'I use Firefox instead of Chrome', 'moving away from AWS'. The last 7 days (today included) against the 28 days before, in the selected subreddits; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its subreddits. per day: the last 35 days. Click an entry for the comments behind it.",
+      "description": "Alternatives people look for or use instead: 'alternatives to LastPass', 'a good Plex alternative', 'I use Firefox instead of Chrome', 'moving away from AWS'. The last 7 days (today included) against the 28 days before, in the selected channels; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its channels. per day: the last 35 days. Click an entry for the comments behind it.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -777,7 +771,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'alternative' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT concat('r/', subreddit)\n                        FROM subreddit_groups WHERE group_name = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ': ') > 0, substring(term, position(term, ': ') + 2), term) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'alternative' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'alternative' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ': ') > 0, substring(term, position(term, ': ') + 2), term) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'alternative' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
           "refId": "A"
         },
         {
@@ -788,7 +782,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'alternative' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'alternative' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
           "refId": "B"
         }
       ],
@@ -1028,7 +1022,7 @@
     {
       "type": "table",
       "title": "Rising: complaints",
-      "description": "'is Reddit down?', 'Teams is unusable', 'cancelled my Netflix subscription', 'Spotify raised prices again', 'YouTube enshittification'. The last 7 days (today included) against the 28 days before, in the selected subreddits; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its subreddits. per day: the last 35 days. Click an entry for the comments behind it.",
+      "description": "'is Reddit down?', 'Teams is unusable', 'cancelled my Netflix subscription', 'Spotify raised prices again', 'YouTube enshittification'. The last 7 days (today included) against the 28 days before, in the selected channels; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its channels. per day: the last 35 days. Click an entry for the comments behind it.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -1048,7 +1042,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'complaint' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT concat('r/', subreddit)\n                        FROM subreddit_groups WHERE group_name = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ': ') > 0, substring(term, position(term, ': ') + 2), term) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'complaint' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'complaint' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ': ') > 0, substring(term, position(term, ': ') + 2), term) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'complaint' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
           "refId": "A"
         },
         {
@@ -1059,7 +1053,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'complaint' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'complaint' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
           "refId": "B"
         }
       ],
@@ -1319,7 +1313,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    g.group_name AS group,\n    substring(t.term, 7) AS need,\n    sum(t.docs) AS mentions,\n    uniqCombinedMerge(12)(t.authors) AS authors,\n    t.term AS term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(group), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(group), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily AS t\nINNER JOIN subreddit_groups AS g ON g.subreddit = t.subreddit\nWHERE t.kind = 'need' AND t.day >= toDate($__fromTime) AND t.day <= toDate($__toTime)\n  AND t.source IN (${source:singlequote}) AND g.group_name != 'tracked'\nGROUP BY group, term\nHAVING authors >= ${min_authors:raw}\nORDER BY group, mentions DESC, authors DESC, need\nLIMIT 10 BY group",
+          "rawSql": "SELECT\n    g.group_name AS group,\n    substring(t.term, 7) AS need,\n    sum(t.docs) AS mentions,\n    uniqCombinedMerge(12)(t.authors) AS authors,\n    t.term AS term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(group), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(group), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily AS t\nINNER JOIN (\n    SELECT group_name, channel FROM channel_groups\n    WHERE group_name NOT IN (SELECT platform FROM channels)\n    UNION ALL SELECT channel, channel FROM channels WHERE background\n) AS g ON g.channel = t.channel\nWHERE t.kind = 'need' AND t.day >= toDate($__fromTime) AND t.day <= toDate($__toTime)\n  AND $__conditionalAll(t.doc_type IN (${doc_type:singlequote}), $doc_type)\nGROUP BY group, term\nHAVING authors >= ${min_authors:raw}\nORDER BY group, mentions DESC, authors DESC, need\nLIMIT 10 BY group",
           "refId": "A"
         }
       ],
@@ -1426,7 +1420,7 @@
     {
       "type": "table",
       "title": "Comments behind intents, last 48 hours",
-      "description": "The comments and posts the intents were found in, newest first. Raw text is only kept for 48 hours, and only items ingested since intents were extracted (migration 005) carry them. Set Term (or click an entry in the tables above) to see one intent's comments, e.g. 'notion → obsidian' or 'complaint: reddit'; empty shows all of the selected kinds.",
+      "description": "The comments and posts the intents were found in, newest first. Raw text is only kept for 48 hours. Set Term (or click an entry in the tables above) to see one intent's comments, e.g. 'notion → obsidian' or 'complaint: reddit'; empty shows all of the selected kinds.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -1446,7 +1440,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    created_at AS time,\n    -- not \"AS subreddit\": the alias would replace the column in WHERE\n    splitByChar('/', permalink)[3] AS community,\n    arrayStringConcat(arrayFilter(t -> if(position(t, ': ') > 0, splitByString(': ', t)[1], 'switch') IN (${intent_kind:singlequote})\n                                       AND (${term:sqlstring} = '' OR t = ${term:sqlstring}),\n                                  intents), ', ') AS found,\n    substring(text, 1, 500) AS text,\n    concat('https://www.reddit.com', permalink) AS link\nFROM items\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND created_at > now() - INTERVAL 48 HOUR\n  AND arrayExists(t -> if(position(t, ': ') > 0, splitByString(': ', t)[1], 'switch') IN (${intent_kind:singlequote})\n                       AND (${term:sqlstring} = '' OR t = ${term:sqlstring}), intents)\nORDER BY created_at DESC\nLIMIT 200",
+          "rawSql": "SELECT\n    created_at AS time,\n    channel,\n    arrayStringConcat(arrayFilter(t -> if(position(t, ': ') > 0, splitByString(': ', t)[1], 'switch') IN (${intent_kind:singlequote})\n                                       AND (${term:sqlstring} = '' OR t = ${term:sqlstring}),\n                                  intents), ', ') AS found,\n    substring(text, 1, 500) AS text,\n    url AS link\nFROM items\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND created_at > now() - INTERVAL 48 HOUR\n  AND arrayExists(t -> if(position(t, ': ') > 0, splitByString(': ', t)[1], 'switch') IN (${intent_kind:singlequote})\n                       AND (${term:sqlstring} = '' OR t = ${term:sqlstring}), intents)\nORDER BY created_at DESC\nLIMIT 200",
           "refId": "A"
         }
       ],
@@ -1463,7 +1457,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open on reddit",
+                    "title": "Open",
                     "url": "${__value.raw}",
                     "targetBlank": true
                   }
@@ -1490,7 +1484,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "community"
+              "options": "channel"
             },
             "properties": [
               {
@@ -1518,7 +1512,7 @@
     {
       "type": "table",
       "title": "Rising: switches considered",
-      "description": "Someone thinks of switching from x to y ('x → y') or of leaving x ('x'), in the first person: 'I'm thinking of switching from Notion to Obsidian', 'should I ditch Notion?', 'about to cancel Netflix'. Not after if, would or could, not advice ('you could switch'). The last 7 days (today included) against the 28 days before, in the selected subreddits; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its subreddits. per day: the last 35 days. Click an entry for the comments behind it.",
+      "description": "Someone thinks of switching from x to y ('x → y') or of leaving x ('x'), in the first person: 'I'm thinking of switching from Notion to Obsidian', 'should I ditch Notion?', 'about to cancel Netflix'. Not after if, would or could, not advice ('you could switch'). The last 7 days (today included) against the 28 days before, in the selected channels; ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly average of the 28 days before. times_usual: the share of comments and posts now against before. excess: mentions above what the share before would give, what the table is sorted by. trend_z: the strongest score of the short-term detector in the last 24 hours, if it trends in the group or one of its channels. per day: the last 35 days. Click an entry for the comments behind it.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -1538,7 +1532,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'considering' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT concat('r/', subreddit)\n                        FROM subreddit_groups WHERE group_name = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ': ') > 0, substring(term, position(term, ': ') + 2), term) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'considering' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
+          "rawSql": "WITH\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND hour >= toDateTime(today() - 6, 'UTC')) AS n_now,\n    (SELECT sum(docs) FROM scope_hourly\n     WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND hour >= toDateTime(today() - 34, 'UTC')\n       AND hour < toDateTime(today() - 6, 'UTC')) AS n_before,\n    trending AS (\n        SELECT term, max(z) AS z FROM trends\n        WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = 'considering' AND subsumed_by = ''\n          AND scope IN (SELECT ${group:sqlstring} UNION ALL SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring})\n        GROUP BY term\n    )\nSELECT\n    if(position(term, ': ') > 0, substring(term, position(term, ': ') + 2), term) AS entity,\n    sumIf(docs, day >= today() - 6) AS mentions,\n    uniqCombinedMergeIf(12)(authors, day >= today() - 6) AS authors,\n    round(sumIf(docs, day < today() - 6) / 4, 1) AS per_week_before,\n    -- the share now against the share before, with half a mention added to both\n    round((mentions + 0.5) / n_now / ((sumIf(docs, day < today() - 6) + 0.5)\n          / greatest(n_before, 1)), 1) AS times_usual,\n    round(mentions - sumIf(docs, day < today() - 6) * n_now / greatest(n_before, 1), 1)\n        AS excess,\n    round(any(t.z), 1) AS trend_z,\n    term,\n    concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&from=now-30d&to=now') AS examples, concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(${group:sqlstring}), '&var-bucket=day&from=now-90d&to=now') AS explore\nFROM term_daily\nLEFT JOIN trending AS t USING term\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'considering' AND day >= today() - 34\nGROUP BY term\nHAVING mentions >= ${min_mentions:raw} AND authors >= ${min_authors:raw}\nORDER BY excess DESC, mentions DESC\nLIMIT 30",
           "refId": "A"
         },
         {
@@ -1549,7 +1543,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind = 'considering' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, term, sum(docs) AS mentions\nFROM term_daily\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind = 'considering' AND day >= today() - 34\nGROUP BY time, term\nORDER BY time",
           "refId": "B"
         }
       ],
@@ -1809,7 +1803,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, kind, sum(docs) AS mentions\nFROM term_daily\nWHERE subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) AND source IN (${source:singlequote}) AND kind IN ('switch', 'alternative', 'complaint', 'need', 'considering') AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\nGROUP BY time, kind\nORDER BY time",
+          "rawSql": "SELECT toDateTime(day, 'UTC') AS time, kind, sum(docs) AS mentions\nFROM term_daily\nWHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}) AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type) AND kind IN ('switch', 'alternative', 'complaint', 'need', 'considering') AND day >= toDate($__fromTime) AND day <= toDate($__toTime)\nGROUP BY time, kind\nORDER BY time",
           "refId": "A"
         }
       ],

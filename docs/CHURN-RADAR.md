@@ -55,7 +55,7 @@ detector already works on them. As built (`radar:` in [config.yaml](../config.ya
 
 ```yaml
 groups:
-  pkm: [Notion, ObsidianMD, Evernote, OneNote, logseq, PKMS, NoteTaking, Zettelkasten]
+  pkm: [r/Notion, r/ObsidianMD, r/Evernote, r/OneNote, r/logseq, r/PKMS, r/NoteTaking, r/Zettelkasten]
 
 radar:
   enabled: true
@@ -104,7 +104,7 @@ Three sources, in order of cost (all of it within reddit's free API tier):
 1. **The watchlist's subreddits** (no new code). The vendors' own subreddits and the
    category subreddits are where "I'm leaving Notion" gets written. They join the tracked
    multireddits and count like every other subreddit.
-2. **Brand search** ([`ingest/search.py`](../src/wgra/ingest/search.py)). Every 15
+2. **Brand search** ([`sources/reddit/search.py`](../src/wgra/sources/reddit/search.py)). Every 15
    minutes per product, reddit search for new posts naming any of its names, anywhere
    (`"notion" OR "notion ai" OR "notion.so"`, newest first). Checked on 2026-10-31:
    * Search finds posts only. `type=comment` is ignored.
@@ -125,10 +125,11 @@ Three sources, in order of cost (all of it within reddit's free API tier):
 Search hits from tracked subreddits are skipped, since the stream already has them. A
 tree's comments that are already stored (the r/all sample caught them, or the tree was
 fetched before a restart) are skipped too. The rest are stored and extracted like any item,
-under a scope of their own, `_search`, like `_sample`. Its counts aren't shares of anything
-(search isn't a complete stream), so it's in no group, and the detectors and alerts never
-see it. Only the radar counts it. Budget: each search is polled at a fixed interval, and its
-share comes off the tracked feeds' budget like the background sample's. For 9 products
+in a channel of their own, `r/_search`, like the sample's `r/all`. Its counts aren't shares
+of anything (search isn't a complete stream), so it's in no group and not `analyzed` in the
+`channels` table: the detectors and alerts never see it. Only the radar counts it. Budget:
+each search is polled at a fixed interval, and its share comes off the tracked feeds' budget
+like the r/all sample's. For 9 products
 that's 36 requests an hour, plus a few dozen trees a day.
 
 ### 2.3 Precision without a model
@@ -225,10 +226,10 @@ trend, and `missing: notion · offline mode` growing for months is a long-term o
 
 ### 2.6 Evidence
 
-`items.intents` loses its permalinks with the text after 48 hours, but a weekly report needs
-links from the whole week. Migration `006_radar.sql` adds `intent_items`, filled by a
-materialized view from `items` for every intent term: id, permalink, the real subreddit,
-created_at, kind and term. There is no text and no author, and it's kept for 90 days.
+`items.intents` loses its urls with the text after 48 hours, but a weekly report needs
+links from the whole week. A new table `intent_items`, filled by a materialized view from
+`items` for every intent term: id, url, the channel, created_at, kind and term (the real
+subreddit is in the url). There is no text and no author, and it's kept for 90 days.
 
 **Quotes respect deletions.** The report fetches the evidence items' current text through
 `/api/info` (100 ids per request) when it's built. Deleted and removed items are left out,
@@ -267,7 +268,7 @@ library, `SMTP_URL` in `.env`), through your own mailbox.
 * Done on 2026-10-31: the stack runs from the repository root on `develop`, migrations 004
   and 005 applied, on the laptop it was developed on. Still open: an always-on machine.
 * **Done when:** `wgra status` and the ingestion dashboard show 7 complete days, and
-  `wgra intents --scope sample --days 1` counts intents.
+  `wgra intents --scope r/all --days 1` counts intents.
 
 ### Phase 1: watchlists and collection (built 2026-10-31, collecting)
 
@@ -278,9 +279,10 @@ Built:
   watchlist and its group `pkm`, single-word names as names in intents (`configure_names`
   in `text/intents.py`, set by the ingester and the backfill).
 * Brand search as feeds of their own (`Feed.search`, fixed interval, budget taken off the
-  tracked feeds), comment trees every 10 minutes, the `_search` scope
-  ([`ingest/search.py`](../src/wgra/ingest/search.py)). What reddit's search returns is in
-  §2.2.
+  tracked feeds), comment trees every 10 minutes, the `_search` scope (since the
+  cross-platform phase 1 the channel `r/_search`,
+  [`sources/reddit/search.py`](../src/wgra/sources/reddit/search.py)). What reddit's search
+  returns is in §2.2.
 * `wgra radar candidates [--watchlist pkm] [--days 1]`
   ([`radar/candidates.py`](../src/wgra/radar/candidates.py)): per product and where it
   comes from, the comments and posts naming it (by its most named name) and those with an

@@ -12,15 +12,31 @@ from pathlib import Path
 OUT = Path(__file__).parent / "dashboards"
 DS = {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"}
 
+# The scope picker ("group") takes a group or a channel: every group, the platforms' first
+# ("reddit": every tracked subreddit), then every analyzed channel ("r/technology", "r/all").
+SCOPES = (
+    "SELECT name FROM ("
+    "SELECT DISTINCT group_name AS name, 0 AS position, "
+    "group_name IN (SELECT platform FROM channels) AS platform FROM channel_groups "
+    "UNION ALL SELECT channel, 1, false FROM channels WHERE analyzed) "
+    "ORDER BY position, platform DESC, name"
+)
+# the channels of the picked scope: a group's, or the channel itself
+GROUP_CHANNELS = (
+    "SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} "
+    "UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring}"
+)
 SCOPE = (
-    "subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}) "
-    "AND $__conditionalAll(subreddit IN (${subreddit:singlequote}), $subreddit) "
-    "AND source IN (${source:singlequote})"
+    f"channel IN ({GROUP_CHANNELS}) "
+    "AND $__conditionalAll(channel IN (${channel:singlequote}), $channel) "
+    "AND $__conditionalAll(doc_type IN (${doc_type:singlequote}), $doc_type)"
 )
 # the kinds of intents (docs/ARCHITECTURE.md §4.7), terms like words otherwise
 INTENT_KINDS = ["switch", "alternative", "complaint", "need", "considering"]
 INTENT_KIND_LIST = ", ".join(f"'{kind}'" for kind in INTENT_KINDS)
 TERM_LIST = "arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring}))"
+# the platform's background channel, the prior of its scores (r/all)
+BACKGROUND = "SELECT channel FROM channels WHERE background"
 TERMS = f"term IN {TERM_LIST}"
 # words of the text and of each term, joined by single spaces, so "GPT-5" matches "gpt 5"
 TEXT_MATCHES_TERMS = (
@@ -129,31 +145,43 @@ def custom_variable(name, label, values, *, default, multi=False, include_all=Fa
     }
 
 
+def group_variable():
+    return query_variable("group", "Group or channel", SCOPES, default="reddit")
+
+
 def scope_variables():
     return [
+        group_variable(),
         query_variable(
-            "group",
-            "Group",
-            "SELECT DISTINCT group_name FROM subreddit_groups "
-            "ORDER BY group_name = 'tracked' DESC, group_name",
-            default="tracked",
-        ),
-        query_variable(
-            "subreddit",
-            "Subreddits",
-            "SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring} "
-            "ORDER BY subreddit",
+            "channel",
+            "Channels",
+            f"SELECT channel FROM ({GROUP_CHANNELS}) ORDER BY channel",
             multi=True,
             include_all=True,
         ),
-        custom_variable(
-            "source",
-            "Source",
-            ["comment", "post"],
-            default=["comment", "post"],
+        query_variable(
+            "doc_type",
+            "Type",
+            "SELECT DISTINCT doc_type FROM scope_hourly ORDER BY doc_type",
             multi=True,
+            include_all=True,
         ),
     ]
+
+
+def scopes_variable():
+    """The picked group and its channels, or the picked channel, for the tables of trends."""
+    return query_variable(
+        "scope",
+        "Scopes",
+        "SELECT scope FROM ("
+        "SELECT ${group:sqlstring} AS scope, 0 AS position "
+        "UNION ALL SELECT channel, 1 FROM channel_groups WHERE group_name = ${group:sqlstring}) "
+        "ORDER BY position, scope",
+        multi=True,
+        include_all=True,
+        all_value=None,
+    )
 
 
 def dashboard(uid, title, description, panels, variables, time_from, refresh=""):
@@ -208,36 +236,36 @@ def term_rows(columns: str, hourly: str, daily: str, group_by: str) -> str:
     GROUP BY {group_by}"""
 
 
-MENTIONS_PER_SUBREDDIT = term_rows(
-    "{bucket} AS time, subreddit, term, sum(docs) AS docs",
+MENTIONS_PER_CHANNEL = term_rows(
+    "{bucket} AS time, channel, term, sum(docs) AS docs",
     HOUR_BUCKET,
     DAY_BUCKET,
-    "time, subreddit, term",
+    "time, channel, term",
 )
 
 terms_dashboard = dashboard(
     "wgra-terms",
     "Term explorer",
-    "How often terms are mentioned in a group or subreddits, relative to all comments and posts.",
+    "How often terms are mentioned in a group or channels, relative to all comments and posts.",
     [
         panel(
             "timeseries",
             "Share of comments and posts mentioning the term (per 1,000)",
             f"""
 WITH totals AS (
-    SELECT {TOTAL_BUCKET} AS time, subreddit, sum(docs) AS n
+    SELECT {TOTAL_BUCKET} AS time, channel, sum(docs) AS n
     FROM scope_hourly
     WHERE {HOURS} AND {SCOPE}
-    GROUP BY time, subreddit
+    GROUP BY time, channel
 )
 SELECT t.time AS time, t.term AS term,
        if(${{rate:sqlstring}} = 'macro', 1000 * t.share_sum / s.members, 1000 * t.docs / s.n)
            AS per_1000
 FROM (
     SELECT time, term, sum(c.docs) AS docs, sum(c.docs / totals.n) AS share_sum
-    FROM ({MENTIONS_PER_SUBREDDIT}
+    FROM ({MENTIONS_PER_CHANNEL}
     ) AS c
-    INNER JOIN totals USING (time, subreddit)
+    INNER JOIN totals USING (time, channel)
     GROUP BY time, term
 ) AS t
 INNER JOIN (SELECT time, sum(n) AS n, count() AS members FROM totals GROUP BY time) AS s
@@ -250,12 +278,12 @@ ORDER BY time
             11,
             description=(
                 "Comments and posts that contain the term, per 1,000 comments and posts in the "
-                "selected subreddits. Dividing by the total removes the daily and weekly activity "
+                "selected channels. Dividing by the total removes the daily and weekly activity "
                 "swings, so the line shows the share of the conversation. Separate several terms "
                 "with commas. Bucket: week sums whole ISO weeks (Monday to Sunday, UTC), as the "
                 "long-term trends do; days and weeks reach back further than hours (180 days). "
                 "Group rate: pooled divides all mentions by all comments and posts; macro "
-                "averages each subreddit's share, so a big subreddit doesn't drown out the "
+                "averages each channel's share, so a big channel doesn't drown out the "
                 "small ones (the long-term trends of groups use it)."
             ),
             interval="1h",
@@ -266,7 +294,7 @@ ORDER BY time
             "Mentions",
             f"""
 SELECT time, term, sum(docs) AS mentions
-FROM ({MENTIONS_PER_SUBREDDIT}
+FROM ({MENTIONS_PER_CHANNEL}
 )
 GROUP BY time, term
 ORDER BY time
@@ -309,28 +337,28 @@ ORDER BY time
             "table",
             "Where it is discussed",
             f"""
-SELECT t.term AS term, t.subreddit AS subreddit, t.docs AS mentions, t.authors AS authors,
+SELECT t.term AS term, t.channel AS channel, t.docs AS mentions, t.authors AS authors,
        round(1000 * t.docs / s.docs, 2) AS per_1000
 FROM (
-    SELECT term, subreddit, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors
+    SELECT term, channel, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors
     FROM ({
                 term_rows(
-                    "term, subreddit, sum(docs) AS docs, uniqCombinedMergeState(12)(authors) "
+                    "term, channel, sum(docs) AS docs, uniqCombinedMergeState(12)(authors) "
                     "AS authors",
                     "",
                     "",
-                    "term, subreddit",
+                    "term, channel",
                 )
             }
     )
-    GROUP BY term, subreddit
+    GROUP BY term, channel
 ) AS t
 INNER JOIN (
-    SELECT subreddit, sum(docs) AS docs
+    SELECT channel, sum(docs) AS docs
     FROM scope_hourly
     WHERE {HOURS} AND {SCOPE}
-    GROUP BY subreddit
-) AS s USING subreddit
+    GROUP BY channel
+) AS s USING channel
 ORDER BY mentions DESC
 LIMIT 100
 """,
@@ -345,8 +373,8 @@ LIMIT 100
             "table",
             "Recent mentions",
             f"""
-SELECT created_at AS time, subreddit, source, substring(text, 1, 400) AS text,
-       concat('https://www.reddit.com', permalink) AS link
+SELECT created_at AS time, channel, doc_type AS type, substring(text, 1, 400) AS text,
+       url AS link
 FROM items
 WHERE $__timeFilter(created_at) AND {SCOPE}
   AND ({TEXT_MATCHES_TERMS} OR hasAny(intents, {TERM_LIST}))
@@ -369,7 +397,7 @@ LIMIT 100
                                 "id": "links",
                                 "value": [
                                     {
-                                        "title": "Open on reddit",
+                                        "title": "Open",
                                         "url": "${__value.raw}",
                                         "targetBlank": True,
                                     }
@@ -383,11 +411,11 @@ LIMIT 100
                         "properties": [{"id": "custom.width", "value": 160}],
                     },
                     {
-                        "matcher": {"id": "byName", "options": "subreddit"},
+                        "matcher": {"id": "byName", "options": "channel"},
                         "properties": [{"id": "custom.width", "value": 120}],
                     },
                     {
-                        "matcher": {"id": "byName", "options": "source"},
+                        "matcher": {"id": "byName", "options": "type"},
                         "properties": [{"id": "custom.width", "value": 80}],
                     },
                 ],
@@ -425,9 +453,9 @@ WITH
      WHERE {SCOPE}
        AND hour >= now() - INTERVAL 8 DAY AND hour < now() - INTERVAL 24 HOUR) AS n_before,
     (SELECT sum(docs) FROM scope_hourly
-     WHERE subreddit = '_sample'
+     WHERE channel IN ({BACKGROUND})
        AND hour >= now() - INTERVAL 8 DAY) AS n_background,
-    -- how many comments' worth of weight the reddit-wide share gets in "usual"
+    -- how many comments' worth of weight the platform-wide share gets in "usual"
     500 AS prior_weight,
     candidates AS (
         SELECT
@@ -444,7 +472,7 @@ WITH
     background AS (
         SELECT term, kind, sum(docs) AS mentions
         FROM term_hourly
-        WHERE subreddit = '_sample'
+        WHERE channel IN ({BACKGROUND})
           AND hour >= now() - INTERVAL 8 DAY
           AND (term, kind) IN (SELECT term, kind FROM candidates)
         GROUP BY term, kind
@@ -455,7 +483,7 @@ SELECT
     c.mentions_24h AS mentions_24h,
     c.authors_24h AS authors_24h,
     c.mentions_before AS mentions_7d_before,
-    b.mentions AS mentions_reddit_sample,
+    b.mentions AS mentions_background,
     (c.mentions_before + prior_weight * (b.mentions + 1) / (n_background + 1))
         / (n_before + prior_weight) AS usual_share,
     round(1000 * c.mentions_24h / n_now, 2) AS per_1000_now,
@@ -474,10 +502,10 @@ LIMIT 200
             description=(
                 "times_usual: the share of comments and posts mentioning a term in the last 24 "
                 "hours, divided by its usual share. Usual blends the term's share in the 7 days "
-                "before with its share in the sample of all of reddit. Without history yet, the "
-                "reddit-wide share dominates, so this first shows what is distinctive for the "
-                "group and turns into what is rising as history accumulates. Ignores the time "
-                "picker. The real trend scoring is on the Trending now dashboard."
+                "before with its share in the platform's background, the r/all sample. Without "
+                "history yet, the platform-wide share dominates, so this first shows what is "
+                "distinctive for the group and turns into what is rising as history accumulates. "
+                "Ignores the time picker. The real trend scoring is on the Trending now dashboard."
             ),
             fieldConfig={
                 "defaults": {},
@@ -507,7 +535,12 @@ LIMIT 200
     "now-24h",
 )
 
-tracked = "subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = 'tracked')"
+# the picked platforms: their polls, and their tracked channels (the group named like the
+# platform, "reddit": every tracked subreddit, not r/all)
+PLATFORMS = "platform IN (${platform:singlequote})"
+TRACKED = (
+    "channel IN (SELECT channel FROM channel_groups WHERE group_name IN (${platform:singlequote}))"
+)
 ingestion_dashboard = dashboard(
     "wgra-ingestion",
     "Ingestion",
@@ -517,18 +550,19 @@ ingestion_dashboard = dashboard(
             "stat",
             "Comments + posts stored, last 24h",
             f"SELECT sum(docs) FROM scope_hourly "
-            f"WHERE {tracked} AND hour >= now() - INTERVAL 24 HOUR",
+            f"WHERE {TRACKED} AND hour >= now() - INTERVAL 24 HOUR",
             0,
             0,
             6,
             5,
             table=True,
-            description="From tracked subreddits, without the r/all sample.",
+            description="From the tracked channels of the selected platforms, without their "
+            "samples (r/all).",
         ),
         panel(
             "stat",
             "Requests, last 10 minutes",
-            "SELECT count() FROM polls WHERE ts > now() - INTERVAL 10 MINUTE",
+            f"SELECT count() FROM polls WHERE {PLATFORMS} AND ts > now() - INTERVAL 10 MINUTE",
             6,
             0,
             6,
@@ -539,7 +573,7 @@ ingestion_dashboard = dashboard(
         panel(
             "stat",
             "Gaps, last 24h",
-            "SELECT sum(gap) FROM polls WHERE ts > now() - INTERVAL 24 HOUR",
+            f"SELECT sum(gap) FROM polls WHERE {PLATFORMS} AND ts > now() - INTERVAL 24 HOUR",
             12,
             0,
             6,
@@ -553,7 +587,7 @@ ingestion_dashboard = dashboard(
             "stat",
             "Share of all reddit comments sampled",
             "SELECT sum(new_items) / sum(id_span) FROM polls "
-            "WHERE background AND id_span > 0 AND $__timeFilter(ts)",
+            "WHERE platform = 'reddit' AND sample AND id_span > 0 AND $__timeFilter(ts)",
             18,
             0,
             6,
@@ -566,10 +600,10 @@ ingestion_dashboard = dashboard(
         panel(
             "timeseries",
             "New items per minute",
-            """
+            f"""
 SELECT $__timeInterval(ts) AS time, feed, sum(new_items) / ($__interval_s / 60) AS per_minute
 FROM polls
-WHERE $__timeFilter(ts)
+WHERE {PLATFORMS} AND $__timeFilter(ts)
 GROUP BY time, feed
 ORDER BY time
 """,
@@ -583,13 +617,13 @@ ORDER BY time
         panel(
             "timeseries",
             "Requests per minute",
-            """
+            f"""
 SELECT $__timeInterval(ts) AS time,
        count() / ($__interval_s / 60) AS requests,
        countIf(status != 200) / ($__interval_s / 60) AS errors,
        sum(gap) / ($__interval_s / 60) AS gaps
 FROM polls
-WHERE $__timeFilter(ts)
+WHERE {PLATFORMS} AND $__timeFilter(ts)
 GROUP BY time
 ORDER BY time
 """,
@@ -602,14 +636,14 @@ ORDER BY time
         panel(
             "table",
             "Feeds, last hour",
-            """
-SELECT feed, count() AS polls, countIf(status != 200) AS errors, sum(new_items) AS new_items,
-       sum(gap) AS gaps, round(avg(interval_s), 1) AS poll_every_s,
+            f"""
+SELECT platform, feed, count() AS polls, countIf(status != 200) AS errors,
+       sum(new_items) AS new_items, sum(gap) AS gaps, round(avg(interval_s), 1) AS poll_every_s,
        round(argMax(rate, ts) * 60) AS items_per_minute, max(ts) AS last_poll
 FROM polls
-WHERE ts > now() - INTERVAL 1 HOUR
-GROUP BY feed
-ORDER BY feed
+WHERE {PLATFORMS} AND ts > now() - INTERVAL 1 HOUR
+GROUP BY platform, feed
+ORDER BY platform, feed
 """,
             0,
             14,
@@ -635,31 +669,51 @@ ORDER BY sum(bytes_on_disk) DESC
         ),
         panel(
             "table",
-            "Tracked subreddits, last 24h",
+            "Channels, last 24h",
             f"""
-SELECT subreddit,
-       sumIf(docs, source = 'comment') AS comments,
-       sumIf(docs, source = 'post') AS posts,
-       uniqCombinedMerge(12)(authors) AS authors
-FROM scope_hourly
-WHERE {tracked} AND hour >= now() - INTERVAL 24 HOUR
-GROUP BY subreddit
-ORDER BY comments DESC
+SELECT c.channel AS channel, c.platform AS platform, sum(s.docs) AS documents,
+       arrayStringConcat(
+           arraySort(groupArrayIf(concat(s.doc_type, ' ', toString(s.docs)), s.docs > 0)), ', '
+       ) AS by_type,
+       sum(s.authors) AS authors
+FROM channels AS c
+LEFT JOIN (
+    SELECT channel, doc_type, sum(docs) AS docs, uniqCombinedMerge(12)(authors) AS authors
+    FROM scope_hourly
+    WHERE hour >= now() - INTERVAL 24 HOUR
+    GROUP BY channel, doc_type
+) AS s ON s.channel = c.channel
+WHERE c.{PLATFORMS}
+GROUP BY c.channel, c.platform
+ORDER BY c.platform, documents DESC, c.channel
 """,
             0,
             22,
             24,
             12,
             table=True,
+            description="Every channel of config.yaml: the tracked ones, the samples (r/all) "
+            "and the radar's search (r/_search). authors adds up per type: a person writing "
+            "a comment and a post counts twice.",
         ),
     ],
-    [],
+    [
+        query_variable(
+            "platform",
+            "Platform",
+            "SELECT DISTINCT platform FROM channels ORDER BY platform",
+            multi=True,
+            include_all=True,
+            all_value=None,
+        ),
+    ],
     "now-6h",
     refresh="1m",
 )
 
-# What the analyzer found (wgra analyze, every 15 minutes). A scope is a tracked subreddit
-# ("r/technology") or a group ("tech"), the dashboard shows a group and its subreddits.
+# What the analyzer found (wgra analyze, every 15 minutes). A scope is a channel
+# ("r/technology", "r/all") or a group ("tech"), the dashboard shows a group and its
+# channels, or one channel.
 TREND_SCOPES = "scope IN (${scope:singlequote})"
 LATEST_RUN = (
     "(SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run"
@@ -672,13 +726,11 @@ LATEST_TRENDS = (
 
 
 def explore_url(scope: str = "scope") -> str:
-    """SQL for the term explorer url of a trend: its group, or its subreddit."""
+    """SQL for the term explorer url of a trend, in its scope (a group or a channel, the
+    scope picker takes either)."""
     return (
         "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
-        f"if(startsWith({scope}, 'r/'), "
-        "concat('&var-group=tracked&var-subreddit=', "
-        f"encodeURLFormComponent(substring({scope}, 3))), "
-        f"concat('&var-group=', encodeURLFormComponent({scope}))), '&from=now-7d&to=now')"
+        f"'&var-group=', encodeURLFormComponent({scope}), '&from=now-7d&to=now')"
     )
 
 
@@ -688,7 +740,7 @@ WITH {LATEST_RUN}
 SELECT hour AS time, term, sum(docs) AS mentions
 FROM term_hourly
 WHERE hour > latest_run - INTERVAL 7 DAY AND hour <= latest_run
-  AND subreddit IN (SELECT subreddit FROM subreddit_groups WHERE group_name = ${{group:sqlstring}})
+  AND channel IN ({GROUP_CHANNELS})
   AND (kind, term) IN (SELECT kind, term FROM trends WHERE {LATEST_TRENDS})
 GROUP BY time, term
 ORDER BY time
@@ -809,7 +861,7 @@ WHERE horizon = ${{horizon:sqlstring}} AND {TREND_SCOPES}
             table=True,
             description="Days of data the window is compared with, up to 28. With less than 3 "
             "days there are no alerts, and on the first day the window is compared with the "
-            "share of the term on all of reddit (the r/all sample): what's distinctive, not "
+            "share of the term on all of the platform (the r/all sample): what's distinctive, not "
             "what's rising.",
         ),
         panel(
@@ -873,7 +925,7 @@ LIMIT 200
                     "see docs/ARCHITECTURE.md §4.2), what trends are ranked by. times_usual: "
                     "the share of comments and posts mentioning the term in the window, divided "
                     "by its share in the 28 days before. new: barely mentioned before. breadth: "
-                    "for a group, in how many of its subreddits the term trends, of those "
+                    "for a group, in how many of its channels the term trends, of those "
                     "mentioning it. subsumed_by: a phrase that explains this burst ('pro' "
                     "because of 'vision pro'), shown when Subsumed is set to show. Click a term "
                     "to open it in the term explorer."
@@ -906,8 +958,7 @@ FROM (
     SELECT $__timeInterval(hour) AS time, term, sum(docs) AS docs
     FROM term_hourly
     WHERE $__timeFilter(hour)
-      AND subreddit IN (SELECT subreddit FROM subreddit_groups
-                        WHERE group_name = ${{group:sqlstring}})
+      AND channel IN ({GROUP_CHANNELS})
       AND (kind, term) IN (
           SELECT kind, term FROM trends
           WHERE {LATEST_TRENDS} AND subsumed_by = ''
@@ -919,8 +970,7 @@ INNER JOIN (
     SELECT $__timeInterval(hour) AS time, sum(docs) AS docs
     FROM scope_hourly
     WHERE $__timeFilter(hour)
-      AND subreddit IN (SELECT subreddit FROM subreddit_groups
-                        WHERE group_name = ${{group:sqlstring}})
+      AND channel IN ({GROUP_CHANNELS})
     GROUP BY time
 ) AS s USING time
 ORDER BY time
@@ -930,7 +980,7 @@ ORDER BY time
             24,
             10,
             description="The 8 strongest trends of the latest run, as a share of all comments "
-            "and posts in the group's subreddits.",
+            "and posts in the group's channels.",
             interval="1h",
             series_label="term",
         ),
@@ -995,24 +1045,8 @@ LIMIT 200
         ),
     ],
     [
-        query_variable(
-            "group",
-            "Group",
-            "SELECT DISTINCT group_name FROM subreddit_groups "
-            "ORDER BY group_name = 'tracked' DESC, group_name",
-            default="tracked",
-        ),
-        query_variable(
-            "scope",
-            "Scopes",
-            "SELECT scope FROM ("
-            "SELECT ${group:sqlstring} AS scope, 0 AS position "
-            "UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups "
-            "WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
-            multi=True,
-            include_all=True,
-            all_value=None,
-        ),
+        group_variable(),
+        scopes_variable(),
         custom_variable("horizon", "Horizon", ["24h", "6h"], default="24h"),
         custom_variable(
             "kind",
@@ -1037,7 +1071,7 @@ LONG_TERM_ROWS = (
     "week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) "
     "AND kind IN (${kind:singlequote})"
 )
-# a trend's row: scopes can share terms (a group and its subreddits)
+# a trend's row: scopes can share terms (a group and its channels)
 TREND_ID = "concat(scope, ' · ', term)"
 
 
@@ -1045,9 +1079,7 @@ def weekly_explore_url() -> str:
     """SQL for the term explorer url of a long-term trend: weekly, over its window."""
     return (
         "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
-        "if(startsWith(scope, 'r/'), "
-        "concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), "
-        "concat('&var-group=', encodeURLFormComponent(scope))), "
+        "'&var-group=', encodeURLFormComponent(scope), "
         "'&var-bucket=week&var-rate=macro&from=', "
         "toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now')"
     )
@@ -1184,7 +1216,7 @@ LONG_TERM_COLUMNS_HELP = (
     "run tested, at most 0.05. start/end_per_1000: the trend line at the first and last "
     "week of the window. spike_share: how much of the change comes from the two highest "
     "weeks. peak: the highest week, times the median week. A group's share is the average "
-    "of its subreddits' shares. Click a term to open it in the term explorer, weekly."
+    "of its channels' shares. Click a term to open it in the term explorer, weekly."
 )
 
 long_term_dashboard = dashboard(
@@ -1227,16 +1259,14 @@ long_term_dashboard = dashboard(
         panel(
             "stat",
             "Weeks of history",
-            """
+            f"""
 SELECT greatest(max(intDiv(toMonday(today()) - first_week, 7)), 0)
 FROM (
     SELECT if(toDayOfWeek(min(hour)) = 1, toMonday(min(hour)), toMonday(min(hour)) + 7)
            AS first_week
     FROM scope_hourly
-    WHERE source = 'comment' AND subreddit IN (
-        SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}
-    )
-    GROUP BY subreddit
+    WHERE channel IN ({GROUP_CHANNELS})
+    GROUP BY channel
 )
 """,
             12,
@@ -1244,7 +1274,7 @@ FROM (
             6,
             4,
             table=True,
-            description="Complete weeks of data in the group's subreddits. A window runs once "
+            description="Complete weeks of data in the group's channels. A window runs once "
             "it has that many weeks: 13, 26 or 52. Until then there's nothing here.",
         ),
         panel(
@@ -1318,29 +1348,13 @@ ORDER BY time
             24,
             10,
             description="The 8 fastest growing or fading terms in the selected scopes, as "
-            "analyzed: weekly, a group's share the average of its subreddits'.",
+            "analyzed: weekly, a group's share the average of its channels'.",
             series_label="trend",
         ),
     ],
     [
-        query_variable(
-            "group",
-            "Group",
-            "SELECT DISTINCT group_name FROM subreddit_groups "
-            "ORDER BY group_name = 'tracked' DESC, group_name",
-            default="tracked",
-        ),
-        query_variable(
-            "scope",
-            "Scopes",
-            "SELECT scope FROM ("
-            "SELECT ${group:sqlstring} AS scope, 0 AS position "
-            "UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups "
-            "WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
-            multi=True,
-            include_all=True,
-            all_value=None,
-        ),
+        group_variable(),
+        scopes_variable(),
         custom_variable("horizon", "Window", ["13w", "26w", "52w"], default="13w"),
         custom_variable(
             "kind",
@@ -1355,7 +1369,7 @@ ORDER BY time
 )
 
 
-# The lead–lag layer (wgra analyze, leadlag/): which subreddits pick up terms before
+# The lead–lag layer (wgra analyze, leadlag/): which channels pick up terms before
 # others (edges, learned daily), and forecasts of which current bursts will reach which
 # scopes, with how they turned out.
 LATEST_EDGES = "day = (SELECT max(day) FROM propagation_edges)"
@@ -1384,9 +1398,9 @@ def hours_as_days(*columns: str) -> dict:
 early_warning_dashboard = dashboard(
     "wgra-early-warning",
     "Early warning",
-    "Which subreddits pick up terms before others, and forecasts of which current bursts "
-    "will reach other subreddits, groups or all of reddit. Learned from at least 4–6 weeks of "
-    "history.",
+    "Which channels pick up terms before others, and forecasts of which current bursts "
+    "will reach other channels, groups or all of reddit (r/all). Learned from at least 4–6 "
+    "weeks of history.",
     [
         panel(
             "stat",
@@ -1723,12 +1737,12 @@ ORDER BY time
         ),
         panel(
             "table",
-            "Reddit vs Wikipedia (optional)",
+            "Onsets vs Wikipedia (optional)",
             """
 SELECT
     count() AS events,
     countIf(wiki_onset IS NOT NULL) AS with_interest,
-    countIf(lead_days > 0) AS reddit_first,
+    countIf(lead_days > 0) AS onset_first,
     countIf(lead_days = 0) AS same_day,
     countIf(lead_days < 0) AS wikipedia_first,
     quantileExactIf(0.5)(lead_days, lead_days IS NOT NULL) AS median_lead_days
@@ -1742,7 +1756,7 @@ WHERE start > now() - INTERVAL 90 DAY
             table=True,
             description="With wikipedia.enabled: for events whose term names a Wikipedia "
             "article, did daily pageviews rise (3x their 28-day median, at least 100) after "
-            "the term's first onset on reddit? `wgra wikipedia` prints a sign test.",
+            "the term's first onset? `wgra wikipedia` prints a sign test.",
         ),
     ],
     [
@@ -1929,7 +1943,7 @@ LIMIT 50
         11,
         table=True,
         description=(
-            "Someone switched from x to y, in the selected subreddits and time range: "
+            "Someone switched from x to y, in the selected channels and time range: "
             "'switched from Notion to Obsidian', 'dropped ChatGPT for Claude', 'we replaced our "
             "Jira with Linear', 'the Jenkins to GitHub Actions migration'. mentions: comments "
             "and posts (each counts once), authors: different people. the other way: the "
@@ -1989,8 +2003,7 @@ WITH
     trending AS (
         SELECT term, max(z) AS z FROM trends
         WHERE detected_at > now() - INTERVAL 24 HOUR AND kind = '{kind}' AND subsumed_by = ''
-          AND scope IN (SELECT ${{group:sqlstring}} UNION ALL SELECT concat('r/', subreddit)
-                        FROM subreddit_groups WHERE group_name = ${{group:sqlstring}})
+          AND scope IN (SELECT ${{group:sqlstring}} UNION ALL {GROUP_CHANNELS})
         GROUP BY term
     )
 SELECT
@@ -2046,12 +2059,12 @@ LIMIT 30
 
 
 RISING_HELP = (
-    "The last 7 days (today included) against the 28 days before, in the selected subreddits; "
+    "The last 7 days (today included) against the 28 days before, in the selected channels; "
     "ignores the time picker. mentions, authors: the last 7 days. per_week_before: the weekly "
     "average of the 28 days before. times_usual: the share of comments and posts now against "
     "before. excess: mentions above what the share before would give, what the table is "
     "sorted by. trend_z: the strongest score of the short-term detector in the last 24 "
-    "hours, if it trends in the group or one of its subreddits. per day: the last 35 days. "
+    "hours, if it trends in the group or one of its channels. per day: the last 35 days. "
     "Click an entry for the comments behind it."
 )
 
@@ -2067,9 +2080,13 @@ SELECT
     t.term AS term,
     {intent_links("group")}
 FROM term_daily AS t
-INNER JOIN subreddit_groups AS g ON g.subreddit = t.subreddit
+INNER JOIN (
+    SELECT group_name, channel FROM channel_groups
+    WHERE group_name NOT IN (SELECT platform FROM channels)
+    UNION ALL SELECT channel, channel FROM channels WHERE background
+) AS g ON g.channel = t.channel
 WHERE t.kind = 'need' AND {INTENT_DAYS.replace("day", "t.day")}
-  AND t.source IN (${{source:singlequote}}) AND g.group_name != 'tracked'
+  AND $__conditionalAll(t.doc_type IN (${{doc_type:singlequote}}), $doc_type)
 GROUP BY group, term
 HAVING authors >= ${{min_authors:raw}}
 ORDER BY group, mentions DESC, authors DESC, need
@@ -2109,13 +2126,12 @@ examples_table = panel(
     f"""
 SELECT
     created_at AS time,
-    -- not "AS subreddit": the alias would replace the column in WHERE
-    splitByChar('/', permalink)[3] AS community,
+    channel,
     arrayStringConcat(arrayFilter(t -> {TERM_KIND} IN (${{intent_kind:singlequote}})
                                        AND (${{term:sqlstring}} = '' OR t = ${{term:sqlstring}}),
                                   intents), ', ') AS found,
     substring(text, 1, 500) AS text,
-    concat('https://www.reddit.com', permalink) AS link
+    url AS link
 FROM items
 WHERE {SCOPE} AND created_at > now() - INTERVAL 48 HOUR
   AND arrayExists(t -> {TERM_KIND} IN (${{intent_kind:singlequote}})
@@ -2130,8 +2146,7 @@ LIMIT 200
     table=True,
     description=(
         "The comments and posts the intents were found in, newest first. Raw text is only kept "
-        "for 48 hours, and only items ingested since intents were extracted (migration "
-        "005) carry them. Set Term (or click an entry in the tables above) to see one intent's "
+        "for 48 hours. Set Term (or click an entry in the tables above) to see one intent's "
         "comments, e.g. 'notion → obsidian' or 'complaint: reddit'; empty shows all of the "
         "selected kinds."
     ),
@@ -2145,7 +2160,7 @@ LIMIT 200
                         "id": "links",
                         "value": [
                             {
-                                "title": "Open on reddit",
+                                "title": "Open",
                                 "url": "${__value.raw}",
                                 "targetBlank": True,
                             }
@@ -2155,7 +2170,7 @@ LIMIT 200
                 ],
             },
             width("time", 160),
-            width("community", 120),
+            width("channel", 120),
             width("found", 220),
         ],
     },
@@ -2201,7 +2216,7 @@ intent_dashboard = dashboard(
             0,
             4,
             5,
-            description="The first day with intents, in any subreddit: they're extracted at "
+            description="The first day with intents, in any channel: they're extracted at "
             "ingest, so there is no history before the ingester started extracting them (plus "
             "the 48 hours of raw text before, with wgra backfill-intents).",
         ),

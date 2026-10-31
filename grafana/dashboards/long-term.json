@@ -19,20 +19,20 @@
       {
         "type": "query",
         "name": "group",
-        "label": "Group",
+        "label": "Group or channel",
         "datasource": {
           "type": "grafana-clickhouse-datasource",
           "uid": "clickhouse"
         },
-        "query": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
-        "definition": "SELECT DISTINCT group_name FROM subreddit_groups ORDER BY group_name = 'tracked' DESC, group_name",
+        "query": "SELECT name FROM (SELECT DISTINCT group_name AS name, 0 AS position, group_name IN (SELECT platform FROM channels) AS platform FROM channel_groups UNION ALL SELECT channel, 1, false FROM channels WHERE analyzed) ORDER BY position, platform DESC, name",
+        "definition": "SELECT name FROM (SELECT DISTINCT group_name AS name, 0 AS position, group_name IN (SELECT platform FROM channels) AS platform FROM channel_groups UNION ALL SELECT channel, 1, false FROM channels WHERE analyzed) ORDER BY position, platform DESC, name",
         "refresh": 1,
         "multi": false,
         "includeAll": false,
         "sort": 0,
         "current": {
-          "text": "tracked",
-          "value": "tracked"
+          "text": "reddit",
+          "value": "reddit"
         }
       },
       {
@@ -43,8 +43,8 @@
           "type": "grafana-clickhouse-datasource",
           "uid": "clickhouse"
         },
-        "query": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
-        "definition": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT concat('r/', subreddit), 1 FROM subreddit_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+        "query": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT channel, 1 FROM channel_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
+        "definition": "SELECT scope FROM (SELECT ${group:sqlstring} AS scope, 0 AS position UNION ALL SELECT channel, 1 FROM channel_groups WHERE group_name = ${group:sqlstring}) ORDER BY position, scope",
         "refresh": 1,
         "multi": true,
         "includeAll": true,
@@ -251,7 +251,7 @@
     {
       "type": "stat",
       "title": "Weeks of history",
-      "description": "Complete weeks of data in the group's subreddits. A window runs once it has that many weeks: 13, 26 or 52. Until then there's nothing here.",
+      "description": "Complete weeks of data in the group's channels. A window runs once it has that many weeks: 13, 26 or 52. Until then there's nothing here.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -271,7 +271,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT greatest(max(intDiv(toMonday(today()) - first_week, 7)), 0)\nFROM (\n    SELECT if(toDayOfWeek(min(hour)) = 1, toMonday(min(hour)), toMonday(min(hour)) + 7)\n           AS first_week\n    FROM scope_hourly\n    WHERE source = 'comment' AND subreddit IN (\n        SELECT subreddit FROM subreddit_groups WHERE group_name = ${group:sqlstring}\n    )\n    GROUP BY subreddit\n)",
+          "rawSql": "SELECT greatest(max(intDiv(toMonday(today()) - first_week, 7)), 0)\nFROM (\n    SELECT if(toDayOfWeek(min(hour)) = 1, toMonday(min(hour)), toMonday(min(hour)) + 7)\n           AS first_week\n    FROM scope_hourly\n    WHERE channel IN (SELECT channel FROM channel_groups WHERE group_name = ${group:sqlstring} UNION ALL SELECT channel FROM channels WHERE channel = ${group:sqlstring})\n    GROUP BY channel\n)",
           "refId": "A"
         }
       ],
@@ -337,7 +337,7 @@
     {
       "type": "table",
       "title": "Emerging: rare at the start of the window, growing steadily",
-      "description": "Terms mentioned by at most 1 in 1,000 comments and posts at the start of the window that grew significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "description": "Terms mentioned by at most 1 in 1,000 comments and posts at the start of the window that grew significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its channels' shares. Click a term to open it in the term explorer, weekly.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -357,7 +357,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'emerging'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'emerging'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {
@@ -639,7 +639,7 @@
     {
       "type": "table",
       "title": "Mainstreaming: common already, still growing",
-      "description": "Terms above 1 in 1,000 at the start of the window that kept growing significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "description": "Terms above 1 in 1,000 at the start of the window that kept growing significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its channels' shares. Click a term to open it in the term explorer, weekly.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -659,7 +659,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'mainstreaming'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'mainstreaming'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {
@@ -941,7 +941,7 @@
     {
       "type": "table",
       "title": "Fading",
-      "description": "Terms whose share shrank significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "description": "Terms whose share shrank significantly and steadily. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its channels' shares. Click a term to open it in the term explorer, weekly.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -961,7 +961,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'fading'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'fading'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {
@@ -1243,7 +1243,7 @@
     {
       "type": "table",
       "title": "One-offs: the change is one event, not a trend",
-      "description": "Terms whose change between the first and second half of the window comes mostly from one or two weeks far above the rest (spike_share at least 0.5, peak at least 3 times the median week). Sorted by that change. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its subreddits' shares. Click a term to open it in the term explorer, weekly.",
+      "description": "Terms whose change between the first and second half of the window comes mostly from one or two weeks far above the rest (spike_share at least 0.5, peak at least 3 times the median week). Sorted by that change. per_month: growth per month (Theil–Sen slope of the log weekly share, robust to one-off spikes). q: Mann–Kendall p-value after Benjamini–Hochberg over every term the run tested, at most 0.05. start/end_per_1000: the trend line at the first and last week of the window. spike_share: how much of the change comes from the two highest weeks. peak: the highest week, times the median week. A group's share is the average of its channels' shares. Click a term to open it in the term explorer, weekly.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -1263,7 +1263,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), if(startsWith(scope, 'r/'), concat('&var-group=tracked&var-subreddit=', encodeURLFormComponent(substring(scope, 3))), concat('&var-group=', encodeURLFormComponent(scope))), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'one-off'\nORDER BY abs(log(change)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'one-off'\nORDER BY abs(log(change)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {
@@ -1545,7 +1545,7 @@
     {
       "type": "timeseries",
       "title": "The strongest trends, weekly share (per 1,000 comments and posts)",
-      "description": "The 8 fastest growing or fading terms in the selected scopes, as analyzed: weekly, a group's share the average of its subreddits'.",
+      "description": "The 8 fastest growing or fading terms in the selected scopes, as analyzed: weekly, a group's share the average of its channels'.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"

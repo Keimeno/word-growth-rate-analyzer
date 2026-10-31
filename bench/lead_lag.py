@@ -12,14 +12,14 @@ the planned VPS (4 CPUs, 8 GB):
     uv run python bench/lead_lag.py --database wgra_bench_ll run backfill
     # then: run daily, run forecast, run learn, run replay
 
-`generate` writes `term_hourly` and `scope_hourly` for `--days` days up to today: the 37
-subreddits of config.yaml with about 130k comments a day between them and the r/all sample
-with 400k, a Zipf-like vocabulary (bench/synthetic.py's) with the tail scaled to the
+`generate` writes `term_hourly` and `scope_hourly` for `--days` days up to today: the
+tracked subreddits of config.yaml with about 130k comments a day between them and the r/all
+sample with 400k, a Zipf-like vocabulary (bench/synthetic.py's) with the tail scaled to the
 distinct term rows per hour measured live in the first hour (about 87k tracked, 97k
 sample). In the last `--event-days` days it plants `--events-per-day` events: a term of
 log-uniform rank between 50 and 500k (a quarter are words used every hour in most
 subreddits) bursting for 48 hours at three times its usual share (at least 2 mentions an
-hour) in 1–4 subreddits or the sample. Five leader subreddits pass 60% of their terms on to
+hour) in 1–4 subreddits or r/all. Five leader subreddits pass 60% of their terms on to
 a fixed follower 2–4 days later, everything else is random. Every burst is a trend in
 `trends`, one row an hour for a day from 6 hours in.
 
@@ -49,8 +49,11 @@ from pathlib import Path
 import numpy as np
 from dotenv import load_dotenv
 
-from wgra.config import SAMPLE_SCOPE, Env, load_config
-from wgra.detect.short_term import TREND_COLUMNS, Trend
+from wgra.config import Env, load_config
+from wgra.detect.short_term import CHANNEL, TREND_COLUMNS, Trend
+from wgra.ingest.run import write_channels
+from wgra.leadlag.edges import PLATFORM_FOLLOWER
+from wgra.sources.reddit.channels import PLATFORM, SAMPLE
 from wgra.store import connect, migrate
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -75,12 +78,12 @@ LEADERS = 5
 BURST_HOURS = 48
 
 HOURS_SQL = f"""
-INSERT INTO term_hourly (hour, subreddit, source, kind, term, occurrences, docs)
-SELECT hour, subreddit, 'comment', {KIND}, {TERM}, docs, docs
+INSERT INTO term_hourly (hour, channel, doc_type, kind, term, occurrences, docs)
+SELECT hour, channel, 'comment', {KIND}, {TERM}, docs, docs
 FROM (
     SELECT toDateTime({{day:Date}}, 'UTC') + toIntervalHour(intDiv(number, {{dense:UInt64}}))
                AS hour,
-           {{subreddit:String}} AS subreddit,
+           {{channel:String}} AS channel,
            number % {{dense:UInt64}} + 1 AS rank,
            {{per_hour:Float64}} * least({MAX_SHARE}, {A} / pow(rank, {S})) AS expected,
            toUInt64({NOISY}) AS docs
@@ -89,7 +92,7 @@ FROM (
 WHERE docs > 0
 UNION ALL
 SELECT toDateTime({{day:Date}}, 'UTC') + toIntervalHour(intDiv(number, {{tail:UInt64}})),
-       {{subreddit:String}}, 'comment', {KIND}, {TERM}, 1, 1
+       {{channel:String}}, 'comment', {KIND}, {TERM}, 1, 1
 FROM (
     SELECT number,
            toUInt64({{dense:UInt64}} * pow(
@@ -100,13 +103,13 @@ FROM (
 UNION ALL
 SELECT toDateTime({{day:Date}}, 'UTC')
            + toIntervalHour(intDiv(number, greatest({{hapax:UInt64}}, 1))),
-       {{subreddit:String}}, 'comment', 'phrase', concat('h', hex(rand64())), 1, 1
+       {{channel:String}}, 'comment', 'phrase', concat('h', hex(rand64())), 1, 1
 FROM numbers(24 * {{hapax:UInt64}})
 """
 
 TOTALS_SQL = """
-INSERT INTO scope_hourly (hour, subreddit, source, docs, tokens)
-SELECT toDateTime({day:Date}, 'UTC') + toIntervalHour(number), {subreddit:String}, 'comment',
+INSERT INTO scope_hourly (hour, channel, doc_type, docs, tokens)
+SELECT toDateTime({day:Date}, 'UTC') + toIntervalHour(number), {channel:String}, 'comment',
        {per_hour:UInt64}, {per_hour:UInt64} * 30
 FROM numbers(24)
 """
@@ -123,18 +126,19 @@ def kind_of(rank: int) -> str:
 def generate(client, config, days: int, event_days: int, events_per_day: int, seed: int) -> None:
     end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     start = end - timedelta(days=days)
-    volumes = comments_per_day(list(config.subreddits))
-    volumes[SAMPLE_SCOPE] = SAMPLE_PER_DAY
+    subreddits = list(config.tracked(PLATFORM))
+    volumes = comments_per_day(subreddits)
+    volumes[SAMPLE] = SAMPLE_PER_DAY
     started = time.monotonic()
     for offset in range(days):
         day = (start + timedelta(days=offset)).date()
-        for subreddit, per_day in volumes.items():
+        for channel, per_day in volumes.items():
             per_hour = per_day / 24
-            sample = subreddit == SAMPLE_SCOPE
+            sample = channel == SAMPLE
             scale = TAIL_SCALE["sample" if sample else "tracked"]
             parameters = {
                 "day": day,
-                "subreddit": subreddit,
+                "channel": channel,
                 "per_hour": per_hour,
                 "dense": dense_ranks(int(per_hour)),
                 "tail": int(scale * tail_rows(int(per_hour))),
@@ -145,10 +149,9 @@ def generate(client, config, days: int, event_days: int, events_per_day: int, se
         print(f"{day}  {offset + 1}/{days} days  {time.monotonic() - started:.0f}s", flush=True)
 
     rng = np.random.default_rng(seed)
-    subreddits = list(config.subreddits)
     leaders = [subreddits[index] for index in rng.choice(len(subreddits), LEADERS, replace=False)]
     others = [sub for sub in subreddits if sub not in leaders]
-    follower_of = {leader: str(rng.choice([*others, SAMPLE_SCOPE])) for leader in leaders}
+    follower_of = {leader: str(rng.choice([*others, SAMPLE])) for leader in leaders}
     print("planted leaders:", follower_of)
 
     bursts: list[tuple[str, int, datetime]] = []
@@ -163,30 +166,29 @@ def generate(client, config, days: int, event_days: int, events_per_day: int, se
                 lag = timedelta(hours=int(rng.integers(48, 97)))
                 bursts.append((follower_of[leader], rank, at + lag))
         else:
-            for sub in rng.choice([*subreddits, SAMPLE_SCOPE], rng.integers(1, 5), replace=False):
+            for sub in rng.choice([*subreddits, SAMPLE], rng.integers(1, 5), replace=False):
                 bursts.append((str(sub), rank, at + timedelta(hours=int(rng.integers(0, 120)))))
 
     rows, trend_rows = [], []
-    for subreddit, rank, at in bursts:
-        per_hour = volumes[subreddit] / 24
+    for channel, rank, at in bursts:
+        per_hour = volumes[channel] / 24
         rate = max(2.0, 3 * per_hour * min(MAX_SHARE, A / rank**S))
         for hour in range(BURST_HOURS):
             docs = int(rng.poisson(rate))
             moment = at + timedelta(hours=hour)
             if docs and moment < end:
                 rows.append(
-                    (moment, subreddit, "comment", kind_of(rank), term_name(rank), docs, docs)
+                    (moment, channel, "comment", kind_of(rank), term_name(rank), docs, docs)
                 )
-        scope = "sample" if subreddit == SAMPLE_SCOPE else f"r/{subreddit}"
         for hour in range(6, 30):
             detected = at + timedelta(hours=hour)
             if detected < end:
-                trend_rows.append(trend_row(scope, rank, detected))
+                trend_rows.append(trend_row(channel, rank, detected))
     for first in range(0, len(rows), 500_000):
         client.insert(
             "term_hourly",
             rows[first : first + 500_000],
-            column_names=["hour", "subreddit", "source", "kind", "term", "occurrences", "docs"],
+            column_names=["hour", "channel", "doc_type", "kind", "term", "occurrences", "docs"],
         )
     client.insert("trends", trend_rows, column_names=list(TREND_COLUMNS))
     print(f"{len(bursts):,} bursts, {len(rows):,} burst rows, {len(trend_rows):,} trend rows")
@@ -198,7 +200,7 @@ def trend_row(scope: str, rank: int, detected: datetime) -> list[object]:
         scope=scope,
         term=term_name(rank),
         detected_at=detected,
-        scope_type="group" if scope == "sample" else "subreddit",
+        scope_type=CHANNEL,
         kind=kind_of(rank),
         window_start=detected - timedelta(hours=24),
         window_end=detected,
@@ -289,9 +291,9 @@ def run(client, config, database: str, step: str) -> None:
                 kind=e.kind,
                 term=e.term,
                 event_start=e.start,
-                follower="sample",
+                follower=SAMPLE,
                 leader=e.onsets[0].scope,
-                follower_type="sample",
+                follower_type=PLATFORM_FOLLOWER,
                 without_leader=False,
                 topic="all",
                 created_at=now - timedelta(days=1),
@@ -381,12 +383,7 @@ def main() -> None:
     client = connect(env, database=args.database)
     migrate(client)
     if args.command == "generate":
-        client.command("TRUNCATE TABLE subreddit_groups")
-        client.insert(
-            "subreddit_groups",
-            config.group_memberships(),
-            column_names=["group_name", "subreddit"],
-        )
+        write_channels(client, config)
         generate(client, config, args.days, args.event_days, args.events_per_day, args.seed)
     else:
         run(client, config, args.database, args.step)

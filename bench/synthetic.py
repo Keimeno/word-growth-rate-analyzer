@@ -1,8 +1,8 @@
 """Production-scale synthetic history, to measure the long-term detector.
 
 Writes `term_daily` and `scope_hourly` straight into a ClickHouse database (never the
-live one): the 37 subreddits of config.yaml with about 130k comments a day between them,
-and the r/all sample with 400k a day, for as many weeks as asked. Run it against a
+live one): the tracked subreddits of config.yaml with about 130k comments a day between
+them, and the r/all sample with 400k a day, for as many weeks as asked. Run it against a
 ClickHouse of its own, for example one limited to the planned VPS (4 CPUs, 8 GB):
 
     docker run -d --name wgra-dev-bench-clickhouse --cpus 4 --memory 8g \\
@@ -31,7 +31,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from wgra.config import SAMPLE_SCOPE, Env, load_config
+from wgra.config import Env, load_config
+from wgra.ingest.run import write_channels
+from wgra.sources.reddit.channels import PLATFORM, SAMPLE
 from wgra.store import connect, migrate
 
 A, S, VOCABULARY = 110.0, 1.34, 5_000_000
@@ -42,8 +44,8 @@ LARGEST = 40_000
 HAPAX_PER_COMMENT = 2
 
 
-def comments_per_day(subreddits: list[str]) -> dict[str, int]:
-    return {sub: round(LARGEST / (index + 1) ** 1.2) for index, sub in enumerate(subreddits)}
+def comments_per_day(channels: list[str]) -> dict[str, int]:
+    return {channel: round(LARGEST / (index + 1) ** 1.2) for index, channel in enumerate(channels)}
 
 
 def dense_ranks(per_day: int) -> int:
@@ -68,10 +70,10 @@ NOISY = (
 )
 
 DAY_SQL = f"""
-INSERT INTO term_daily (day, subreddit, source, kind, term, occurrences, docs)
-SELECT day, subreddit, 'comment', {KIND}, {TERM}, docs, docs
+INSERT INTO term_daily (day, channel, doc_type, kind, term, occurrences, docs)
+SELECT day, channel, 'comment', {KIND}, {TERM}, docs, docs
 FROM (
-    SELECT {{day:Date}} AS day, {{subreddit:String}} AS subreddit,
+    SELECT {{day:Date}} AS day, {{channel:String}} AS channel,
            number + 1 AS rank,
            {{per_day:UInt64}} * least({MAX_SHARE}, {A} / pow(rank, {S})) AS expected,
            toUInt64({NOISY}) AS docs
@@ -79,9 +81,9 @@ FROM (
 )
 WHERE docs > 0
 UNION ALL
-SELECT day, subreddit, 'comment', {KIND}, {TERM}, 1, 1
+SELECT day, channel, 'comment', {KIND}, {TERM}, 1, 1
 FROM (
-    SELECT {{day:Date}} AS day, {{subreddit:String}} AS subreddit,
+    SELECT {{day:Date}} AS day, {{channel:String}} AS channel,
            -- inverse of the cumulative r^-S between the dense ranks and the vocabulary's end
            toUInt64({{dense:UInt64}} * pow(
                1 - randCanonical() * (1 - pow({VOCABULARY} / {{dense:UInt64}}, {1 - S})),
@@ -89,14 +91,14 @@ FROM (
     FROM numbers({{tail:UInt64}})
 )
 UNION ALL
-SELECT {{day:Date}}, {{subreddit:String}}, 'comment', 'phrase',
+SELECT {{day:Date}}, {{channel:String}}, 'comment', 'phrase',
        concat('h', hex(rand64())), 1, 1
 FROM numbers({{hapax:UInt64}})
 """
 
 HOURS_SQL = """
-INSERT INTO scope_hourly (hour, subreddit, source, docs, tokens)
-SELECT toDateTime({day:Date}, 'UTC') + INTERVAL number HOUR, {subreddit:String}, 'comment',
+INSERT INTO scope_hourly (hour, channel, doc_type, docs, tokens)
+SELECT toDateTime({day:Date}, 'UTC') + INTERVAL number HOUR, {channel:String}, 'comment',
        intDiv({per_day:UInt64}, 24), intDiv({per_day:UInt64} * 30, 24)
 FROM numbers(24)
 """
@@ -115,27 +117,24 @@ def main() -> None:
 
     config = load_config(args.config)
     env = Env.from_environ()
-    admin = connect(env)
+    admin = connect(env, database="default")
     admin.command(f"CREATE DATABASE IF NOT EXISTS {args.database}")
     client = connect(env, database=args.database)
     migrate(client)
-    client.command("TRUNCATE TABLE subreddit_groups")
-    client.insert(
-        "subreddit_groups", config.group_memberships(), column_names=["group_name", "subreddit"]
-    )
+    write_channels(client, config)
 
-    scopes = comments_per_day(list(config.subreddits))
-    scopes[SAMPLE_SCOPE] = SAMPLE_PER_DAY
+    scopes = comments_per_day(list(config.tracked(PLATFORM)))
+    scopes[SAMPLE] = SAMPLE_PER_DAY
     start = args.end - timedelta(weeks=args.weeks)
     days = [start + timedelta(days=offset) for offset in range(7 * args.weeks)]
     started = time.monotonic()
     for number, day in enumerate(days, start=1):
-        for subreddit, per_day in scopes.items():
+        for channel, per_day in scopes.items():
             # the sample is mostly unrelated subreddits: words and two-word phrases only
-            hapax = 0 if subreddit == SAMPLE_SCOPE else HAPAX_PER_COMMENT * per_day
+            hapax = 0 if channel == SAMPLE else HAPAX_PER_COMMENT * per_day
             parameters = {
                 "day": day,
-                "subreddit": subreddit,
+                "channel": channel,
                 "per_day": per_day,
                 "dense": dense_ranks(per_day),
                 "tail": tail_rows(per_day),

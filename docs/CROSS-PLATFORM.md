@@ -1,7 +1,8 @@
 # Cross-platform spread map: plan
 
-**Status: planned, not started.** A reference for building it later. Nothing below exists
-yet except what it builds on.
+**Status: phase 1 built (2026-10-31), phases 2–5 planned.** Phase 1 (§8) made storage,
+analysis and dashboards source-agnostic with Reddit behind a source interface; nothing
+of phases 2–5 exists yet.
 
 Today the analyzer learns which subreddits pick up a term before others
 ([ARCHITECTURE.md §4.6](ARCHITECTURE.md#46-lead-lag-early-warning)). This plan makes
@@ -21,8 +22,8 @@ problem less than hoped: of the new sources only Bluesky clearly allows a produc
 probably does with care, and Hacker News's terms forbid commercial use unless YC allows it
 (§5).
 
-Phase 1 is planned in detail in §8: Reddit behind a source interface, with the same results
-as today.
+Phase 1 is described in §8: Reddit behind a source interface, with the same results as
+before. What came out differently from the plan is in §8.10.
 
 **It costs nothing to run**, like the rest of v2. Every new source is free; GitHub needs a
 free token.
@@ -589,7 +590,13 @@ item's channel (background channels: 2-grams, `intents.sample`). `wgra ingest` g
    history into a bench database. Dump a `wgra replay --csv` over its last 3 days, and the
    events with onsets and the edges of `run backfill`.
 2. **After**, the same on the phase 1 code, on the same day (the generator's history ends
-   today).
+   today). As built: `generate` can't be repeated identically, its noise comes from
+   ClickHouse's `rand()` and `randCanonical()`, so the seed only fixes the planted events.
+   The after run used the before database's history copied into a phase 1 database with
+   the names of §8.2 (`INSERT … SELECT` of `term_hourly`, `scope_hourly` and `trends`),
+   and ran `run backfill` and the replay on it. And the generator writes `term_hourly`
+   without author sketches, so the replay needs `--min-authors 0`: with the author gate
+   it finds nothing at all, before and after.
 3. Compare after mapping the names of §8.2: the same rows with the same numbers. Long-term
    trends are covered by their integration tests, which run unchanged apart from names.
 4. `uv run pytest`, `ruff check`, `ruff format --check` and `mypy` pass.
@@ -620,3 +627,56 @@ tested:
 * thresholds per platform (`detect.platforms`)
 * `ingest_cursors`, and a Compose service per source
 * rise onsets and thinning come in phase 3
+
+### 8.10 As built (2026-10-31)
+
+Built in four commits on `develop`, in the order of §8.8. Where the plan turned out wrong
+or incomplete against the code:
+
+* **r/all is a channel, so its trends lose a group's breadth.** The sample was scored as
+  the one-member group `sample`, which computed breadth over its single member (0 or 1 of
+  1). As the channel `r/all` its rows have breadth and members 0, like every channel.
+  Nothing used them: breadth only alerts from 3 channels up.
+* **Platform groups are recognized by name.** Onsets, edges and topics leave out the
+  implicit group `reddit` as they left out `tracked`. Shared code tells it apart from a
+  configured group by looking it up: a group named like a platform in `channels`
+  (`Scope.implicit`), so a configured group can't be named `reddit`.
+* **First data from any type of document,** for the long-term windows (as planned) and
+  for the edges' history check (`Network.load`, which also counted comments only).
+* **The prior's channel** is `load_background()`, the first background channel in
+  `channels`. With one platform there's one.
+* **`config.yaml`:** the sample's subreddit setting is gone, the sample is always `r/all`.
+  The old `background:` section and the Reddit keys of `ingest:` are errors that say where
+  they went. Scopes named in `detect.scopes`, `detect.exclude_scopes`,
+  `long_term.exclude_scopes` and `notify.skip_scopes` must be a channel or a group, so an
+  old `skip_scopes: [sample]` fails instead of silently not skipping `r/all`.
+  `Config.channels()` always lists `r/all` (as the sample group always existed) and
+  `r/_search`.
+* **`Env`:** `from_environ(require_reddit)` became `from_environ(require_author_hash_key)`:
+  the author hash key belongs to the ingester, not to Reddit. `RedditSource` reads
+  `REDDIT_*` itself (`reddit_credentials()`).
+* **The sink** is `Pipeline` in `ingest/run.py`, the shared `Processor` and `Writer`.
+  `RedditSource.ingest` still counts a skipped item as new for `polls.new_items`, as before.
+  The sample's feed is called `sample-all` (it was `background-all`), `Feed.background` is
+  `Feed.sample`, `RedditItem.source` is `RedditItem.doc_type`.
+* **Dashboards:** the scope picker (`group`) takes a group or a channel and lists both,
+  groups first. Links to the term explorer and Trending now carry the scope itself, so
+  neither `notify/messages.py` nor the dashboards need to know whether it's a channel.
+  The `source` variable is the query variable `doc_type`, every type by default. The
+  intent radar's needs table lists the configured groups and `r/all`, as it listed
+  `sample`.
+* **`wgra status`** lists every channel of `config.yaml` with its platform, its documents
+  of the last 24 hours and their types. **`wgra suggest-subreddits`** prints channel ids to
+  paste. **`wgra radar candidates`** buckets as `watchlist`, `reddit`, `r/all` and
+  `r/_search`, and only counts those channels: another platform's channels won't land in
+  `reddit` in phase 2.
+* **`backfill-intents` and `bench/intent_precision.py`** read the stored `lang`;
+  `real_subreddit()` is gone. `bench/intent_names.py` reads the english items by `lang`.
+* **Wikipedia:** `wiki_leads.first_onset`, `first_scope` as planned, and the summary's
+  `reddit_first` is `onset_first`.
+* **Tests:** 443, from 432: the config errors, a scope lookup that works for a channel
+  without `r/` (`hn`), a fake platform's items and polls through the sink into ClickHouse,
+  and `RedditSource` choosing `r/x`, `r/all` and `r/_search`, setting `skip`, and handing
+  each item on once.
+* **`ruff format --check` failed before phase 1:** ruff 0.17 formats the Python block of
+  §8.4, which now follows its formatting.

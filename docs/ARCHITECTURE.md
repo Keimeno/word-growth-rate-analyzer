@@ -78,6 +78,17 @@ Everything in the solid boxes is free, open source software (see §3.6).
 
 ### 3.1 `ingest`
 
+Since the cross-platform phase 1 (docs/CROSS-PLATFORM.md §8), collection is split into
+sources and a shared pipeline. A source (`src/wgra/sources/`, one per platform) owns its
+schedule, request budget and restart state, turns what its platform returns into `Item`s
+(id, platform, channel, doc_type, author, created_at, text, url, lang, and `skip`: why the
+pipeline should drop it) and hands them with its poll rows to the `Sink`. The sink
+(`ingest/run.py`, `ingest/pipeline.py`, `ingest/writer.py`) is the same for every source:
+the copypasta filter, terms, intents, the author hash (taken over `platform:author`, so a
+name on two platforms is two people) and buffered writes. `wgra ingest` runs every
+enabled platform, `--source` one of them. Reddit is the only source so far, in
+`sources/reddit/` (`RedditSource`); what follows describes it.
+
 * **Auth:** app-only OAuth (`grant_type=client_credentials`) with the existing
   client ID and secret. No Reddit username or password is needed. The token
   is valid for 24h. Re-authenticate at about 23h, and on a 401.
@@ -87,7 +98,8 @@ Everything in the solid boxes is free, open source software (see §3.6).
   or create a replacement casually.
 * **Streams instead of subreddits.** A stream is one listing URL covering a
   group of subreddits with similar volume: `r/technology+gadgets+hardware/comments`.
-  Each returned item carries its own `subreddit`, so attribution is free.
+  Each returned item carries its own subreddit, so attribution is free: a tracked
+  subreddit's items count in its channel, `r/technology`.
   Low-volume subs get packed together. High-volume subs, and `r/all` as the
   background corpus, get their own stream.
 * **Budgeted scheduler.** The free tier allows 1000 requests per 10 minutes
@@ -111,7 +123,7 @@ Everything in the solid boxes is free, open source software (see §3.6).
 * **Posts too.** Poll `…/new` for submissions (title + selftext) on the same
   streams, at a lower frequency.
 * **Cleaning** (in this order): drop `[deleted]`/`[removed]`, AutoModerator,
-  known bots and moderator-distinguished comments. Strip quoted lines (`> …`),
+  known bots and moderator-distinguished comments (the Reddit source sets `skip`). Strip quoted lines (`> …`),
   so replies don't count the parent twice. Strip code blocks and markdown
   link targets. Pull out URLs as `domain` terms and `r/xyz` as
   `subreddit` terms. Drop exact-duplicate bodies posted across subs within
@@ -128,9 +140,11 @@ Everything in the solid boxes is free, open source software (see §3.6).
   the r/all sample, a few percent of each. Per subreddit that's far too thin
   to mean anything. Kept separate, thousands of tiny subreddits would add about
   27 rows per comment, almost all of them counted once (measured: 1,716 sample
-  comments came from 1,268 subreddits). So their counts go into one scope,
-  `_sample`, with words and two-word phrases only. The permalink still names
-  the real subreddit.
+  comments came from 1,268 subreddits). So their counts go into one channel,
+  `r/all`, with words and two-word phrases only. The url still names the real
+  subreddit. `r/all` is Reddit's platform channel (`background` in the
+  `channels` table): the prior of every Reddit scope's scores. The churn radar's
+  search results go into `r/_search` the same way, a channel no detector sees.
 * **Output.** One row per (comment, distinct term) goes into a `Null`-engine
   table. Materialized views aggregate those rows, so the raw rows are never
   stored. The raw comment and post text also goes to a table with a **48h
@@ -146,13 +160,14 @@ The schema as built is in
 
 | Table | Engine | Key | Retention | Purpose |
 | --- | --- | --- | --- | --- |
-| `items` | ReplacingMergeTree | (subreddit, created_at, id) | 48h TTL | Raw comments and posts and the intents found in them: example comments, LLM context |
+| `items` | ReplacingMergeTree | (channel, created_at, id) | 48h TTL | Raw documents (platform, channel, doc_type, url, lang) and the intents found in them: example comments, LLM context |
 | `term_events` | Null | — | not stored | Insert target, feeds the views |
-| `term_hourly` | AggregatingMergeTree | (subreddit, term, kind, source, hour) | 180 days TTL | Short-term detection |
-| `term_daily` | AggregatingMergeTree | (subreddit, term, kind, source, day) | forever | Long-term detection |
-| `scope_hourly` | AggregatingMergeTree | (subreddit, source, hour) | forever | Denominators: comments, tokens, distinct authors |
-| `polls` | MergeTree | (feed, ts) | 90 days | Every request: ingestion health and coverage |
-| `subreddit_groups` | MergeTree | (group, subreddit) | rewritten on start | The groups from `config.yaml`, for dashboards and queries |
+| `term_hourly` | AggregatingMergeTree | (channel, term, kind, doc_type, hour) | 180 days TTL | Short-term detection |
+| `term_daily` | AggregatingMergeTree | (channel, term, kind, doc_type, day) | forever | Long-term detection |
+| `scope_hourly` | AggregatingMergeTree | (channel, doc_type, hour) | forever | Denominators: documents, tokens, distinct authors |
+| `polls` | MergeTree | (platform, feed, ts) | 90 days | Every request: ingestion health and coverage |
+| `channels` | MergeTree | (channel) | rewritten on start | Every channel of `config.yaml` with its platform, language, whether the detectors see it (`analyzed`) and whether it's its platform's prior (`background`) |
+| `channel_groups` | MergeTree | (group_name, channel) | rewritten on start | The groups from `config.yaml`, and `reddit`, every tracked subreddit |
 | `trends` | ReplacingMergeTree | (horizon, scope, term, detected_at) | 90 days, alerts forever | Detector output, alert state |
 | `long_term_trends` | ReplacingMergeTree | (horizon, scope, term, week) | forever | Long-term detector output, one set per week |
 | `notifications` | MergeTree | (kind, sent_at) | forever | Every message sent to ntfy; makes the daily digest go out once |
@@ -164,7 +179,7 @@ The schema as built is in
 Each term row carries `occurrences` (sum), `docs` (number of comments
 containing the term) and `authors` (`uniqCombined` state, a mergeable
 HyperLogLog sketch). Distinct-author counts stay correct when you roll up
-hours into days or subreddits into groups. Feed the sketch a **keyed hash**
+hours into days or channels into groups. Feed the sketch a **keyed hash**
 of the author (HMAC with a secret), never the username, so stored values
 can't be linked back to Reddit accounts.
 
@@ -359,8 +374,8 @@ Three changes came out of testing it:
   gates again. Suppressed rows are kept with `subsumed_by` set.
 * **Cooldown:** don't re-alert the same term within 72h unless its score
   doubles. As built, the cooldown is per term across scopes, and a run alerts a
-  term once, in its strongest scope: `openai` bursting in r/OpenAI, tech and
-  tracked is one story, and the cap is only 5 a day.
+  term once, in its strongest scope: `openai` bursting in r/openai, tech and
+  reddit is one story, and the cap is only 5 a day.
 * **Breadth:** for a group, count how many member subs show `z > 3` (with at
   least 3 mentions there). A term bursting in 6 of 9 tech subs is a bigger story
   than one sub at `z = 12`. Groups alert on breadth ≥ 3 if that's also ≥ 30% of
@@ -441,33 +456,45 @@ a day after 00:30 UTC in `wgra analyze`, or with `wgra long-term --once [--as-of
   `horizon` (13w, 26w, 52w), `rank`, ReplacingMergeTree, created by the
   ingester or the analyzer, whichever starts first.
 
-### 4.4 Scoping by subreddit and topic
+### 4.4 Scoping by channel and topic
 
 ```yaml
-# config.yaml (replaces config.json)
+# config.yaml, as built (cross-platform phase 1)
+platforms:
+  reddit:
+    sample: {requests_per_minute: 20, max_ngram: 2}   # the channel r/all: the prior
 groups:
-  tech:      [technology, programming, hardware, gadgets, LocalLLaMA, MachineLearning, webdev, apple, Android]
-  finance:   [investing, stocks, wallstreetbets, personalfinance]
-  de:        [de, Finanzen, de_EDV]
-subreddits:
-  de:        {language: de}
-  Finanzen:  {language: de}
-background: [all]           # sampled, used for priors and "distinctive terms"
+  tech:      [r/technology, r/programming, r/hardware, r/gadgets, r/LocalLLaMA, r/webdev]
+  finance:   [r/investing, r/stocks, r/wallstreetbets, r/personalfinance]
+  de:        [r/de, r/Finanzen, r/de_EDV]
+languages:
+  de:        [r/de, r/Finanzen, r/de_EDV]
 ```
 
-* **Group rate:** the macro-average of the member subs' rates by default, so
+* **Scopes** are channels and groups, read from the `channels` and `channel_groups`
+  tables: every analyzed channel (each tracked subreddit, `r/technology`, and the r/all
+  sample, `r/all`), every configured group and `reddit`, every tracked subreddit.
+  `r/_search` isn't analyzed. A channel id carries its platform (`r/`), but the code
+  never tells a channel from a group by its name: it looks it up in `channels` or uses
+  the stored scope type (`channel` or `group`). A group can't be named like a channel,
+  and `config.yaml` refuses bare subreddit names.
+* **The prior** of every score is the share in the platform's background channel,
+  `r/all` (`background` in `channels`). With one platform there's one prior; priors per
+  platform come with the second (docs/CROSS-PLATFORM.md §8.9).
+
+* **Group rate:** the macro-average of the member channels' rates by default, so
   r/technology doesn't drown out r/hardware. The pooled rate is available as
   a toggle. As built (phase 4) for long-term trends and the term explorer:
-  * a group's weekly share is the average of its subreddits' shares, over the
-    subreddits with comments that week; `long_term.group_rate: pooled` divides all
+  * a group's weekly share is the average of its channels' shares, over the
+    channels with documents that week; `long_term.group_rate: pooled` divides all
     mentions by all comments and posts instead, and so does the explorer's
     "Group rate: pooled" (its default, like before)
-  * a group is analyzed over the subreddits whose history covers the window, if
-    at least half of them do. A subreddit added to a group joins the average once
+  * a group is analyzed over the channels whose history covers the window, if
+    at least half of them do. A channel added to a group joins the average once
     it has the history; joining at once would shift the average and make its
     vocabulary look like it emerged.
   * the pseudo-mentions are on the pooled scale, 0.5 / all comments of the week:
-    0.5 per member subreddit would swamp the small subreddits' shares.
+    0.5 per member channel would swamp the small channels' shares.
   * on the test history: a term at a constant share in a big subreddit and growing
     fourfold in one 25 times smaller is mainstreaming in the group at +9% a month
     with the macro average, and flat pooled.
@@ -536,21 +563,21 @@ There's no author gate: the hourly author sketches can't be summed over rolling 
 cheaply, and the event's trend already passed one. The prior is the term's sample share
 over the 90 days before the span, so nothing later goes into it.
 
-The scopes are every tracked subreddit, the r/all sample ("sample", reddit-wide), every
-configured group (pooled counts, like short-term detection), and **every group without
-each of its subreddits**. Without that last kind, a burst in r/LocalLLaMA would carry
+The scopes are every analyzed channel (each tracked subreddit, and `r/all`, reddit-wide),
+every configured group (pooled counts, like short-term detection), and **every group
+without each of its channels**. Without that last kind, a burst in r/LocalLLaMA would carry
 "tech" past the gates on its own mentions, and "r/LocalLLaMA leads tech" would be true by
 construction. The question that makes sense is whether the rest of the group follows.
 
 Events are stored with their onsets in `lead_lag_events`, kept forever because `trends`
 expires after 90 days. An event's onsets are recomputed daily until its span is over.
 
-**Edges.** Every day, for every leader subreddit L and follower F, over the events of the
-last 180 days (`training_days`). The followers are:
+**Edges.** Every day, for every leader L (an analyzed channel that isn't its platform's
+background: a tracked subreddit) and follower F, over the events of the last 180 days
+(`training_days`). The followers are:
 
-* the other tracked subreddits
-* the configured groups, without L when L is one of their subreddits
-* the sample
+* the other analyzed channels (follower type `channel`), and `r/all` (type `platform`)
+* the configured groups, without L when L is one of their channels (type `group`)
 
 For each pair:
 
@@ -674,7 +701,8 @@ learned once a day as of the first step after `run_at`, and forecasts are made b
   against always forecasting the base rate
 
 **Community suggestions** (`wgra suggest-subreddits`). The sample pools every untracked
-subreddit, but the raw items (48 hours) still name the real subreddit in their permalink.
+subreddit in `r/all`, but the raw items (48 hours) still name the real subreddit in their
+url.
 For the terms trending now, words and phrases past the detector's warmup, ClickHouse
 finds the sampled items mentioning them (words of the text and of the term matched like
 the term explorer's examples, one pass with `multiSearchAllPositionsUTF8`).
@@ -928,7 +956,7 @@ v2 lived in `v2/` next to v1 until the cutover, and is now the repository root.
 ```
 ./
   pyproject.toml, uv.lock   # uv
-  config.yaml               # subreddits, groups, languages, budget
+  config.yaml               # platforms, groups of channels, languages, budget
   docker-compose.yml        # clickhouse, grafana, ingest (+ ntfy in phase 2)
   Dockerfile
   clickhouse/wgra.xml       # settings for a small server
@@ -936,11 +964,15 @@ v2 lived in `v2/` next to v1 until the cutover, and is now the repository root.
     build_dashboards.py     # generates dashboards/*.json
     provisioning/           # datasource, dashboard provider
   src/wgra/
-    reddit/                 # client: auth, pacing by rate limit headers; listing parsing
+    sources/                # base.py: Item, Sink, Source
+      reddit/               # channels.py (r/x, r/all, r/_search), client.py (auth, pacing
+                            # by rate limit headers), models.py (listing parsing),
+                            # feeds.py (feeds + scheduler), search.py, source.py
     text/                   # cleaning, tokenizer, phrases, stopwords (en, de),
                             # intents.py and the word lists it uses (intent_words/)
-    ingest/                 # feeds + scheduler, processing, batch writer, main loop,
-                            # backfill.py (intents of the last 48 hours, once)
+    ingest/                 # the shared pipeline: processing, batch writer, run.py
+                            # (channels, every source, one sink), backfill.py (intents of
+                            # the last 48 hours, once)
     store/                  # clickhouse client, migrations runner
     migrations/*.sql
     query.py                # read-only queries for the CLI
@@ -1393,13 +1425,19 @@ without paid APIs or a model. The plan, its phases and go/no-go gates are in
 `wgra radar candidates` (phase 1); the watchlist filter, the precision fixes of §4.7 and
 the `considering` kind (phase 2, not measured yet).
 
-### Cross-platform spread map (planned, not started)
+### Cross-platform spread map (phase 1 built 2026-10-31)
 
 Hacker News, Bluesky, GitHub and app-store reviews collected next to Reddit behind one
 source interface, and the lead–lag of §4.6 run across all of them: which platform picks up
 a story first, and how long it takes to reach the next. Reddit becomes one source of
 several and can be switched off. The plan, its phases and go/no-go gates are in
 [CROSS-PLATFORM.md](CROSS-PLATFORM.md).
+
+Phase 1 is built: storage, analysis and dashboards count channels (`r/technology`, the
+sample `r/all`) and document types instead of subreddits and sources, the `channels`
+table says what each channel is, and Reddit is a source behind the `Item`/`Sink`/`Source`
+interface in `src/wgra/sources/reddit/`. The same benchmark history gives the same
+trends, onsets and edges as before, apart from the names (CROSS-PLATFORM.md §8.7).
 
 ### Phase 5: hardening and cutover
 
@@ -1478,12 +1516,20 @@ Open questions:
 ## Appendix A: ClickHouse schema
 
 The schema as built is
-[`src/wgra/migrations/001_init.sql`](../src/wgra/migrations/001_init.sql).
+[`src/wgra/migrations/001_init.sql`](../src/wgra/migrations/001_init.sql) to `004_lead_lag.sql`.
 Changes from the first sketch:
 
-* raw comments and posts share one `items` table with a `source` column
-* `source` is part of every term key, so comments and posts can be compared
+* raw comments and posts share one `items` table with a `doc_type` column
+* `doc_type` is part of every term key, so comments and posts can be compared
   or combined
+* the cross-platform phase 1 (docs/CROSS-PLATFORM.md §8) renamed `subreddit` to `channel`
+  (`r/technology`, the sample `r/all`, search results `r/_search`) and `source` to
+  `doc_type`, replaced `permalink` by an absolute `url`, added `platform` and `lang` to
+  `items`, `platform` to `polls` (and renamed its `background` to `sample`), and replaced
+  `subreddit_groups` by `channels` and `channel_groups`. Scope types are `channel` and
+  `group`, follower types `channel`, `group` and `platform` (r/all). Nothing was deployed,
+  so the schema files were edited in place and the intents column of migration 005 folded
+  into 001.
 * `uniqCombined(12)` instead of the default precision. That keeps the
   sketch small (about 3 KB at most instead of about 100 KB) at about 1.6%
   error, plenty for author counts.
@@ -1510,9 +1556,9 @@ SELECT kind, term,
        sumIf(docs, <hour in window>)                    AS y_w,
        sumIf(docs, <hour in reference>)                 AS y_b,
        uniqCombinedMergeIf(12)(authors, <hour in window>) AS authors_w,
-       <their docs in the _sample scope of term_daily, 90 days> AS y_sample
+       <their docs in the background channel r/all of term_daily, 90 days> AS y_sample
 FROM term_hourly
-WHERE subreddit IN {subreddits} AND <hour in window or reference>
+WHERE channel IN {channels} AND <hour in window or reference>
   AND (kind, term) IN (SELECT kind, term FROM candidates)
 GROUP BY kind, term;
 -- "in reference" for the 6h horizon: the same hours of the day only.

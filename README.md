@@ -12,6 +12,11 @@ to render it is at the top of that file.
 This is version 2, in Python and ClickHouse. Version 1 (TypeScript, MongoDB and Redis) was
 replaced on 2026-10-31 and is in the git history up to commit `eef466c`.
 
+Reddit is the only source so far. Storage, analysis and dashboards count channels
+(`r/technology`, the r/all sample `r/all`) and don't know Reddit, so more platforms can
+follow: Hacker News, GitHub, Bluesky and app reviews are planned in
+[docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md).
+
 Phases 1, 2 and 4, the lead–lag early warning and intents are built. The ingester collects comments
 and posts from the subreddits in [config.yaml](config.yaml) into ClickHouse. Every 15
 minutes the analyzer scores what is mentioned far more than usual, per subreddit and per
@@ -45,11 +50,12 @@ Requires Docker. Works the same on a laptop and on a server.
    ```
 
    * `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` of a Reddit "script" app. No Reddit
-     username or password needed.
+     username or password needed, and only while `platforms.reddit` is enabled.
    * `AUTHOR_HASH_KEY`, `CLICKHOUSE_PASSWORD` and `GRAFANA_ADMIN_PASSWORD`: generate each
      with `openssl rand -hex 32`. Never change `AUTHOR_HASH_KEY` afterwards.
 
-2. Choose subreddits and groups in `config.yaml`.
+2. Choose subreddits and groups in `config.yaml`. A group lists channels: a subreddit is
+   written `r/technology`.
 
 3. Start ClickHouse, Grafana, ntfy, the ingester and the analyzer:
 
@@ -59,13 +65,13 @@ Requires Docker. Works the same on a laptop and on a server.
 
 4. Open Grafana at <http://localhost:3608>, log in as `admin` with `GRAFANA_ADMIN_PASSWORD`.
    The dashboards are in the WGRA folder:
-   * **Trending now**: what the analyzer found, per group and its subreddits: score,
+   * **Trending now**: what the analyzer found, per group and its channels: score,
      times the usual share, mentions, authors, breadth, a sparkline of the last week,
      and the alerts. Click a term to explore it.
-   * **Long-term trends**: per group and its subreddits, the emerging, mainstreaming,
+   * **Long-term trends**: per group and its channels, the emerging, mainstreaming,
      fading and one-off terms of the last 13, 26 or 52 weeks, with growth per month,
      significance and the weekly share as a sparkline.
-   * **Early warning**: which subreddits lead which (lead time, hit rate, lift, sample
+   * **Early warning**: which channels lead which (lead time, hit rate, lift, sample
      size, as a table and a graph), recent cascades, the current forecasts and how past
      forecasts turned out.
    * **Intent radar**: the top switching flows (x → y) with the flow the other way and a
@@ -73,9 +79,12 @@ Requires Docker. Works the same on a laptop and on a server.
      top needs per group, and the comments behind each of them from the last 48 hours.
    * **Term explorer**: how often terms are mentioned over time, where, and recent
      examples. Per hour, day or week, and for groups pooled or as the average of the
-     subreddits' shares.
+     channels' shares.
    * **Rising (preview)**: a simpler first look at what's mentioned more than usual.
-   * **Ingestion**: is the ingester healthy and complete.
+   * **Ingestion**: is the ingester healthy and complete, per platform.
+
+   Every dashboard picks a group or a single channel: `reddit` is every tracked subreddit,
+   `r/all` the sample of the rest of reddit.
 
 5. Subscribe to the alerts: open <http://localhost:3609/wgra> in a browser, or see
    [Notifications on your phone](#notifications-on-your-phone). Check that they arrive:
@@ -98,7 +107,8 @@ docker compose stop ingest analyze
 
 ## Trends and alerts
 
-Every 15 minutes, `wgra analyze` compares, for every tracked subreddit and every group,
+Every 15 minutes, `wgra analyze` compares, for every channel (each tracked subreddit, and
+r/all) and every group,
 the share of comments and posts mentioning each term in a window with its share before:
 
 * **24h**: the last 24 hours against the 28 days before.
@@ -110,17 +120,17 @@ share, and a score (the strength of the evidence, a z-score of the weighted log 
 with a prior from the r/all sample, see the
 [architecture](docs/ARCHITECTURE.md#42-short-term-burst-detection)) of at least
 3. "pro" isn't shown as trending when "vision pro" explains it. For groups, breadth
-counts the subreddits the term trends in. All of it is in the `detect:` section of
+counts the channels the term trends in. All of it is in the `detect:` section of
 [config.yaml](config.yaml), overridable per scope.
 
 What reaches your phone:
 
 * **Instant alerts**, at most 5 a day: a score of at least 10 with 20 authors, or a
-  term trending in many subreddits of a group at once. A term alerts once per story:
+  term trending in many channels of a group at once. A term alerts once per story:
   not again for 72 hours unless its score doubles, and only in the scope where it's
   strongest.
 * **A daily digest per group** at 08:00 (Europe/Berlin, set in `notify:`): the 10
-  strongest trends of the last 24 hours in the group and its subreddits.
+  strongest trends of the last 24 hours in the group and its channels.
 * Tapping either opens Grafana.
 
 **The first days.** Without history, the window is compared with the share on all of
@@ -159,8 +169,8 @@ The phone has to reach ntfy and, for the links, Grafana:
 
 Once a day after 00:30 UTC, `wgra analyze` looks at weekly shares: per ISO week (Monday
 to Sunday, UTC), the comments and posts mentioning a term divided by all of them. The
-current week is left out, so the results change on Mondays. For every subreddit and
-group, over the last 13, 26 and 52 weeks:
+current week is left out, so the results change on Mondays. For every channel and group,
+over the last 13, 26 and 52 weeks:
 
 * Terms mentioned at least 20 times a week on average are tested. ClickHouse fits a
   least squares line through every one's log share and picks the fastest growing and
@@ -172,7 +182,7 @@ group, over the last 13, 26 and 52 weeks:
 * Each is **emerging** (significant growth, from at most 1 in 1,000 comments),
   **mainstreaming** (significant growth of a common term), **fading**, **one-off**
   (most of the change is one or two weeks far above the rest) or flat (not stored).
-* A group's share is the average of its subreddits' shares, so a big subreddit doesn't
+* A group's share is the average of its channels' shares, so a big subreddit doesn't
   drown out the small ones. `group_rate: pooled` divides all mentions by all comments
   instead.
 
@@ -202,13 +212,14 @@ r/technology, a product in a niche subreddit before all of reddit. The analyzer 
 these leader → follower edges from its own trends and turns them into forecasts.
 
 * **Events and onsets.** Every term that trends (score 5 or more) becomes an event. For
-  each event, every subreddit, every group and the r/all sample ("sample", reddit-wide)
-  gets an onset: the first hour its last 24 hours mentioned the term at least 5 times,
+  each event, every channel (each tracked subreddit, and r/all, reddit-wide) and every
+  group gets an onset: the first hour its last 24 hours mentioned the term at least 5 times,
   twice its usual share, with a score of 3 (the same scoring as trends, against its own
-  28 days before). A group a subreddit belongs to is also measured without it, so "the
+  28 days before). A group a channel belongs to is also measured without it, so "the
   rest of tech follows r/LocalLLaMA" isn't just r/LocalLLaMA's own mentions.
 * **Edges**, learned every day after 01:00 UTC from the events of the last 180 days: for
-  each leader subreddit and follower, how often the follower crossed within 7 days after
+  each leader (a tracked subreddit) and follower, how often the follower crossed within 7
+  days after
   the leader (when it hadn't before), after how long (median and IQR), against how often
   it crosses on any trending term (the base rate). A pair is an edge with at least 5
   events and 3 hits, significantly more hits than the base rate explains, and the leader
@@ -216,7 +227,7 @@ these leader → follower edges from its own trends and turns them into forecast
   crossed): two subreddits that pick up the same big stories in either order are related,
   but neither leads. Both tests are corrected for testing every pair. The probability
   shown is shrunk towards the base rate, with an 80%
-  interval, so 3 hits of 3 don't read as a certainty. Per topic too: a subreddit can lead
+  interval, so 3 hits of 3 don't read as a certainty. Per topic too: a channel can lead
   on tech terms and follow on everything else.
 * **Forecasts**, after every analysis run: a term trending in a leader whose followers
   haven't crossed yet, with the chance they will (lowered for the time that already
@@ -253,15 +264,15 @@ uv run wgra replay --forecast --step 6 --horizon 24h    # re-running the detecto
 ```
 
 **Which subreddits to add?** `wgra suggest-subreddits` looks at the r/all sample's comments
-and posts of the last 48 hours: their permalinks name the untracked subreddit they come
+and posts of the last 48 hours: their urls name the untracked subreddit they come
 from. It lists those that mentioned the terms rising now early (before they trended) or
 far more than their size explains, as lines to paste into a group of `config.yaml`. It
 never changes the config.
 
-**Does reddit come first?** Optionally (`wikipedia.enabled`, or `wgra wikipedia`), events
-whose term names a Wikipedia article are compared with its daily pageviews (Wikimedia's
-free API, cached, rate limited): did interest there rise after the reddit onset? It
-prints how often reddit was first and a sign test.
+**Do the onsets come first?** Optionally (`wikipedia.enabled`, or `wgra wikipedia`),
+events whose term names a Wikipedia article are compared with its daily pageviews
+(Wikimedia's free API, cached, rate limited): did interest there rise after the event's
+first onset? It prints how often the onset was first and a sign test.
 
 ## Intents
 
@@ -299,7 +310,7 @@ long-term trends) and are ranked apart from words, in `config.yaml` (`detect.kin
 
 ```bash
 uv run wgra intents --scope tech                           # all five kinds, last 7 days
-uv run wgra intents --scope sample --kind switch --days 30 --examples 2
+uv run wgra intents --scope r/all --kind switch --days 30 --examples 2
 uv run wgra term "complaint: reddit" --scope tech --bucket hour --days 2
 ```
 
@@ -329,7 +340,7 @@ subreddits (the pilot: note-taking, `pkm`). For its products the ingester:
 * and fetches, once, the comment tree of a post found that way whose title asks or tells
   about a switch ("Alternatives to Notion?"), a day after it was posted.
 
-What search finds outside the tracked subreddits is counted under the scope `_search`. It
+What search finds outside the tracked subreddits is counted in the channel `r/_search`. It
 isn't a complete stream, so it's in no group and no detector sees it.
 
 The radar only counts intents about a watched product: a switch or a switch considered
@@ -352,7 +363,7 @@ started by Docker Compose.
 uv sync
 uv run wgra status
 uv run wgra term "claude code" --scope tech --days 14
-uv run wgra term rust --scope programming --bucket hour --days 2
+uv run wgra term rust --scope r/programming --bucket hour --days 2
 uv run wgra term ai --scope tech --bucket week --days 180
 uv run wgra trends --scope tech                 # the latest trends
 uv run wgra trends --horizon 13w                # the latest long-term trends
@@ -363,26 +374,28 @@ uv run wgra edges && uv run wgra forecasts
 uv run wgra suggest-subreddits                  # untracked subreddits worth adding
 uv run wgra intents --scope tech --kind switch  # who switches from what to what
 uv run wgra radar candidates                    # the churn radar's material per product
-uv run wgra wikipedia                           # reddit onsets vs Wikipedia pageviews
+uv run wgra wikipedia                           # onsets vs Wikipedia pageviews
 uv run wgra notify-test
 ```
 
-A scope is a group from `config.yaml`, a single subreddit, `tracked` (every tracked
-subreddit) or `sample` (the r/all sample of everything else).
+A scope is a group from `config.yaml`, a channel (`r/technology`), `reddit` (every tracked
+subreddit) or `r/all` (the r/all sample of everything else). `wgra status` lists every
+channel with its platform and what it collected in the last 24 hours.
 
 To run the ingester outside of Docker, stop the container first (both would share one
-API budget), then run `uv run wgra ingest`. The analyzer can run anywhere, but run only
+API budget), then run `uv run wgra ingest` (every enabled platform, or `--source reddit`). The analyzer can run anywhere, but run only
 one of it with notifications on, or alerts go out twice.
 
 ## How the data is stored
 
 | Table | What | Kept |
 | --- | --- | --- |
-| `items` | Raw comments and posts and the intents found in them, for examples in the dashboards | 48 hours |
-| `term_hourly` | Per hour, subreddit and term: comments mentioning it, occurrences, distinct authors | 180 days |
+| `items` | Raw comments and posts, their channel, url, language and the intents found in them, for examples in the dashboards | 48 hours |
+| `term_hourly` | Per hour, channel, document type and term: comments mentioning it, occurrences, distinct authors | 180 days |
 | `term_daily` | The same per day | forever |
-| `scope_hourly` | Per hour and subreddit: all comments, words and authors (the denominators) | forever |
-| `polls` | Every request to Reddit, for the ingestion dashboard | 90 days |
+| `scope_hourly` | Per hour, channel and document type: all comments, words and authors (the denominators) | forever |
+| `channels`, `channel_groups` | The channels and groups of `config.yaml`, rewritten when the ingester starts | |
+| `polls` | Every request to a platform, for the ingestion dashboard | 90 days |
 | `trends` | Every 15 minutes, the top 50 trends per scope and horizon (and the top 20 of each intent kind), with the numbers behind them and what happened with the alert | 90 days, alerts forever |
 | `long_term_trends` | Every week, the emerging, mainstreaming, fading and one-off terms per scope and window, with the statistics and weekly shares behind them | forever |
 | `notifications` | Every message sent to ntfy (alerts, digests, weekly reports, forecast alerts) | forever |
@@ -399,9 +412,11 @@ one of it with notifications on, or alerts go out twice.
   48 hours, as Reddit asks of API users.
 * Tracked subreddits are polled completely as multireddits (`r/a+b+c`), each feed as often
   as its volume needs. A sample of r/all serves as the "normal" vocabulary. Reddit only
-  returns its last second or two, so it's a sample of a few percent. Its counts are
-  pooled into one scope, `_sample`. What the churn radar's search finds is pooled into
-  `_search` the same way.
+  returns its last second or two, so it's a sample of a few percent. What it finds outside
+  the tracked subreddits is pooled into one channel, `r/all`. What the churn radar's
+  search finds is pooled into `r/_search` the same way.
+* Authors are hashed together with their platform, so the same name on two platforms
+  counts as two people.
 
 ## Development
 
@@ -410,8 +425,14 @@ uv run pytest            # integration tests need ClickHouse: docker compose up 
 uv run ruff check . && uv run ruff format --check . && uv run mypy
 ```
 
-* Schema changes go into a new file in `src/wgra/migrations/`, applied on the next start
-  (or with `uv run wgra migrate`).
+* While nothing is deployed, schema changes edit the files in `src/wgra/migrations/` in
+  place and the local database is recreated (`docker compose down`, `docker volume rm
+  wgra_clickhouse_data`, `docker compose up -d --build`), see
+  [docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md) §2.2. Once there's history worth
+  keeping they go into a new file again, applied on the next start (or with
+  `uv run wgra migrate`).
+* A new platform is a source in `src/wgra/sources/` (`sources/base.py`: an `Item`, a
+  `Sink`, a `Source`), like `sources/reddit/`.
 * The dashboards are generated: edit `grafana/build_dashboards.py` and run
   `uv run python grafana/build_dashboards.py`. Grafana reloads them within 10 seconds.
 * `bench/` measures at production scale: `bench/synthetic.py` writes a year of synthetic

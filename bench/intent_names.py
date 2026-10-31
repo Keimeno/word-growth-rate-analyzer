@@ -19,7 +19,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from wgra.config import SAMPLE_SCOPE, Env
+from wgra.config import Env
 from wgra.store import connect
 from wgra.text.intents import (
     _HARD_BREAK,
@@ -60,19 +60,11 @@ def main() -> None:
     seen: Counter[str] = Counter()
     authors: dict[str, set[int]] = {}
     items = 0
-    english = {
-        sub
-        for (sub,) in client.query(
-            "SELECT DISTINCT subreddit FROM subreddit_groups WHERE group_name != 'de'"
-        ).result_rows
-    } | {SAMPLE_SCOPE}
     first = last = None
     with client.query_rows_stream(
-        "SELECT subreddit, created_at, author_hash, text FROM items FINAL"
+        "SELECT created_at, author_hash, text FROM items FINAL WHERE lang = 'en'"
     ) as stream:
-        for subreddit, created_at, author, text in stream:
-            if subreddit not in english:
-                continue
+        for created_at, author, text in stream:
             if sum(word.lower() in german for word in _TOKEN.findall(text)) >= 2:
                 continue
             items += 1
