@@ -1,7 +1,7 @@
 import pytest
 from helpers import make_config, make_item, no_sample
 
-from wgra.ingest.feeds import FeedScheduler, build_feeds, observed_rate
+from wgra.sources.reddit.feeds import FeedScheduler, build_feeds, observed_rate
 
 
 def listing(newest_id: int, count: int, seconds_apart: float, newest_time: int = 1_700_000_000):
@@ -20,16 +20,16 @@ def test_subreddits_are_packed_into_comment_and_post_feeds():
         ("posts-1", ("de", "programming")),
         ("comments-2", ("technology",)),
         ("posts-2", ("technology",)),
-        ("background-all", ("all",)),
+        ("sample-all", ("all",)),
     ]
     assert feeds[0].path == "/r/de+programming/comments"
     assert feeds[1].path == "/r/de+programming/new"
-    assert feeds[-1].background
+    assert feeds[-1].sample
 
 
-def test_background_feed_can_be_disabled():
+def test_the_sample_feed_can_be_disabled():
     feeds = build_feeds(make_config(platforms=no_sample()))
-    assert not any(feed.background for feed in feeds)
+    assert not any(feed.sample for feed in feeds)
 
 
 def test_observed_rate_uses_the_listing_time_span():
@@ -105,17 +105,17 @@ def test_a_full_listing_of_unseen_items_is_a_gap_and_speeds_up_polling():
     assert comments.newest_id == 1250
 
 
-def test_background_feed_reports_how_far_reddit_ids_advanced():
+def test_the_sample_feed_reports_how_far_reddit_ids_advanced():
     config = make_config(platforms={"reddit": {"sample": {"requests_per_minute": 20}}})
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
-    background = feeds[-1]
+    sample = feeds[-1]
 
-    scheduler.record_success(background, listing(1000, 20, seconds_apart=0), now=0)
-    outcome = scheduler.record_success(background, listing(1300, 20, seconds_apart=0), now=3)
+    scheduler.record_success(sample, listing(1000, 20, seconds_apart=0), now=0)
+    outcome = scheduler.record_success(sample, listing(1300, 20, seconds_apart=0), now=3)
     assert outcome.id_span == 300
     assert not outcome.gap
-    assert background.interval == pytest.approx(3.0)
+    assert sample.interval == pytest.approx(3.0)
 
 
 def test_failures_back_off_exponentially_and_honor_retry_after():

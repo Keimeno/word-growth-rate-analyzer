@@ -196,7 +196,7 @@ def test_forecasts_in_the_live_loop(history_db):
     assert any(t.term == term and t.scope == "r/a" for t in trends)
 
     ntfy, sent = recording_ntfy()
-    env = Env("", "", "", b"", "", 0, "", "", "", grafana_url="https://grafana.test")
+    env = Env(b"", "", 0, "", "", "", grafana_url="https://grafana.test")
     on = replace(CONFIG.forecast, alert=True, alert_min_probability=0.5, alert_min_events=5)
     analyzer = Analyzer(replace(CONFIG, forecast=on), env, client, ntfy)
     step = analyzer.run_forecasts(now, trends)
@@ -236,7 +236,7 @@ def test_forecast_alerts_are_off_by_default(history_db):
     now = history.first_burst("r/a", term) + timedelta(hours=20)
     trends = Detector(client, CONFIG).run(now.replace(minute=0) + timedelta(hours=1), now)
     ntfy, sent = recording_ntfy()
-    env = Env("", "", "", b"", "", 0, "", "", "")
+    env = Env(b"", "", 0, "", "", "")
     step = Analyzer(CONFIG, env, client, ntfy).run_forecasts(now, trends)
     assert [f for f in step.new if f.term == term]
     assert {f.alert for f in step.new} == {OFF}

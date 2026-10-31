@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from helpers import make_config, make_item
+from helpers import make_config, make_doc
 
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
 from wgra.ingest.run import write_channels
@@ -34,11 +34,13 @@ def test_views_count_docs_occurrences_and_distinct_authors(client):
 
     created = int(datetime(2026, 10, 10, 14, 5, tzinfo=UTC).timestamp())
     items = [
-        make_item(1, created, author="alice", text="rust rust rust is great"),
-        make_item(2, created + 60, author="bob", text="I like rust"),
-        make_item(3, created + 120, author="alice", text="rust again"),
-        make_item(4, created + 3600, author="carol", text="python only"),
-        make_item(5, created, subreddit="programming", author="dave", text="rust in programming"),
+        make_doc(config, 1, created, author="alice", text="rust rust rust is great"),
+        make_doc(config, 2, created + 60, author="bob", text="I like rust"),
+        make_doc(config, 3, created + 120, author="alice", text="rust again"),
+        make_doc(config, 4, created + 3600, author="carol", text="python only"),
+        make_doc(
+            config, 5, created, subreddit="programming", author="dave", text="rust in programming"
+        ),
     ]
     processed = [processor.process(item) for item in items]
     client.insert("items", [p.item_row for p in processed], column_names=list(ITEM_COLUMNS))

@@ -50,7 +50,7 @@ def sample(args: argparse.Namespace) -> None:
         watchlist = config.radar.watchlists[args.watchlist]
     # the watched products' single-word names count as names, as in the ingester
     configure_names(config.radar.names)
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     found: dict[str, list[dict[str, object]]] = defaultdict(list)
     items = 0
     with client.query_rows_stream(

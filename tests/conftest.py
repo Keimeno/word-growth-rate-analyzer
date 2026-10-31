@@ -19,7 +19,7 @@ def throwaway_database() -> Iterator:
     """
     load_dotenv()
     try:
-        env = Env.from_environ(require_reddit=False)
+        env = Env.from_environ()
         admin = connect(env)
         admin.command("SELECT 1")
     except Exception as error:

@@ -372,7 +372,7 @@ def main() -> None:
     measure.add_argument("step", choices=["backfill", "daily", "forecast", "learn", "replay"])
     args = parser.parse_args()
 
-    env = Env.from_environ(require_reddit=False)
+    env = Env.from_environ()
     if args.database == "wgra" or env.clickhouse_port == 3607:
         raise SystemExit("never against the live database or ClickHouse")
     config = load_config(args.config)

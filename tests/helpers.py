@@ -2,7 +2,9 @@ from datetime import UTC, datetime, timedelta
 
 from wgra.config import Config, parse_config
 from wgra.detect.short_term import Trend
-from wgra.reddit.models import RedditItem
+from wgra.sources.base import Item
+from wgra.sources.reddit.models import RedditItem
+from wgra.sources.reddit.source import to_item
 
 
 def no_sample(**reddit: object) -> dict[str, object]:
@@ -23,17 +25,17 @@ def make_item(
     id36: int,
     created_utc: int = 1_700_000_000,
     *,
-    source: str = "comment",
+    doc_type: str = "comment",
     subreddit: str = "technology",
     author: str = "someone",
     text: str = "hello world",
     distinguished: str | None = None,
     stickied: bool = False,
 ) -> RedditItem:
-    prefix = "t1" if source == "comment" else "t3"
+    prefix = "t1" if doc_type == "comment" else "t3"
     return RedditItem(
         fullname=f"{prefix}_{_base36(id36)}",
-        source="comment" if source == "comment" else "post",
+        doc_type="comment" if doc_type == "comment" else "post",
         subreddit=subreddit,
         author=author,
         created_utc=created_utc,
@@ -42,6 +44,14 @@ def make_item(
         distinguished=distinguished,
         stickied=stickied,
     )
+
+
+def make_doc(
+    config: Config, id36: int, *args: object, channel: str | None = None, **values: object
+) -> Item:
+    """A reddit item as the Reddit source hands it to the pipeline (make_item's arguments),
+    in its subreddit's channel or r/all, or in `channel`."""
+    return to_item(make_item(id36, *args, **values), config, channel)  # type: ignore[arg-type]
 
 
 def _base36(number: int) -> str:

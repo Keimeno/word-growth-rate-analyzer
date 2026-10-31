@@ -1,7 +1,8 @@
 import httpx
 import pytest
 
-from wgra.reddit import RedditClient, RedditError, parse_listing
+from wgra.sources.reddit.client import RedditClient, RedditError
+from wgra.sources.reddit.models import parse_listing
 
 
 class FakeTime:
@@ -196,7 +197,7 @@ def test_posts_combine_title_and_selftext_and_drop_removed_selftext():
         }
     }
     items = parse_listing(payload)
-    assert [(item.source, item.text) for item in items] == [
+    assert [(item.doc_type, item.text) for item in items] == [
         ("post", "Title\n\nBody"),
         ("post", "Only"),
     ]

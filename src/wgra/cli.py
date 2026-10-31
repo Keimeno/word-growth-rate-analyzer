@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 
-from wgra.config import Env, load_config
+from wgra.config import PLATFORM_DOC_TYPES, Env, load_config
 from wgra.detect.short_term import GROUP, Trend
 from wgra.notify.messages import per_month_text
 from wgra.query import (
@@ -61,14 +61,14 @@ def cmd_ingest(args: argparse.Namespace) -> None:
     from wgra.ingest.run import run_ingest
 
     config = load_config(args.config)
-    env = Env.from_environ()
+    env = Env.from_environ(require_author_hash_key=True)
 
     async def main() -> None:
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
-        await run_ingest(config, env, stop)
+        await run_ingest(config, env, stop, args.source)
 
     asyncio.run(main())
 
@@ -78,7 +78,7 @@ def _analyzer(args: argparse.Namespace, notify: bool = True) -> Analyzer:
     from wgra.notify.ntfy import Ntfy
 
     config = load_config(args.config)
-    env = Env.from_environ(require_reddit=False)
+    env = Env.from_environ()
     client = connect(env)
     if applied := migrate(client):
         logging.getLogger(__name__).info("applied migrations: %s", ", ".join(applied))
@@ -239,7 +239,7 @@ def _print_long_term(trends: Sequence[LongTermTrend]) -> None:
 
 
 def cmd_trends(args: argparse.Namespace) -> None:
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     if args.horizon.endswith("w"):
         week, long_term = latest_long_term(client, args.horizon, args.scope, args.limit)
         if week is None:
@@ -348,7 +348,7 @@ def cmd_lead_lag(args: argparse.Namespace) -> None:
 def cmd_edges(args: argparse.Namespace) -> None:
     from wgra.leadlag.edges import load_edges
 
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     day, edges = load_edges(client)
     if day is None:
         print("no edges yet, see `wgra lead-lag --once`")
@@ -367,7 +367,7 @@ def cmd_edges(args: argparse.Namespace) -> None:
 def cmd_forecasts(args: argparse.Namespace) -> None:
     from wgra.leadlag.forecasts import HIT, MISS, PENDING, load_forecasts
 
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     forecasts = load_forecasts(client, since=datetime.now(UTC) - timedelta(days=args.days))
     pending = [f for f in forecasts if f.outcome == PENDING]
     resolved = [f for f in forecasts if f.outcome in (HIT, MISS)]
@@ -384,12 +384,13 @@ def cmd_forecasts(args: argparse.Namespace) -> None:
 
 def cmd_suggest_subreddits(args: argparse.Namespace) -> None:
     from wgra.leadlag.suggest import suggest, yaml_snippet
+    from wgra.sources.reddit.channels import PLATFORM, subreddit_of
 
     config = load_config(args.config)
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     result = suggest(
         client,
-        config.subreddits,
+        [subreddit_of(channel) for channel in config.tracked(PLATFORM)],
         datetime.now(UTC),
         hours=args.hours,
         terms=args.terms,
@@ -437,7 +438,7 @@ def cmd_wikipedia(args: argparse.Namespace) -> None:
     )
 
     config = load_config(args.config)
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     migrate(client)
     now = datetime.now(UTC)
     if args.fetch:
@@ -496,7 +497,7 @@ def cmd_replay(args: argparse.Namespace) -> None:
     )
     config = replace(config, detect=detect, notify=notify, lead_lag=lead_lag, forecast=forecast)
 
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     scopes = load_scopes(client, config.detect.exclude_scopes)
     if args.scope:
         scopes = [scope for scope in scopes if scope.name in args.scope]
@@ -554,7 +555,7 @@ def _print_forecast_evaluation(client: Client, config: Config, steps: Sequence[S
 def cmd_notify_test(args: argparse.Namespace) -> None:
     analyzer = _analyzer(args)
     analyzer.send_test()
-    env = Env.from_environ(require_reddit=False)
+    env = Env.from_environ()
     print(f"sent to {env.ntfy_url}/{env.ntfy_topic}")
 
 
@@ -564,12 +565,12 @@ def _utc(value: str) -> datetime:
 
 
 def cmd_migrate(_: argparse.Namespace) -> None:
-    applied = migrate(connect(Env.from_environ(require_reddit=False)))
+    applied = migrate(connect(Env.from_environ()))
     print(f"applied: {', '.join(applied)}" if applied else "already up to date")
 
 
 def cmd_status(_: argparse.Namespace) -> None:
-    status = ingestion_status(connect(Env.from_environ(require_reddit=False)))
+    status = ingestion_status(connect(Env.from_environ()))
     print("Feeds, last hour")
     _print_table(
         [
@@ -601,7 +602,7 @@ INTENT_TITLES = {
 
 
 def cmd_intents(args: argparse.Namespace) -> None:
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     for kind in args.kind or INTENT_KINDS:
         report = intent_report(client, args.scope, kind, args.days, args.limit)
         _print_intents(report)
@@ -622,7 +623,7 @@ def cmd_backfill_intents(args: argparse.Namespace) -> None:
     from wgra.ingest.run import write_channels
 
     config = load_config(args.config)
-    env = Env.from_environ(require_reddit=False)
+    env = Env.from_environ()
     target = connect(env)
     if applied := migrate(target):
         logging.getLogger(__name__).info("applied migrations: %s", ", ".join(applied))
@@ -690,7 +691,7 @@ def cmd_radar_candidates(args: argparse.Namespace) -> None:
     unknown = set(args.watchlist or ()) - set(config.radar.watchlists)
     if unknown or not config.radar.watchlists:
         sys.exit(f"no such watchlist in radar.watchlists: {', '.join(sorted(unknown)) or 'none'}")
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     for name in args.watchlist or config.radar.watchlists:
         watchlist = config.radar.watchlists[name]
         table = candidates(client, config, watchlist, args.days)
@@ -717,7 +718,7 @@ def cmd_radar_candidates(args: argparse.Namespace) -> None:
 
 
 def cmd_term(args: argparse.Namespace) -> None:
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     points = term_series(client, args.term, args.scope, args.days, args.bucket)
     print(f'"{args.term}" in {args.scope}, comments and posts mentioning it')
     _print_table(
@@ -741,7 +742,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("-v", "--verbose", action="store_true")
     commands = parser.add_subparsers(required=True, metavar="command")
 
-    commands.add_parser("ingest", help="poll reddit and store counts").set_defaults(func=cmd_ingest)
+    ingest = commands.add_parser("ingest", help="collect from every source and store counts")
+    ingest.add_argument(
+        "--source",
+        action="append",
+        choices=list(PLATFORM_DOC_TYPES),
+        help="only this platform, repeatable (default: every enabled one)",
+    )
+    ingest.set_defaults(func=cmd_ingest)
 
     analyze = commands.add_parser("analyze", help="detect trends every 15 minutes and alert")
     analyze.add_argument("--once", action="store_true", help="run once and print the result")

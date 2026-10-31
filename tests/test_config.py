@@ -17,7 +17,7 @@ def test_channel_ids_are_lowercase_and_deduplicated():
     config = parse_config({"groups": {"a": ["r/Rust", "/r/golang", "r/rust"], "b": ["R/Rust"]}})
     assert config.groups == {"a": ("r/golang", "r/rust"), "b": ("r/rust",)}
     assert config.tracked("reddit") == ("r/golang", "r/rust")
-    assert config.subreddits == ("golang", "rust")
+    assert config.is_tracked("r/rust") and not config.is_tracked("r/all")
 
 
 def test_channels_have_their_platform_language_and_role():
@@ -56,12 +56,6 @@ def test_languages_default_to_english():
     assert config.language("r/de") == "de"
     assert config.language("r/technology") == "en"
     assert config.language("r/all") == "en"
-
-
-def test_scope_pools_untracked_subreddits():
-    config = make_config()
-    assert config.scope("technology") == "r/technology"
-    assert config.scope("askreddit") == "r/all"
 
 
 def test_scopes_named_in_settings_must_exist():
@@ -180,7 +174,7 @@ def test_empty_notification_settings_mean_the_defaults(monkeypatch):
     monkeypatch.setenv("NTFY_URL", "")
     monkeypatch.setenv("NTFY_TOPIC", "")
     monkeypatch.setenv("GRAFANA_URL", "https://grafana.example/")
-    env = Env.from_environ(require_reddit=False)
+    env = Env.from_environ()
     assert env.ntfy_url == "http://localhost:3609"
     assert env.ntfy_topic == "wgra"
     assert env.grafana_url == "https://grafana.example"

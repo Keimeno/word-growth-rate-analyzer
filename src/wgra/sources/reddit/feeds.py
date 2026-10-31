@@ -7,13 +7,13 @@ estimates its own item rate from the timestamps in the listing and is polled so 
 poll sees about half a listing of new items. That keeps busy feeds complete and quiet
 feeds cheap.
 
-The background feed (a sample of r/all) is different: reddit only returns the last
+The sample feed (a sample of r/all) is different: reddit only returns the last
 second or two of r/all, so it can never be complete. It gets a fixed share of the
 request budget and is treated as a random sample.
 
 The churn radar's searches (posts naming a watched product, docs/CHURN-RADAR.md §2.2)
 aren't complete either: each is polled at a fixed interval, and its budget comes off the
-tracked feeds' like the background's.
+tracked feeds' like the sample's.
 """
 
 from __future__ import annotations
@@ -24,10 +24,10 @@ from itertools import batched
 from typing import Literal
 
 from wgra.config import Config
-from wgra.ingest.search import search_query
-from wgra.reddit.client import LISTING_LIMIT
-from wgra.reddit.models import RedditItem
-from wgra.sources.reddit.channels import SAMPLE, subreddit_of
+from wgra.sources.reddit.channels import PLATFORM, SAMPLE, subreddit_of
+from wgra.sources.reddit.client import LISTING_LIMIT
+from wgra.sources.reddit.models import RedditItem
+from wgra.sources.reddit.search import search_query
 
 FeedKind = Literal["comments", "posts"]
 
@@ -52,7 +52,8 @@ class Feed:
     name: str
     kind: FeedKind
     subreddits: tuple[str, ...]
-    background: bool = False
+    # the r/all sample, never complete
+    sample: bool = False
     # a search for posts naming a watched product (the churn radar), all over reddit
     search: str | None = None
     # estimated new items per second
@@ -78,19 +79,20 @@ class Feed:
     def complete(self) -> bool:
         """Whether polling it often enough sees every item: tracked subreddits do, the r/all
         sample and searches don't, they get fixed intervals instead."""
-        return not self.background and self.search is None
+        return not self.sample and self.search is None
 
 
 @dataclass(frozen=True)
 class PollOutcome:
     gap: bool
-    # how far reddit's id sequence advanced since the last poll, for the background
+    # how far reddit's id sequence advanced since the last poll, for the r/all
     # sample this is roughly the number of comments posted on all of reddit
     id_span: int
 
 
 def build_feeds(config: Config, subreddits: Sequence[str] | None = None) -> list[Feed]:
-    subreddits = config.subreddits if subreddits is None else subreddits
+    if subreddits is None:
+        subreddits = tuple(map(subreddit_of, config.tracked(PLATFORM)))
     feeds = []
     for index, chunk in enumerate(
         batched(subreddits, config.platforms.reddit.max_subreddits_per_feed, strict=False)
@@ -101,10 +103,10 @@ def build_feeds(config: Config, subreddits: Sequence[str] | None = None) -> list
     if config.platforms.reddit.sample.requests_per_minute > 0:
         feeds.append(
             Feed(
-                name=f"background-{subreddit_of(SAMPLE)}",
+                name=f"sample-{subreddit_of(SAMPLE)}",
                 kind="comments",
                 subreddits=(subreddit_of(SAMPLE),),
-                background=True,
+                sample=True,
             )
         )
 
@@ -134,17 +136,17 @@ class FeedScheduler:
     def __init__(self, feeds: list[Feed], config: Config):
         self.feeds = feeds
         self._reddit = config.platforms.reddit
-        background_budget = self._reddit.sample.requests_per_minute if self._background else 0
-        self._background_interval = 60.0 / background_budget if background_budget else 0.0
+        sample_budget = self._reddit.sample.requests_per_minute if self._sample else 0
+        self._sample_interval = 60.0 / sample_budget if sample_budget else 0.0
         self._search_interval = config.radar.search_interval_minutes * 60
         search_budget = sum(60.0 / self._search_interval for feed in feeds if feed.search)
         self._tracked_budget = max(
-            self._reddit.requests_per_minute - background_budget - search_budget, 1.0
+            self._reddit.requests_per_minute - sample_budget - search_budget, 1.0
         )
 
     @property
-    def _background(self) -> list[Feed]:
-        return [feed for feed in self.feeds if feed.background]
+    def _sample(self) -> list[Feed]:
+        return [feed for feed in self.feeds if feed.sample]
 
     def next_feed(self) -> Feed:
         return min(self.feeds, key=lambda feed: feed.next_poll_at)
@@ -186,8 +188,8 @@ class FeedScheduler:
         feed.next_poll_at = now + max(backoff, retry_after or 0.0)
 
     def interval(self, feed: Feed) -> float:
-        if feed.background:
-            return self._background_interval
+        if feed.sample:
+            return self._sample_interval
         if feed.search is not None:
             return self._search_interval
         return self._desired_interval(feed) * self._budget_scale()

@@ -50,7 +50,7 @@ def main() -> None:
     args = parser.parse_args()
 
     load_dotenv()
-    client = connect(Env.from_environ(require_reddit=False))
+    client = connect(Env.from_environ())
     stop = stopwords("en")
     # german-only function words: german capitalizes every noun, its texts would make
     # "armut" a name

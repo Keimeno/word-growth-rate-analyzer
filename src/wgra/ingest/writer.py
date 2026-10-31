@@ -11,25 +11,9 @@ from typing import Any
 from clickhouse_connect.driver.client import Client
 
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, ProcessedItem
+from wgra.sources.base import POLL_COLUMNS, Poll
 
 log = logging.getLogger(__name__)
-
-POLL_COLUMNS = (
-    "ts",
-    "platform",
-    "feed",
-    "kind",
-    "sample",
-    "status",
-    "items",
-    "new_items",
-    "gap",
-    "id_span",
-    "latency_ms",
-    "interval_s",
-    "rate",
-    "ratelimit_remaining",
-)
 
 # if ClickHouse is down for long, drop the oldest rows instead of running out of memory
 MAX_BUFFERED_ROWS = 2_000_000
@@ -65,8 +49,8 @@ class Writer:
         self.items.extend([processed.item_row])
         self.terms.extend(processed.term_rows)
 
-    def add_poll(self, row: tuple[Any, ...]) -> None:
-        self.polls.extend([row])
+    def add_poll(self, poll: Poll) -> None:
+        self.polls.extend([poll.row()])
 
     async def run(self) -> None:
         while True:

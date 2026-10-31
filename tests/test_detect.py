@@ -220,7 +220,7 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
 
 def test_analyzer_alerts_once_and_sends_one_digest_per_day(history_client):
     ntfy, sent = recording_ntfy()
-    env = Env("", "", "", b"", "", 0, "", "", "", grafana_url="https://grafana.test")
+    env = Env(b"", "", 0, "", "", "", grafana_url="https://grafana.test")
     analyzer = Analyzer(config_for_tests(), env, history_client, ntfy)
     now = END - timedelta(minutes=1)
 
@@ -255,7 +255,7 @@ def test_analyzer_alerts_once_and_sends_one_digest_per_day(history_client):
 
 
 def test_without_notifications_alerts_are_muted(history_client):
-    env = Env("", "", "", b"", "", 0, "", "", "")
+    env = Env(b"", "", 0, "", "", "")
     analyzer = Analyzer(config_for_tests(), env, history_client, None)
     result = analyzer.run_once(END - timedelta(minutes=1))
     assert result.alerts["muted"] == 1

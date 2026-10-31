@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
-from helpers import make_config, make_item
+from helpers import make_config, make_doc
 
 from wgra.config import IntentsConfig, LongTermConfig
 from wgra.detect.long_term import LongTermDetector
@@ -246,7 +246,7 @@ def test_intent_report_and_examples(client):
 def test_the_pipeline_counts_intents_and_remembers_them_with_the_item():
     processor = Processor(CONFIG, b"key")
     processed = processor.process(
-        make_item(1, text="Honestly, I switched from Notion to Obsidian. Is Reddit down?")
+        make_doc(CONFIG, 1, text="Honestly, I switched from Notion to Obsidian. Is Reddit down?")
     )
     item = dict(zip(ITEM_COLUMNS, processed.item_row, strict=True))
     assert item["intents"] == ["complaint: reddit", FLOW]
@@ -254,21 +254,22 @@ def test_the_pipeline_counts_intents_and_remembers_them_with_the_item():
     assert {("switch", FLOW), ("complaint", "complaint: reddit"), ("word", "notion")} <= rows
 
     # the sample too, unless switched off
-    sample_item = make_item(2, subreddit="askreddit", text="Is Reddit down?")
+    sample_item = make_doc(CONFIG, 2, subreddit="askreddit", text="Is Reddit down?")
     assert dict(zip(ITEM_COLUMNS, processor.process(sample_item).item_row, strict=True))[
         "intents"
     ] == ["complaint: reddit"]
     without_sample = Processor(replace(CONFIG, intents=IntentsConfig(sample=False)), b"key")
-    row = without_sample.process(make_item(3, subreddit="askreddit", text="Is Reddit down?"))
+    row = without_sample.process(make_doc(CONFIG, 3, subreddit="askreddit", text="Is Reddit down?"))
     assert dict(zip(ITEM_COLUMNS, row.item_row, strict=True))["intents"] == []
     assert not {kind for _, _, _, kind, *_ in row.term_rows} & set(INTENT_KINDS)
 
 
 def test_german_patterns_follow_the_channels_language():
-    processor = Processor(make_config(), b"key")
+    config = make_config()
+    processor = Processor(config, b"key")
     text = "Ich bin von Windows zu Linux gewechselt."
-    german = processor.process(make_item(1, subreddit="de", text=text))
-    english = processor.process(make_item(2, subreddit="technology", text=text))
+    german = processor.process(make_doc(config, 1, subreddit="de", text=text))
+    english = processor.process(make_doc(config, 2, subreddit="technology", text=text))
     assert ("switch", "windows → linux") in {(row[3], row[4]) for row in german.term_rows}
     assert "windows → linux" not in {row[4] for row in english.term_rows}
 
@@ -284,7 +285,7 @@ def test_backfill_counts_the_intents_of_items_stored_before(client):
     ]
     processed = [
         old.process(
-            make_item(n, int((now - timedelta(hours=1)).timestamp()), subreddit=sub, text=t)
+            make_doc(CONFIG, n, int((now - timedelta(hours=1)).timestamp()), subreddit=sub, text=t)
         )
         for n, (sub, t) in enumerate(texts)
     ]

@@ -32,7 +32,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = load_config(args.config)
-    client = connect(Env.from_environ(require_reddit=False), database=args.database)
+    client = connect(Env.from_environ(), database=args.database)
     migrate(client)
     detector = LongTermDetector(client, config)
     as_of = args.as_of.replace(tzinfo=UTC) if args.as_of.tzinfo is None else args.as_of

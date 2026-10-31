@@ -1,4 +1,5 @@
-"""From reddit items to the rows we store."""
+"""From items to the rows we store, the same for every source: the copypasta filter,
+terms, intents and the author hash."""
 
 from __future__ import annotations
 
@@ -7,12 +8,10 @@ import hmac
 from collections import OrderedDict
 from collections.abc import Hashable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from wgra.config import Config
-from wgra.reddit.models import RedditItem
-from wgra.sources.reddit.channels import PLATFORM, channel_of
+from wgra.sources.base import Item
 from wgra.text import extract_terms
 from wgra.text.intents import INTENT_KINDS, configure_names
 
@@ -31,8 +30,6 @@ ITEM_COLUMNS = (
 )
 TERM_COLUMNS = ("hour", "channel", "doc_type", "kind", "term", "author_hash", "occurrences")
 
-DELETED_AUTHOR = "[deleted]"
-DELETED_TEXTS = frozenset({"[deleted]", "[removed]"})
 # raw text is only kept for 48h, for examples, it doesn't need to be complete
 MAX_STORED_TEXT = 10_000
 # short texts like "this" or "lol" are repeated naturally, only longer ones are copypasta
@@ -69,11 +66,6 @@ class ProcessedItem:
     term_rows: list[tuple[Any, ...]]
 
 
-def is_bot(author: str) -> bool:
-    author = author.lower()
-    return author == "automoderator" or author.endswith("bot")
-
-
 class Processor:
     def __init__(self, config: Config, author_hash_key: bytes):
         self._config = config
@@ -81,21 +73,20 @@ class Processor:
         self._recent_texts = RecentKeys(capacity=50_000)
         configure_names(config.radar.names)
 
-    def author_hash(self, author: str) -> int:
-        """A keyed hash, so stored values can't be linked back to reddit accounts."""
-        if author == DELETED_AUTHOR:
+    def author_hash(self, platform: str, author: str) -> int:
+        """A keyed hash, so stored values can't be linked back to accounts. Hashed with the
+        platform: the same name on two platforms counts as two people, and identities are
+        never linked across platforms."""
+        if not author:
             return 0
-        digest = hmac.new(self._author_hash_key, author.lower().encode(), hashlib.sha256)
+        name = f"{platform}:{author.lower()}"
+        digest = hmac.new(self._author_hash_key, name.encode(), hashlib.sha256)
         return int.from_bytes(digest.digest()[:8], "big")
 
-    def skip_reason(self, item: RedditItem) -> str | None:
-        if item.text.strip() in DELETED_TEXTS:
-            return "deleted"
-        if is_bot(item.author):
-            return "bot"
-        if item.distinguished in ("moderator", "admin") or item.stickied:
-            return "moderation"
-
+    def skip_reason(self, item: Item) -> str | None:
+        """Why an item isn't counted: what its source says, or copypasta."""
+        if item.skip:
+            return item.skip
         normalized = " ".join(item.text.lower().split())
         if len(normalized) >= MIN_DUPLICATE_LENGTH and not self._recent_texts.add(
             hashlib.blake2b(normalized.encode(), digest_size=16).digest()
@@ -103,38 +94,34 @@ class Processor:
             return "duplicate"
         return None
 
-    def process(self, item: RedditItem, channel: str | None = None) -> ProcessedItem:
-        """The rows to store for an item, its counts in `channel` if given (the search's).
-        Otherwise untracked subreddits only reach us through the r/all sample, and their
-        counts are pooled in r/all (the url still names the real subreddit)."""
-        channel = channel or self._config.scope(item.subreddit)
-        language = self._config.language(channel_of(item.subreddit))
+    def process(self, item: Item) -> ProcessedItem:
+        """The rows to store for an item, its counts in its channel. Background channels
+        (r/all) count shorter phrases, and intents only if intents.sample."""
         terms = extract_terms(
             item.text,
-            language=language,
-            max_ngram=self._config.max_ngram(channel),
-            intents=self._config.counts_intents(channel),
+            language=item.lang,
+            max_ngram=self._config.max_ngram(item.channel),
+            intents=self._config.counts_intents(item.channel),
         )
-        created_at = datetime.fromtimestamp(item.created_utc, UTC)
-        hour = created_at.replace(minute=0, second=0, microsecond=0)
-        author_hash = self.author_hash(item.author)
+        hour = item.created_at.replace(minute=0, second=0, microsecond=0)
+        author_hash = self.author_hash(item.platform, item.author)
 
         item_row = (
-            item.fullname,
-            PLATFORM,
-            channel,
-            item.source,
-            created_at,
+            item.id,
+            item.platform,
+            item.channel,
+            item.doc_type,
+            item.created_at,
             author_hash,
             item.text[:MAX_STORED_TEXT],
-            f"https://www.reddit.com{item.permalink}",
-            language,
+            item.url,
+            item.lang,
             terms.token_count,
             # the intents' terms, so dashboards can show the comments behind an intent
             sorted(term for kind, term in terms.counts if kind in INTENT_KINDS),
         )
         term_rows = [
-            (hour, channel, item.source, kind, term, author_hash, occurrences)
+            (hour, item.channel, item.doc_type, kind, term, author_hash, occurrences)
             for (kind, term), occurrences in terms.counts.items()
         ]
         return ProcessedItem(item_row=item_row, term_rows=term_rows)

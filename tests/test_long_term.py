@@ -335,7 +335,7 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
 
 def test_analyzer_runs_daily_and_reports_on_mondays(history_client):
     ntfy, sent = recording_ntfy()
-    env = Env("", "", "", b"", "", 0, "", "", "", grafana_url="https://grafana.test")
+    env = Env(b"", "", 0, "", "", "", grafana_url="https://grafana.test")
     analyzer = Analyzer(config_for_tests(), env, history_client, ntfy)
     scopes = load_scopes(history_client)
     monday_night = datetime(2026, 6, 22, 0, 15, tzinfo=UTC)

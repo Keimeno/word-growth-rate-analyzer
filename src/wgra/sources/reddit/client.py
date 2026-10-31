@@ -17,7 +17,7 @@ from typing import Any, Self
 
 import httpx
 
-from wgra.reddit.models import RedditItem, parse_listing, parse_tree
+from wgra.sources.reddit.models import RedditItem, parse_listing, parse_tree
 
 log = logging.getLogger(__name__)
 

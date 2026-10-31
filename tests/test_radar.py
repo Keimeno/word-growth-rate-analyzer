@@ -2,12 +2,12 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from helpers import make_config, make_item
+from helpers import make_config, make_doc
 
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
 from wgra.ingest.run import write_channels
-from wgra.ingest.search import due_trees, names_any, search_query, stored_ids, wants_tree
 from wgra.radar.candidates import candidates, products_of, summarize
+from wgra.sources.reddit.search import due_trees, names_any, search_query, stored_ids, wants_tree
 from wgra.store import migrate
 from wgra.text.intents import configure_names, extract_intents
 from wgra.text.terms import clean
@@ -109,8 +109,15 @@ def test_watched_names_count_in_lowercase():
 
 
 def test_search_items_are_counted_in_the_search_channel():
-    item = make_item(1, subreddit="productivity", text="I switched from Notion to Obsidian.")
-    processed = Processor(pkm_config(), b"key").process(item, "r/_search")
+    config = pkm_config()
+    item = make_doc(
+        config,
+        1,
+        subreddit="productivity",
+        text="I switched from Notion to Obsidian.",
+        channel="r/_search",
+    )
+    processed = Processor(config, b"key").process(item)
     assert processed.item_row[ITEM_COLUMNS.index("channel")] == "r/_search"
     assert processed.item_row[ITEM_COLUMNS.index("intents")] == ["notion → obsidian"]
     assert {row[TERM_COLUMNS.index("channel")] for row in processed.term_rows} == {"r/_search"}
@@ -219,8 +226,10 @@ def test_candidates_from_clickhouse(client):
             ("r/elsewhere", "Notion and Obsidian"),
         ]
     ):
-        item = make_item(author + 1, subreddit="any", author=f"a{author}", text=text)
-        rows += Processor(config, b"key").process(item, channel).term_rows
+        item = make_doc(
+            config, author + 1, subreddit="any", author=f"a{author}", text=text, channel=channel
+        )
+        rows += Processor(config, b"key").process(item).term_rows
     client.insert(
         "term_events",
         [(hour, *row[1:]) for row in rows],
@@ -250,8 +259,16 @@ def test_due_trees_and_stored_ids(client):
     rows = []
     for id36, hours_ago, title in posts:
         created = int((now - timedelta(hours=hours_ago)).timestamp())
-        item = make_item(id36, created, source="post", subreddit="productivity", text=title)
-        rows.append(Processor(config, b"key").process(item, "r/_search").item_row)
+        item = make_doc(
+            config,
+            id36,
+            created,
+            doc_type="post",
+            subreddit="productivity",
+            text=title,
+            channel="r/_search",
+        )
+        rows.append(Processor(config, b"key").process(item).item_row)
     client.insert("items", rows, column_names=list(ITEM_COLUMNS))
 
     assert due_trees(client, config.radar, set()) == ["t3_1"]

@@ -114,7 +114,7 @@ def main() -> None:
         raise SystemExit("never into the live database")
 
     config = load_config(args.config)
-    env = Env.from_environ(require_reddit=False)
+    env = Env.from_environ()
     admin = connect(env)
     admin.command(f"CREATE DATABASE IF NOT EXISTS {args.database}")
     client = connect(env, database=args.database)

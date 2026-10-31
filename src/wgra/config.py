@@ -498,20 +498,16 @@ class Config:
         background = info is not None and info.background
         return self.intents.enabled and (self.intents.sample or not background)
 
-    @cached_property
-    def subreddits(self) -> tuple[str, ...]:
-        """The names of the tracked subreddits, for collecting them."""
-        return tuple(map(reddit_channels.subreddit_of, self.tracked(reddit_channels.PLATFORM)))
-
-    def scope(self, subreddit: str) -> str:
-        """Where an item's counts go: its subreddit's channel if tracked, the sample's
-        otherwise."""
-        channel = reddit_channels.channel_of(subreddit)
-        return channel if channel in self._tracked else reddit_channels.SAMPLE
+    def is_tracked(self, channel: str) -> bool:
+        return channel in self._tracked
 
     @cached_property
     def _tracked(self) -> frozenset[str]:
-        return frozenset(self.tracked(reddit_channels.PLATFORM))
+        return frozenset(
+            channel
+            for channel, info in self._channels.items()
+            if info.analyzed and not info.background
+        )
 
     def group_memberships(self) -> list[tuple[str, str]]:
         """(group, channel) pairs, including each platform's group of its tracked channels
@@ -801,9 +797,10 @@ def load_config(path: Path) -> Config:
 
 @dataclass(frozen=True)
 class Env:
-    reddit_client_id: str
-    reddit_client_secret: str
-    reddit_user_agent: str
+    """The connections and secrets every command needs. Each source reads its own
+    credentials (REDDIT_* for reddit) when it's enabled."""
+
+    # the ingester's secret for hashing author names
     author_hash_key: bytes
     clickhouse_host: str
     clickhouse_port: int
@@ -819,23 +816,16 @@ class Env:
     grafana_url: str = "http://localhost:3608"
 
     @classmethod
-    def from_environ(cls, require_reddit: bool = True) -> Env:
+    def from_environ(cls, require_author_hash_key: bool = False) -> Env:
+        """`require_author_hash_key`: for the ingester, which stores author hashes."""
         required = ["CLICKHOUSE_PASSWORD"]
-        if require_reddit:
-            required += [
-                "REDDIT_CLIENT_ID",
-                "REDDIT_CLIENT_SECRET",
-                "REDDIT_USER_AGENT",
-                "AUTHOR_HASH_KEY",
-            ]
+        if require_author_hash_key:
+            required.append("AUTHOR_HASH_KEY")
         missing = [name for name in required if not os.environ.get(name)]
         if missing:
             raise RuntimeError(f"missing environment variables: {', '.join(missing)} (see .env)")
 
         return cls(
-            reddit_client_id=os.environ.get("REDDIT_CLIENT_ID", ""),
-            reddit_client_secret=os.environ.get("REDDIT_CLIENT_SECRET", ""),
-            reddit_user_agent=os.environ.get("REDDIT_USER_AGENT", ""),
             author_hash_key=os.environ.get("AUTHOR_HASH_KEY", "").encode(),
             clickhouse_host=os.environ.get("CLICKHOUSE_HOST", "localhost"),
             clickhouse_port=int(os.environ.get("CLICKHOUSE_PORT", "3607")),

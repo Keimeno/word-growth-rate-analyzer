@@ -1,6 +1,7 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
-from helpers import make_config, make_item
+from helpers import make_config, make_doc
 
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor, RecentKeys
 
@@ -19,37 +20,41 @@ def test_recent_keys_forget_the_oldest():
     assert "b" not in keys
 
 
-def test_author_hash_is_keyed_stable_and_case_insensitive():
+def test_author_hash_is_keyed_stable_case_insensitive_and_per_platform():
     first, other_key = processor(), Processor(make_config(), b"other-key")
-    assert first.author_hash("Someone") == first.author_hash("someone")
-    assert first.author_hash("someone") != other_key.author_hash("someone")
-    assert first.author_hash("[deleted]") == 0
+    assert first.author_hash("reddit", "Someone") == first.author_hash("reddit", "someone")
+    assert first.author_hash("reddit", "someone") != other_key.author_hash("reddit", "someone")
+    # the same name on two platforms is two people
+    assert first.author_hash("reddit", "pg") != first.author_hash("hn", "pg")
+    # no author (deleted)
+    assert first.author_hash("reddit", "") == 0
 
 
-def test_skip_reasons():
-    p = processor()
-    assert p.skip_reason(make_item(1, text="[removed]")) == "deleted"
-    assert p.skip_reason(make_item(2, author="AutoModerator")) == "bot"
-    assert p.skip_reason(make_item(3, author="RemindMeBot")) == "bot"
-    assert p.skip_reason(make_item(4, distinguished="moderator")) == "moderation"
-    assert p.skip_reason(make_item(5, stickied=True)) == "moderation"
-    assert p.skip_reason(make_item(6, text="an ordinary comment")) is None
+def test_skip_reasons_are_the_sources_and_copypasta():
+    p, config = processor(), make_config()
+    assert p.skip_reason(replace(make_doc(config, 1), skip="bot")) == "bot"
+    assert p.skip_reason(make_doc(config, 2, text="an ordinary comment")) is None
 
 
 def test_long_identical_texts_are_copypasta_short_ones_are_not():
-    p = processor()
+    p, config = processor(), make_config()
     copypasta = "This is a long copypasta that gets posted under every single thread"
-    assert p.skip_reason(make_item(1, text=copypasta)) is None
-    assert p.skip_reason(make_item(2, text=copypasta.upper())) == "duplicate"
-    assert p.skip_reason(make_item(3, text="this")) is None
-    assert p.skip_reason(make_item(4, text="this")) is None
+    assert p.skip_reason(make_doc(config, 1, text=copypasta)) is None
+    assert p.skip_reason(make_doc(config, 2, text=copypasta.upper())) == "duplicate"
+    assert p.skip_reason(make_doc(config, 3, text="this")) is None
+    assert p.skip_reason(make_doc(config, 4, text="this")) is None
 
 
 def test_process_builds_item_and_term_rows():
     p = processor()
     created = int(datetime(2026, 10, 10, 14, 35, 12, tzinfo=UTC).timestamp())
-    item = make_item(
-        42, created, subreddit="de", author="Someone", text="Das E-Auto ist günstig, E-Auto!"
+    item = make_doc(
+        make_config(),
+        42,
+        created,
+        subreddit="de",
+        author="Someone",
+        text="Das E-Auto ist günstig, E-Auto!",
     )
     processed = p.process(item)
 
@@ -59,7 +64,7 @@ def test_process_builds_item_and_term_rows():
     assert (item_row["doc_type"], item_row["lang"]) == ("comment", "de")
     assert item_row["url"] == "https://www.reddit.com/r/de/comments/x/42"
     assert item_row["created_at"] == datetime(2026, 10, 10, 14, 35, 12, tzinfo=UTC)
-    assert item_row["author_hash"] == p.author_hash("someone")
+    assert item_row["author_hash"] == p.author_hash("reddit", "someone")
     assert item_row["token_count"] == 5
 
     rows = {
@@ -75,9 +80,9 @@ def test_process_builds_item_and_term_rows():
     assert ("phrase", "das e-auto") not in rows
 
 
-def test_untracked_subreddits_are_pooled_into_the_sample_with_bigrams_only():
+def test_background_channels_count_bigrams_only():
     processed = processor().process(
-        make_item(7, subreddit="askreddit", text="the right to repair movement")
+        make_doc(make_config(), 7, subreddit="askreddit", text="the right to repair movement")
     )
     item_row = dict(zip(ITEM_COLUMNS, processed.item_row, strict=True))
     assert item_row["channel"] == "r/all"
@@ -89,9 +94,9 @@ def test_untracked_subreddits_are_pooled_into_the_sample_with_bigrams_only():
     assert ("phrase", "right to repair") not in terms
 
 
-def test_tracked_subreddits_keep_their_name_and_trigrams():
+def test_other_channels_count_trigrams():
     processed = processor().process(
-        make_item(8, subreddit="technology", text="the right to repair movement")
+        make_doc(make_config(), 8, subreddit="technology", text="the right to repair movement")
     )
     assert {row[1] for row in processed.term_rows} == {"r/technology"}
     assert ("phrase", "right to repair") in {(row[3], row[4]) for row in processed.term_rows}
