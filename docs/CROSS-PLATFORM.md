@@ -15,20 +15,24 @@ reaches r/programming in 18 hours and Wikipedia in 4 days". Two things come out 
 * **Earlier warning.** A term rising on HN or among GitHub stars becomes a forecast for
   Reddit and for the mainstream: the forecasts of §4.6, with more leaders.
 
-Nobody shows this today. It eases the licensing problem less than hoped: the stack can run
-with Reddit switched off, but of the new sources only Bluesky clearly allows a product.
-GitHub probably does with care, and Hacker News's terms forbid commercial use unless YC
-allows it (§5).
+Nobody shows this today. It's for personal use for now; a commercial product comes later.
+When it does, the stack can run with Reddit switched off, but that eases the licensing
+problem less than hoped: of the new sources only Bluesky clearly allows a product, GitHub
+probably does with care, and Hacker News's terms forbid commercial use unless YC allows it
+(§5).
+
+Phase 1 is planned in detail in §8: Reddit behind a source interface, with the same results
+as today.
 
 **It costs nothing to run**, like the rest of v2. Every new source is free; GitHub needs a
 free token.
 
 ## 1. Where things stand (checked 2026-10-31)
 
-* **The stack collects again** since 2026-10-31. ClickHouse holds 51 hours of Reddit
-  (2026-10-10 to 10-12, and today): 1.1 million comments and posts, 95% of them from the
-  r/all sample, in about 270 MB. A schema change now copies 270 MB. Every week it waits
-  adds to the copy and to what has to be checked afterwards.
+* **Nothing is deployed.** The stack runs locally and collects again since 2026-10-31:
+  51 hours of Reddit (2026-10-10 to 10-12, and today), 1.1 million comments and posts, 95%
+  of them from the r/all sample, in about 270 MB. So there's no migration: the schema is
+  changed in place and the local database recreated (§8.3).
 * **Reddit is built into three layers:**
   * Storage: the `subreddit` column of `items`, `scope_hourly`, `term_hourly`, `term_daily`
     and `subreddit_groups`. It's in the sorting key of each, and ClickHouse can't rename key
@@ -41,10 +45,10 @@ free token.
     (`Network` in `leadlag/edges.py`).
 
   In all, `subreddit` appears in 32 Python and SQL files, 68 times in the dashboard builder.
-* **The churn radar's phase 1 is in** (commit `1d8972f`, 2026-10-31): Reddit search,
-  comment trees and a `_search` scope, in `ingest/`, `reddit/`, `radar/` and the config.
-  It's more Reddit-only collection, and it moves into `sources/reddit/` with the rest.
-  Phase 1 here builds on it and takes the next free migration number.
+* **The churn radar's phases 1 and 2 are in** (`1d8972f`, `c9fc201`, 2026-10-31): Reddit
+  search, comment trees and a `_search` scope, in `ingest/`, `reddit/`, `radar/` and the
+  config. It's more Reddit-only collection, and it moves into `sources/reddit/` with the
+  rest.
 * **The math is already platform-neutral.** Every score compares a scope's share of its own
   documents with its own past, so a channel with 12,000 items a day and one with millions
   are scored the same way. Wikipedia pageviews are already compared with onsets
@@ -77,37 +81,32 @@ free token.
 * Every platform has one **platform channel**, the whole platform: its node on the platform
   map and the prior of its channels' scores. They are `r/all`, `hn`, `bsky`, `gh/stars`, and
   the group `ios` of all tracked apps.
-* **Groups** may list channels of any platform. A bare name in `config.yaml` is a subreddit,
-  so today's config keeps working. A group pools its channels' counts, so a group with
-  `bsky` in it is mostly Bluesky, and the config check warns about groups that mix
-  platforms. The spread map uses channels and platform channels; mixed groups are for
-  topics (an event's topic is the group it trended in most in its first hour, §4.6).
-  `tracked` stays the group of every tracked subreddit.
+* **Groups** list channel ids (`r/technology`, not `technology`) and may mix platforms. A
+  group pools its channels' counts, so a group with `bsky` in it is mostly Bluesky, and the
+  config check warns about groups that mix platforms. The spread map uses channels and
+  platform channels; mixed groups are for topics (an event's topic is the group it trended
+  in most in its first hour, §4.6). The implicit group `tracked` becomes `reddit`: every
+  tracked subreddit. Nothing pools across platforms unless a group says so.
+* A **scope** is a channel id or a group name, and a group can't be named like a channel.
+  Code never tells them apart by a prefix: it looks the name up in `channels` or uses the
+  stored scope type.
 
-### 2.2 Storage, one migration
+### 2.2 Storage
 
-One migration, the next free number:
+Nothing is deployed, so the schema files are edited in place and the local database is
+recreated, without migrations, for as long as that holds. Phase 1 renames `subreddit` to
+`channel` and `source` to `doc_type` everywhere, and adds `channels` (§8.3). Later phases
+add their tables the same way:
 
-* `items`, `scope_hourly`, `term_hourly` and `term_daily`: `subreddit` becomes `channel`,
-  `source` becomes `doc_type` (comment, post, story, star, review). Both are key columns,
-  so the migration creates the new tables, copies with `INSERT … SELECT`
-  (`technology` → `r/technology`, `_sample` → `r/all`, `_search` → `r/_search`), swaps
-  them in with `EXCHANGE TABLES` and recreates the materialized views. `items` gets
-  `platform` and `lang`, and `url` instead of `permalink`.
-* `subreddit_groups` becomes `channel_groups`, next to a new `channels` table (channel,
-  platform, language, whether it's a platform channel), written on every ingester start.
-* `ingest_cursors` (source, cursor, updated_at): where each source resumes after a restart,
-  such as a Jetstream time or an HN item id. Reddit keeps restoring from `items`.
-* `gh_repos`: the watched repos, why each is watched (linked, searched, configured), since
-  when, its description and topics, and how far back its stars are fetched.
-* `polls` gets `platform`.
-* In `trends`, `long_term_trends`, `lead_lag_events`, `propagation_edges` and `forecasts`,
-  the scope `sample` becomes `r/all` and the scope type `subreddit` becomes `channel`.
-  `follower_type` gains `platform` and `external`. Small rewrites at today's size.
+* `ingest_cursors` (phase 2): where each source resumes after a restart, such as an HN
+  item id or a Jetstream time. Reddit keeps restoring from `items`.
+* `gh_repos` (phase 2): the watched repos, why each is watched (linked, searched,
+  configured), since when, its description and topics, and how far back its stars are
+  fetched.
+* `follower_type` gains `external` for `wiki` (phase 2).
 
-Keeping the column names and only prefixing the values would save the copy, but leave every
-query saying `subreddit` where it means a channel. At 270 MB the rename is the cheaper
-choice. In a year it won't be.
+Once something is deployed with history worth keeping, schema changes go back to being
+migrations.
 
 ### 2.3 Collection: one interface, a module per source
 
@@ -270,39 +269,38 @@ platforms:
       example-app: 1234567890
 
 groups:
-  tech: [technology, programming, LocalLLaMA, hn, gh/stars]   # bare names are subreddits
+  tech: [r/technology, r/programming, r/localllama, hn, gh/stars]
 
 detect:
   platforms:                         # per platform, only what differs
     hn: {min_mentions: 5, min_authors: 3}
 ```
 
-Today's `ingest:` and `background:` sections move under `platforms.reddit`. The old keys are
-still read, with a warning.
+Today's `background:` section and the Reddit keys of `ingest:` move under
+`platforms.reddit` in phase 1 (§8.6), without compatibility for the old keys: `config.yaml`
+changes with the code.
 
 ## 3. Delivery plan
 
-### Phase 0: terms and accounts (half a day, mostly waiting for answers)
+### Phase 0: accounts (an hour)
 
-* Decide the intended use: personal, or a product. For a product, ask in writing:
-  Y Combinator (api@ycombinator.com) for commercial use of HN data, and GitHub for
-  commercial analytics on API data (§5). Apply for the Google Trends API alpha.
-* Create a GitHub token. Set up a public contact email; Bluesky's guidelines ask for one.
-* **Done when:** each source in §5 is marked go or no-go for that use. A personal tool
-  doesn't wait for the answers.
+* For personal use: a GitHub token (phase 2), and a contact email in the user agents.
+  Apply for the Google Trends API alpha if it's wanted; it costs only the application.
+* The written permissions of §5 wait until it becomes a product (gate 3).
 
 ### Phase 1: the source-agnostic core, Reddit only (about 3 days)
 
-* On top of the churn radar's phase 1 (§1). The migration of §2.2; `Item` and
-  `Source` with Reddit moved behind them; the shared `Processor`; `platforms:` in the
-  config with the old keys still read; scopes and priors per platform; any channel as a
-  leader in `Network`; the dashboards regenerated.
-* **Done when:** the tests pass, and `wgra replay` over the stored days gives the same
-  trends before and after, apart from the names (`sample` → `r/all`). Reddit keeps
-  collecting through the deploy.
+* Detailed in §8. Names and structure change, results don't: storage, analysis and
+  dashboards stop knowing Reddit, and Reddit moves behind a source interface.
+* **Done when:** a seeded benchmark history gives the same trends, onsets and edges before
+  and after, apart from the names (§8.7), and a day of live collection on the recreated
+  database looks right.
 
-### Phase 2: Hacker News and GitHub, with history (about 4 days)
+### Phase 2: Hacker News and GitHub, with history (about 5 days)
 
+* What phase 1 leaves out because it changes results (§8.9): priors per platform and their
+  mixture for mixed groups, any channel as a leader, thresholds per platform, a Compose
+  service per source, `ingest_cursors`.
 * HN with its Algolia backfill, the `repo` kind, GitHub's watched repos and their star
   backfill, `wiki` as a follower.
 * Run the detector over the backfilled weeks and store the trends, so they become events.
@@ -330,7 +328,7 @@ still read, with a warning.
 * The App Store source and its watchlist, built once the churn radar's watchlists exist
   (CHURN-RADAR.md §2.1), and only if its terms are acceptable for the use (§5).
 
-About 2.5 weeks of work in all. Then waiting: edges involving Reddit need 4–6 weeks of
+About 3 weeks of work in all. Then waiting: edges involving Reddit need 4–6 weeks of
 history counted from 2026-10-31, those involving Bluesky 4–6 weeks from phase 4.
 
 ## 4. Cost
@@ -345,8 +343,10 @@ history counted from 2026-10-31, those involving Bluesky 4–6 weeks from phase 
 
 ## 5. Terms (checked 2026-10-31)
 
-Read from the primary sources on 2026-10-31. This is a reading for planning, not legal
-advice; a product needs a lawyer's reading (gate 3).
+For personal use none of this blocks anything; the obligations that apply anyway are
+Bluesky's deletions and polite rate limits. It matters once this becomes a product. Read
+from the primary sources on 2026-10-31: a reading for planning, not legal advice; a product
+needs a lawyer's reading (gate 3).
 
 | Source | Commercial use | Conditions and obligations | Primary source |
 | --- | --- | --- | --- |
@@ -372,7 +372,8 @@ With Hacker News, the source the examples lean on, it needs YC's written permiss
    platforms: calibrated within 10 points per bin, a lift of at least 2 over the follower's
    base rate, and a median warning of at least 12 hours. Until then they're hints on the
    dashboard, without alerts.
-3. **Data rights (before anyone outside sees it).** Written answers from YC and GitHub, or
+3. **Data rights (when it becomes a product, before anyone outside sees it).** Written
+   answers from YC and GitHub, or
    those sources off for the product; App Store reviews only after a lawyer's reading;
    Reddit licensed or switched off.
 
@@ -408,3 +409,212 @@ With Hacker News, the source the examples lean on, it needs YC's written permiss
 * Open: whether the product is the map (descriptive, sellable as a report soon) or the
   forecasts (which need gate 2), and which topics to start with (proposed: tech, where HN
   and GitHub are strongest).
+
+## 8. Phase 1 in detail: Reddit behind a source interface
+
+The same system with new names and a new structure, and the same results. Afterwards only
+these know Reddit: `sources/reddit/`, the churn radar's search and comment trees (`radar/`
+and the `r/_search` channel), `wgra suggest-subreddits` (it finds untracked subreddits in
+r/all items), and the `subreddit` term kind (mentions of r/x, which HN and Bluesky have
+too). Everything that changes results waits for phase 2 (§8.9), so phase 1 can be checked
+by comparing numbers (§8.7).
+
+### 8.1 Before starting
+
+* The churn radar's phases 1 and 2 are committed (`1d8972f`, `c9fc201`). Phase 1 touches
+  most of the files they did (`cli.py`, `config.yaml`, `radar/`, `text/intents.py`, the
+  dashboard builder, tests), so it runs while no other work edits the checkout.
+* The reference run of §8.7, on the code before phase 1.
+
+### 8.2 Names
+
+| Today | Phase 1 |
+| --- | --- |
+| column `subreddit` | `channel` |
+| column `source` (comment, post) | `doc_type` |
+| `technology` stored, `r/technology` as a scope | `r/technology` in both |
+| `_sample` stored, `sample` as a scope and a group | the channel `r/all` |
+| `_search` stored | the channel `r/_search` (subreddit names can't start with `_`) |
+| the group `tracked` | `reddit`: every tracked subreddit |
+| scope type `subreddit` | `channel` |
+| follower type `subreddit`, `sample` | `channel`, `platform` |
+| `subreddit_groups` | `channel_groups`, and the new `channels` |
+| `permalink` (relative) | `url` (absolute) |
+| `polls.background` | `polls.sample` |
+| `detect.sources` | `detect.doc_types`, empty for every type |
+| `wiki_leads.reddit_onset`, `reddit_scope` | `first_onset`, `first_scope` |
+| the Grafana variable `subreddit` | `channel` |
+| `SAMPLE_SCOPE`, `SAMPLE_GROUP`, `SEARCH_SCOPE`, `subreddit_scope()` | gone from the shared code; the Reddit source has `r/all` and `r/_search` |
+
+Channel ids are lowercase, like subreddit names today. A group name that equals a channel id
+is a config error. Wherever the code tells a channel from a group by its `r/` prefix today
+(`notify/messages.py`, `query.py`, the dashboards), it uses `channels` or the stored scope
+type instead.
+
+### 8.3 Storage
+
+* Migrations 001–004 are edited in place, and 005 (the `intents` column) is folded into
+  001.
+* `items`: id, platform, channel, doc_type, created_at, author_hash, text, url, lang,
+  token_count, intents, ingested_at. Sorted by (channel, created_at, id), deleted after 48
+  hours. `lang` is stored so `wgra backfill-intents` no longer needs to parse the subreddit
+  out of the permalink.
+* `scope_hourly`, `term_events`, `term_hourly`, `term_daily`: `channel` and `doc_type`,
+  otherwise unchanged, with the same materialized views.
+* `channels` (channel, platform, language, analyzed, background) and `channel_groups`
+  (group_name, channel), rewritten from `config.yaml` on every ingester start like
+  `subreddit_groups` today. `analyzed`: the detectors see it (not `r/_search`).
+  `background`: the platform channel, the prior of its platform's scopes (`r/all`).
+* `polls`: plus `platform`, `background` renamed to `sample`. The other columns already fit
+  any polled source (`id_span` is how far the platform's id sequence advanced).
+* `trends`, `long_term_trends`, `lead_lag_events`, `propagation_edges`, `forecasts`: the
+  new values of §8.2, no new columns. `wiki_leads`: the renamed columns.
+* Recreating the local database: `docker compose down`, `docker volume rm
+  wgra_clickhouse_data`, `docker compose up -d --build`. What was collected since
+  2026-10-31 is lost, a few days at most, and history restarts. Alert cooldowns restart
+  with `trends`. If those days are worth keeping, a one-off `INSERT … SELECT` from the old
+  tables into a second database carries them over. It's a command for that day, not a
+  migration.
+
+### 8.4 Collection
+
+```python
+@dataclass(frozen=True, slots=True)
+class Item:
+    id: str                    # unique within its platform: "t1_abc"
+    platform: str              # "reddit"
+    channel: str               # where its counts go: "r/technology", "r/all", "r/_search"
+    doc_type: str              # comment | post
+    author: str                # as the platform writes it
+    created_at: datetime
+    text: str
+    url: str
+    lang: str                  # the channel's language, unless the item says otherwise
+    skip: str | None = None    # why the source drops it: bot, moderation, deleted
+
+
+class Sink(Protocol):
+    """The shared part: dedup, terms, intents, buffered writes."""
+
+    client: Client                 # for restart state and lookups, like seed_state today
+    def add(self, item: Item) -> bool: ...   # False when skipped
+    def add_poll(self, poll: Poll) -> None: ...
+
+
+class Source(Protocol):
+    platform: str
+    async def run(self, sink: Sink, stop: asyncio.Event) -> None: ...
+```
+
+| Today | Phase 1 |
+| --- | --- |
+| `reddit/client.py`, `reddit/models.py` | `sources/reddit/client.py`, `models.py`; `RedditItem.to_item()` |
+| `ingest/feeds.py` | `sources/reddit/feeds.py` |
+| `ingest/search.py` | `sources/reddit/search.py` |
+| `Ingester` in `ingest/run.py`: polls, comment trees, `seed_state`, `usable_subreddits`, the report | `RedditSource` in `sources/reddit/source.py` |
+| `Config.scope()`: a tracked subreddit's own channel, otherwise the sample; search results in `_search` | `RedditSource` decides the channel |
+| `is_bot`, distinguished, stickied, `[deleted]` / `[removed]` in `Processor.skip_reason` | `RedditSource` sets `skip` |
+| `MAX_ITEM_AGE`, the seen-ids set across feeds | `RedditSource` (later sources backfill on purpose) |
+| `REDDIT_*` in `Env` | read by `RedditSource` when Reddit is enabled; `Env.from_environ(require_reddit)` goes away |
+
+What stays shared: `ingest/pipeline.py` (the `Processor`: copypasta filter, terms, intents,
+the author hash), `ingest/writer.py`, `ingest/backfill.py`, and `ingest/run.py`, which
+writes `channels` and `channel_groups`, starts every enabled source with one `Sink`, and
+reports. The author hash takes `platform:author`, so every hash changes once, which the
+recreated database absorbs. `max_ngram` and whether intents are extracted come from the
+item's channel (background channels: 2-grams, `intents.sample`). `wgra ingest` gets
+`--source`, defaulting to every enabled platform; one Compose service stays as today.
+
+### 8.5 Analysis
+
+| Module | Change |
+| --- | --- |
+| `detect/short_term.py` | `Scope(name, type, channels)`; `load_scopes` reads `channels` (analyzed) and `channel_groups`; `subreddit_scope()` goes; the prior's channel is the platform's background from `channels`, not a constant. One platform, one prior, as today. |
+| `detect/long_term.py` | Renames. A channel's first data counts any doc type (today `source = 'comment'`). |
+| `detect/run.py`, `replay.py`, `alerts.py` | A group's members are channel ids already, no prefix mapping. |
+| `detect/scoring.py` | Docstrings: "the platform's background" for "the r/all sample". |
+| `leadlag/onsets.py` | Matrix columns are the analyzed channels, the background among them instead of appended; series as today. |
+| `leadlag/edges.py` | `Network` from channels and groups; leaders are the analyzed channels that aren't a background, as today; follower types of §8.2. |
+| `leadlag/events.py` | Topics compare channel ids, no `f"r/{member}"`. |
+| `leadlag/wikipedia.py` | The renamed columns; "first onset" for "reddit onset". |
+| `leadlag/suggest.py` | Stays Reddit-only; reads the subreddit from `url`. |
+| `notify/messages.py` | Scope type instead of the `r/` prefix; a background channel's label from the config ("reddit-wide (the r/all sample)"). |
+| `query.py`, `cli.py` | `--scope` takes a group or a channel id; `wgra status` lists channels with their platform. |
+| `radar/candidates.py` | Buckets by the watchlist's group, `reddit`, `r/all` and `r/_search`. |
+| `text/` | Unchanged; the `subreddit` kind is text. |
+
+### 8.6 Config, dashboards, docs, tests
+
+* `config.yaml`:
+  ```yaml
+  platforms:
+    reddit:
+      enabled: true
+      requests_per_minute: 90          # of the free tier's 100 per client id
+      max_subreddits_per_feed: 25
+      min_poll_interval: 2
+      max_comment_poll_interval: 300
+      max_post_poll_interval: 900
+      sample:                          # the channel r/all
+        requests_per_minute: 20
+        max_ngram: 2
+  ingest:
+    max_ngram: 3
+  groups:
+    tech: [r/technology, r/programming, …]
+  languages:
+    de: [r/de, r/finanzen, r/de_edv]
+  notify:
+    skip_scopes: [r/all]
+  ```
+  `Config.channels()` derives every channel with its platform, language, `analyzed` and
+  `background`. A bare name in a group, or a group named like a channel, is an error that
+  says what to write instead.
+* `grafana/build_dashboards.py`: the variable `channel`, `channel_groups`, `url` for links
+  ("Open" instead of "Open on reddit"), `r/all` for `_sample`, links from the scope type,
+  the ingestion dashboard per platform (the r/all coverage panel filtered to Reddit). The
+  JSON regenerated.
+* README, ARCHITECTURE.md (§3.1, §3.2, §4.4, appendix A) and CHURN-RADAR.md in the new
+  names.
+* `bench/*.py`: renames (they write `term_hourly` and `scope_hourly` themselves).
+* Tests: renames throughout, and new ones: a fake source through the `Sink` into
+  ClickHouse; `RedditSource` choosing `r/x`, `r/all` and `r/_search` and setting `skip`;
+  the config errors; a scope lookup that doesn't rely on prefixes.
+
+### 8.7 How we know nothing changed
+
+1. **Before**, on the code before phase 1: `bench/lead_lag.py` (seed 1) generates its
+   history into a bench database. Dump a `wgra replay --csv` over its last 3 days, and the
+   events with onsets and the edges of `run backfill`.
+2. **After**, the same on the phase 1 code, on the same day (the generator's history ends
+   today).
+3. Compare after mapping the names of §8.2: the same rows with the same numbers. Long-term
+   trends are covered by their integration tests, which run unchanged apart from names.
+4. `uv run pytest`, `ruff check`, `ruff format --check` and `mypy` pass.
+5. Recreate the local database (§8.3), run a day, and check `wgra status`, the ingestion
+   dashboard and Trending now.
+
+### 8.8 Order of work
+
+Each step leaves the tests green and is committed on `develop`.
+
+1. **Config** (half a day): `platforms.reddit`, channel ids in groups and languages,
+   `Config.channels()`, the errors, their tests.
+2. **Schema and analysis** (a day and a half): §8.3, §8.5 and their tests. Mostly
+   mechanical, the biggest diff.
+3. **Sources** (half a day): `Item`, `Sink`, `Source`; Reddit moved into `sources/reddit/`;
+   the shared `Processor`.
+4. **Dashboards, CLI, docs, bench** (half a day).
+5. **Check and switch** (§8.7): compare, recreate the database, a day of collection.
+
+### 8.9 Left for phase 2
+
+Each changes results, so each comes with the platform that needs it, where it can be
+tested:
+
+* priors per platform, the mixture for groups that mix platforms, and a prior per series
+  in `score_arrays`
+* every channel as a leader, the backgrounds included (`r/all → hn` needs it)
+* thresholds per platform (`detect.platforms`)
+* `ingest_cursors`, and a Compose service per source
+* rise onsets and thinning come in phase 3
