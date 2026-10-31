@@ -92,17 +92,21 @@
 
   <g stroke="#4a5560" stroke-width="2" fill="none" marker-end="url(#a)">
     <!-- reddit -> ingest -->
-    <line x1="262" y1="355" x2="346" y2="355"/>
+    <line x1="262" y1="285" x2="346" y2="285"/>
     <!-- ingest -> clickhouse -->
     <line x1="672" y1="330" x2="736" y2="330"/>
     <!-- clickhouse -> analyze (read) -->
     <line x1="1102" y1="290" x2="1166" y2="290"/>
     <!-- analyze -> clickhouse (write) -->
     <line x1="1168" y1="470" x2="1104" y2="470"/>
+    <!-- clickhouse -> web -->
+    <line x1="738" y1="705" x2="674" y2="705"/>
+    <!-- web -> browser -->
+    <line x1="348" y1="705" x2="264" y2="705"/>
     <!-- clickhouse -> grafana -->
-    <line x1="738" y1="800" x2="674" y2="800"/>
+    <line x1="738" y1="925" x2="674" y2="925"/>
     <!-- grafana -> browser -->
-    <line x1="348" y1="800" x2="264" y2="800"/>
+    <line x1="348" y1="925" x2="264" y2="925"/>
     <!-- analyze -> ntfy -->
     <line x1="1335" y1="632" x2="1335" y2="676"/>
     <!-- ntfy -> phone -->
@@ -110,18 +114,26 @@
     <!-- clickhouse -> cli -->
     <line x1="920" y1="992" x2="920" y2="1076"/>
   </g>
-  <!-- wikipedia -> analyze, optional -->
-  <line x1="1598" y1="300" x2="1504" y2="300" stroke="#4a5560" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#a)"/>
+  <g stroke="#4a5560" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#a)">
+    <!-- wikipedia -> analyze, optional -->
+    <line x1="1598" y1="300" x2="1504" y2="300"/>
+    <!-- planned sources -> ingest -->
+    <line x1="262" y1="467" x2="346" y2="467"/>
+  </g>
 
   <g font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, Arial" font-size="12.5" font-weight="650" fill="#3d4750"
      paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" text-anchor="middle">
-    <text x="304" y="343">read</text>
-    <text x="304" y="374" font-weight="500">HTTPS</text>
+    <text x="304" y="273">read</text>
+    <text x="304" y="304" font-weight="500">HTTPS</text>
+    <text x="304" y="455" font-weight="500">planned</text>
     <text x="704" y="318">write</text>
     <text x="1134" y="278">read</text>
     <text x="1136" y="458">write</text>
-    <text x="706" y="788">read</text>
-    <text x="306" y="788">HTTP</text>
+    <text x="706" y="693">read</text>
+    <text x="706" y="724" font-weight="500">read only</text>
+    <text x="306" y="693">HTTP</text>
+    <text x="706" y="913">read</text>
+    <text x="306" y="913">HTTP</text>
     <text x="1310" y="659" text-anchor="end">push</text>
     <text x="1549" y="738">notify</text>
     <text x="1549" y="288">read</text>
@@ -131,18 +143,23 @@
 </svg>
 
 <div class="title">Word Growth Rate Analyzer · architecture</div>
-<div class="subtitle">Which words and phrases gain or lose share of the conversation per subreddit and group, over hours and over months.</div>
+<div class="subtitle">Which words and phrases gain or lose share of the conversation per channel and group, over hours and over months. Reddit today, more platforms planned.</div>
 <div class="boundary-label">docker compose · one server, a laptop or a VPS</div>
 <div class="boundary-note">ports bound to localhost · free, open source software only</div>
 
 <!-- external: left -->
-<div class="box ext" style="left:40px; top:290px; width:222px; height:130px;">
+<div class="box ext" style="left:40px; top:220px; width:222px; height:130px;">
   <h3>Reddit API</h3>
   <p>app-only OAuth, free tier<br>≤ 100 requests / min</p>
 </div>
-<div class="box ext" style="left:40px; top:730px; width:222px; height:140px;">
+<div class="box ext dashed" style="left:40px; top:385px; width:222px; height:165px;">
+  <h3>More sources</h3>
+  <p>Hacker News · GitHub stars<br>Bluesky · App Store reviews</p>
+  <p style="font-size:12.5px;">planned, behind the same<br>source interface</p>
+</div>
+<div class="box ext" style="left:40px; top:660px; width:222px; height:300px;">
   <h3>You · browser</h3>
-  <p>dashboards, click a term<br>to explore it</p>
+  <p>the web dashboard daily,<br>Grafana as the pro mode;<br>click a term to explore it</p>
 </div>
 
 <!-- external: right -->
@@ -156,30 +173,35 @@
 </div>
 
 <!-- ingest -->
-<div class="box proc" style="left:350px; top:180px; width:322px; height:420px;">
+<div class="box proc" style="left:350px; top:180px; width:322px; height:395px;">
   <h3>ingest <span class="tag">Python · asyncio · always on</span></h3>
   <ul>
-    <li><b>Feeds:</b> tracked subreddits as multireddits (<code>r/a+b+c</code>), each polled as often as its volume needs, plus a sample of r/all as the “normal” vocabulary</li>
-    <li>Paced by Reddit’s rate limit headers, gaps detected</li>
+    <li><b>Sources</b> behind one interface turn their platform into items and polls</li>
+    <li><b>Reddit:</b> tracked subreddits as multireddits (<code>r/a+b+c</code>), each polled as often as its volume needs; a sample of <code>r/all</code> as the “normal” vocabulary; watchlist products via search (<code>r/_search</code>). Paced by rate limit headers, gaps detected</li>
     <li><b>Terms:</b> words, 2–3 word phrases, linked domains, mentioned subreddits</li>
     <li><b>Intents:</b> switch <code>x → y</code>, alternative, complaint, need</li>
-    <li>Authors only as a keyed hash; counted once per comment</li>
+    <li>Authors only as a keyed hash of platform and name; counted once per document</li>
     <li>Batched inserts, flushed on shutdown</li>
   </ul>
 </div>
 
-<!-- grafana -->
-<div class="box out" style="left:350px; top:660px; width:322px; height:330px;">
-  <h3>Grafana <span class="tag">OSS</span><span class="port">:3608</span></h3>
-  <div style="color:var(--muted); margin-top:2px;">ClickHouse datasource, generated dashboards</div>
+<!-- web dashboard -->
+<div class="box out" style="left:350px; top:600px; width:322px; height:210px;">
+  <h3>web <span class="tag">Python · <code>wgra web</code></span><span class="port">:3610</span></h3>
+  <div style="color:var(--muted); margin-top:2px;">The simpler everyday dashboard</div>
   <ul>
-    <li><b>Trending now</b> · short-term trends</li>
-    <li><b>Long-term trends</b> · 13 / 26 / 52 weeks</li>
-    <li><b>Early warning</b> · leaders, forecasts</li>
-    <li><b>Intent radar</b> · switches, complaints, needs</li>
-    <li><b>Term explorer</b> · any term, any scope</li>
-    <li><b>Rising</b> · <b>Ingestion</b> health</li>
+    <li><b>Trending</b> · <b>Long-term</b> · <b>Explore</b></li>
+    <li><b>Why people switch</b> · <b>Early warning</b></li>
+    <li><b>Collection</b> · ingestion health</li>
+    <li><b>Pro mode ↗</b> the same view in Grafana</li>
   </ul>
+</div>
+
+<!-- grafana -->
+<div class="box out" style="left:350px; top:840px; width:322px; height:170px;">
+  <h3>Grafana <span class="tag">OSS · the pro mode</span><span class="port">:3608</span></h3>
+  <div style="color:var(--muted); margin-top:2px;">Generated dashboards on ClickHouse</div>
+  <div style="margin-top:8px;">Trending now · Rising · Long-term trends · Intent radar · Early warning · Term explorer · Ingestion</div>
 </div>
 
 <!-- clickhouse -->
@@ -196,6 +218,8 @@
   <div class="tbl sub"><code>term_daily</code><span>forever</span></div>
   <div class="tbl"><code>scope_hourly</code><span>denominators · forever</span></div>
   <div class="tbl"><code>polls</code><span>every request · 90 d</span></div>
+  <div class="tbl"><code>channels</code><span>platform, language, background</span></div>
+  <div class="tbl"><code>channel_groups</code><span>groups from config.yaml</span></div>
 
   <h4>Written by analyze</h4>
   <div class="tbl"><code>trends</code><span>every 15 min · 90 d</span></div>
@@ -213,7 +237,7 @@
   <div class="step">
     <div class="when">every 15 min</div>
     <div class="what">Short-term bursts</div>
-    <div class="how">24 h vs the 28 days before, 6 h vs the same hours; weighted log-odds z-score with an r/all prior</div>
+    <div class="how">24 h vs the 28 days before, 6 h vs the same hours; weighted log-odds z-score with a prior from the platform’s background (r/all)</div>
   </div>
   <div class="step">
     <div class="when">daily 00:30 UTC</div>
@@ -223,7 +247,7 @@
   <div class="step">
     <div class="when">daily 01:00 UTC · every run</div>
     <div class="what">Lead–lag early warning</div>
-    <div class="how">which subreddits pick terms up first; forecasts where a burst spreads next</div>
+    <div class="how">which channels pick terms up first; forecasts where a burst spreads next</div>
   </div>
   <div class="step">
     <div class="what">Alert rules</div>
@@ -243,20 +267,20 @@
 <!-- config -->
 <div class="box file" style="left:1170px; top:860px; width:332px; height:130px;">
   <h3 style="font-size:16px;"><code style="font-size:15px;">config.yaml</code> <span class="tag">+ <code>.env</code></span></h3>
-  <div style="color:var(--muted); margin-top:6px;">Subreddits, groups, languages, request budget, thresholds per scope. Read by ingest and analyze; <code>.env</code> holds the secrets.</div>
+  <div style="color:var(--muted); margin-top:6px;">Platforms and their request budgets, groups of channels, languages, watchlists, thresholds per scope. Read by ingest and analyze; <code>.env</code> holds the secrets.</div>
 </div>
 
 <!-- cli -->
 <div class="box ext" style="left:740px; top:1080px; width:360px; height:110px;">
   <h3>You · terminal</h3>
-  <p><code>uv run wgra</code> status · term · trends · intents<br>replay · edges · forecasts · suggest-subreddits</p>
+  <p><code>uv run wgra</code> status · term · trends · intents · radar<br>replay · edges · forecasts · suggest-subreddits</p>
 </div>
 
 <div class="legend">
   <div><span class="sw" style="border-color:var(--proc); background:var(--proc-bg)"></span>process (Python 3.13, one image)</div>
   <div><span class="sw" style="border-color:var(--store); background:var(--store-bg)"></span>storage</div>
   <div><span class="sw" style="border-color:var(--out); background:var(--out-bg)"></span>output</div>
-  <div><span class="sw" style="border-color:var(--line); background:var(--ext-bg)"></span>outside the server · dashed: optional</div>
+  <div><span class="sw" style="border-color:var(--line); background:var(--ext-bg)"></span>outside the server · dashed: optional or planned</div>
 </div>
 
 </body>
