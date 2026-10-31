@@ -1,7 +1,7 @@
 # Churn radar: plan
 
-**Status: planned, not started.** A reference for building it later. Nothing below exists
-yet except what it builds on.
+**Status: phase 1 built on 2026-10-31 and collecting.** Phase 0 runs on a laptop for now.
+Phases 2–5 are a reference for building them later.
 
 A weekly report for one product and its competitors: who is leaving which product, for
 what, why, who is thinking about it, and what people in the category wish existed. Every
@@ -22,12 +22,11 @@ use and doesn't need that decided.
 
 ## 1. Where things stand (checked 2026-10-31)
 
-* **Nothing is collecting on this machine.** The ingester and the analyzer stopped on
-  2026-10-12 at 07:56 UTC, and the stored data covers only 2026-10-10 08:00 to 07:00 that day.
-  Migrations 004 (lead–lag) and 005 (intents) were never applied there, so it holds no
-  intents. If the stack isn't running on a server either, nothing has been collected since,
-  and the features that wait for history (long-term trends, lead–lag) haven't started
-  waiting yet.
+* **Nothing was collecting.** The ingester and the analyzer stopped on 2026-10-12 at
+  07:56 UTC, and the stored data covered only 2026-10-10 08:00 to 07:00 that day.
+  Migrations 004 (lead–lag) and 005 (intents) were never applied. The stack was restarted
+  on 2026-10-31 at 14:13 UTC from the repository root (phase 0), with both migrations, so
+  the history that long-term trends, lead–lag and this radar need starts then.
 * **Brand volume is far too thin.** In the 40 hours from 2026-10-10 08:00, the word
   counts per product (items mentioning it, tracked subreddits + r/all sample) were:
   notion 13 + 84, obsidian 5 + 23, bitwarden 23 + 11, keepass 14 + 4, 1password 3 + 0,
@@ -49,7 +48,7 @@ use and doesn't need that decided.
 A watchlist is a set of products in one category, their names as written, and the
 subreddits where the category talks. It lives in `config.yaml`, and its subreddits are a
 group like any other, so the ingester tracks them completely and every dashboard and
-detector already works on them:
+detector already works on them. As built (`radar:` in [config.yaml](../config.yaml)):
 
 ```yaml
 groups:
@@ -57,24 +56,34 @@ groups:
 
 radar:
   enabled: true
+  search_interval_minutes: 15
+  tree_after_hours: 24
   watchlists:
     pkm:
       group: pkm
-      products:               # canonical name: aliases as people write them
-        notion: [Notion, notion.so, Notion AI]
-        obsidian: [Obsidian, obsidian.md]
-        evernote: [Evernote]
-        onenote: [OneNote]
-        logseq: [Logseq]
-        apple notes: [Apple Notes]
       search: true            # also search all of reddit for posts naming a product
-      report: {day: monday, time: "08:00"}
+      products:               # canonical name: the other ways it's written
+        notion: [Notion AI, notion.so]
+        obsidian: [ObsidianMD, obsidian.md]
+        evernote: []
+        onenote: [One Note]
+        logseq: []
+        joplin: []
+        anytype: []
+        apple notes: []
+        roam research: [RoamResearch]
 ```
+
+Names are lowercased, and the canonical name is always one of them. A name can belong to
+only one product of a watchlist. Products named with everyday words ("Bear", "Craft",
+"Capacities") are left out of the pilot, since search would bring hundreds of unrelated
+posts a day for them.
 
 Watchlists do two jobs:
 
-* **Recall.** Every alias counts as a name in any case and position, like the hand-kept
-  `products_*.txt`, so "switched from notion to obsidian" in lowercase counts.
+* **Recall.** Every single-word name counts as a name in any case and position, like the
+  hand-kept `products_*.txt`, so "switched from evernote to obsidian" in lowercase counts
+  (before, only "obsidian" was on the lists, so it didn't).
 * **Precision.** The report only counts intents whose entity is a watched alias, or, for a
   switch, one side of it. A game character, a country or a language can never match an
   alias, which removes the most common class of errors without a model. Products that
@@ -92,21 +101,32 @@ Three sources, in order of cost (all of it within reddit's free API tier):
 1. **The watchlist's subreddits** (no new code). The vendors' own subreddits and the
    category subreddits are where "I'm leaving Notion" gets written. They join the tracked
    multireddits and count like every other subreddit.
-2. **Brand search** (new, `ingest/search.py`). Every 15 minutes per product, reddit search
-   for new posts naming an alias, anywhere. To verify first: as far as known, the API's
-   search covers posts, not comments, and how quickly it indexes new posts is unknown.
-3. **Comment trees** (new). Posts from search whose title has an intent cue
-   ("alternative", "switch", "leaving", "vs", "migrate", "replace") get their full comment
-   tree fetched once, when they are about 24 hours old. The answers under "Alternatives to
-   Notion?" are where the reasons are.
+2. **Brand search** ([`ingest/search.py`](../src/wgra/ingest/search.py)). Every 15
+   minutes per product, reddit search for new posts naming any of its names, anywhere
+   (`"notion" OR "notion ai" OR "notion.so"`, newest first). Checked on 2026-10-31:
+   * Search finds posts only. `type=comment` is ignored.
+   * New posts show up within about 2 minutes.
+   * `"Notion"` matched 100 posts in 12 hours from 97 subreddits, most of them about the
+     word (r/spirituality, r/teslore). `title:"Notion"` matched 100 in 87 hours, a third
+     of them in r/Notion.
 
-Search hits from tracked subreddits are skipped, since the stream already has them, and the
-ingester's duplicate check catches overlaps with the sample. The rest are stored and
-extracted like any item, under a scope of their own, `_search`, like `_sample`. Its counts
-aren't shares of anything (search isn't a complete stream), so the detectors and alerts skip
-it, and only the radar counts it. Budget: 10 products × 4 searches an hour is under 1
-request a minute, plus a few dozen trees a day. Lower `ingest.requests_per_minute` from 90
-to 85 to leave room.
+   The radar searches the full text anyway. Unrelated posts cost little to store, the
+   watchlist filter drops them, and the full text finds posts whose title doesn't name the
+   product.
+3. **Comment trees.** A post from search whose title names a watched product and asks or
+   tells about a switch ("alternatives", "switch", "leaving", "vs", "migrate", "replace",
+   "moving") gets its full comment tree fetched once, 24 hours after it was posted. That's
+   up to 500 comments in one request, without those behind "load more". The answers under
+   "Alternatives to Notion?" are where the reasons are.
+
+Search hits from tracked subreddits are skipped, since the stream already has them. A
+tree's comments that are already stored (the r/all sample caught them, or the tree was
+fetched before a restart) are skipped too. The rest are stored and extracted like any item,
+under a scope of their own, `_search`, like `_sample`. Its counts aren't shares of anything
+(search isn't a complete stream), so it's in no group, and the detectors and alerts never
+see it. Only the radar counts it. Budget: each search is polled at a fixed interval, and its
+share comes off the tracked feeds' budget like the background sample's. For 9 products
+that's 36 requests an hour, plus a few dozen trees a day.
 
 ### 2.3 Precision without a model
 
@@ -207,25 +227,38 @@ library, `SMTP_URL` in `.env`), through your own mailbox.
 
 ## 3. Delivery plan
 
-### Phase 0: collect again (half a day)
+### Phase 0: collect again (half a day; running since 2026-10-31, on a laptop)
 
 * Run the stack on an always-on machine you already have (an old computer at home) or a
   free one (Oracle Cloud's Always Free ARM machine is the usual choice; check its current
   terms). A laptop works, but every hour it sleeps is lost, since raw text only lives for
   48 hours. Deploy lead–lag and intents (ARCHITECTURE.md §6, "Deploying it").
+* Done on 2026-10-31: the stack runs from the repository root on `develop`, migrations 004
+  and 005 applied, on the laptop it was developed on. Still open: an always-on machine.
 * **Done when:** `wgra status` and the ingestion dashboard show 7 complete days, and
   `wgra intents --scope sample --days 1` counts intents.
 
-### Phase 1: watchlists and collection (about 3 days)
+### Phase 1: watchlists and collection (built 2026-10-31, collecting)
 
-* `radar:` in `config.yaml` with validation (every alias belongs to one product, and the
-  group exists), the pilot watchlist and its group, aliases as names.
-* Brand search and comment trees, after checking what reddit's search API returns
-  (comments or not, indexing delay, the result limit), and the `_search` scope.
-* `wgra radar candidates --watchlist pkm --days 1`: per product and source, the items that
-  name it and how many have an intent.
-* **Done when:** a week of candidates tells us, per product and day, how many items name it
-  and how many intents the patterns find.
+Built:
+
+* `radar:` in `config.yaml` with validation (every name belongs to one product of a
+  watchlist, the group exists, product names can't contain `→`, `:` or `·`), the pilot
+  watchlist and its group `pkm`, single-word names as names in intents (`configure_names`
+  in `text/intents.py`, set by the ingester and the backfill).
+* Brand search as feeds of their own (`Feed.search`, fixed interval, budget taken off the
+  tracked feeds), comment trees every 10 minutes, the `_search` scope
+  ([`ingest/search.py`](../src/wgra/ingest/search.py)). What reddit's search returns is in
+  §2.2.
+* `wgra radar candidates [--watchlist pkm] [--days 1]`
+  ([`radar/candidates.py`](../src/wgra/radar/candidates.py)): per product and where it
+  comes from, the comments and posts naming it (by its most named name) and those with an
+  intent about it, per kind.
+* 26 tests: config, names, the search scope, titles that want a tree, the candidates, and
+  against ClickHouse the due trees and the candidates query.
+
+**Done when:** a week of candidates tells us, per product and day, how many items name it
+and how many intents the patterns find. That's 2026-11-07 at the earliest.
 
 ### Phase 2: precision and stance (about 3 days)
 
@@ -269,8 +302,10 @@ library, `SMTP_URL` in `.env`), through your own mailbox.
 * **Volume** is the main risk, and gate 1 tests it before anything else is built on it.
   Patterns miss paraphrases ("finally done with Notion"), so the pilot undercounts: read
   gate 1 as a lower bound. If it passes without a model, it would pass with one.
-* **Reddit search** is unverified: whether it covers comments, how fast it indexes, and
-  its result limits.
+* **Reddit search finds posts only** (checked, §2.2). Comments that name a product in a
+  subreddit we don't track are only found inside a comment tree or by the r/all sample.
+  Still unknown: how deep search pages go, which only matters if a product gets more than
+  100 new posts in 15 minutes.
 * **Reasons from word lists** catch what's spelled out. A report that says "no reason
   given" for most switches is honest but less useful. Phase 3 measures how many have one.
 * **Astroturfing:** vendors' marketing posing as switchers. Distinct authors help, but

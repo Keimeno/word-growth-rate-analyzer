@@ -1358,12 +1358,20 @@ Still open:
 * Intent-specific alerts, e.g. an outage: "complaint: x" bursting across subreddits. Alerts
   already include intents, but at the words' alert gates (z ≥ 10, 20 authors).
 
-### Churn radar (planned, not started)
+### Churn radar (phase 1 built 2026-10-31, collecting)
 
 A weekly report per product and its competitors: switches, people considering leaving,
 complaints, reasons and missing features, with the threads behind them. Built on intents
 without paid APIs or a model. The plan, its phases and go/no-go gates are in
 [CHURN-RADAR.md](CHURN-RADAR.md).
+
+### Cross-platform spread map (planned, not started)
+
+Hacker News, Bluesky, GitHub and app-store reviews collected next to Reddit behind one
+source interface, and the lead–lag of §4.6 run across all of them: which platform picks up
+a story first, and how long it takes to reach the next. Reddit becomes one source of
+several and can be switched off. The plan, its phases and go/no-go gates are in
+[CROSS-PLATFORM.md](CROSS-PLATFORM.md).
 
 ### Phase 5: hardening and cutover
 

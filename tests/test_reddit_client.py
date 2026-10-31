@@ -200,3 +200,42 @@ def test_posts_combine_title_and_selftext_and_drop_removed_selftext():
         ("post", "Title\n\nBody"),
         ("post", "Only"),
     ]
+
+
+async def test_search_listings_pass_their_parameters():
+    fake = FakeReddit([ok({"kind": "Listing", "data": {"children": []}})])
+    async with make_client(fake, FakeTime()) as client:
+        await client.listing("/search", {"q": '"notion"', "sort": "new"})
+    params = fake.api_requests[0].url.params
+    assert fake.api_requests[0].url.path == "/search"
+    assert (params["q"], params["sort"], params["limit"]) == ('"notion"', "new", "100")
+
+
+def comment(name: str, *replies: dict) -> dict:
+    return {
+        "kind": "t1",
+        "data": {
+            "name": name,
+            "subreddit": "productivity",
+            "author": "someone",
+            "created_utc": 1_700_000_000.0,
+            "body": "hello",
+            "permalink": f"/r/productivity/comments/x/{name}",
+            "replies": {"kind": "Listing", "data": {"children": list(replies)}} if replies else "",
+        },
+    }
+
+
+async def test_comment_trees_include_replies_but_not_load_more():
+    post = {"kind": "Listing", "data": {"children": [{"kind": "t3", "data": {"name": "t3_p"}}]}}
+    more = {"kind": "more", "data": {"children": ["t1_x", "t1_y"]}}
+    tree = {
+        "kind": "Listing",
+        "data": {"children": [comment("t1_a", comment("t1_b", more)), comment("t1_c")]},
+    }
+    fake = FakeReddit([httpx.Response(200, json=[post, tree])])
+    async with make_client(fake, FakeTime()) as client:
+        comments = await client.comment_tree("p")
+    assert sorted(item.fullname for item in comments) == ["t1_a", "t1_b", "t1_c"]
+    assert fake.api_requests[0].url.path == "/comments/p"
+    assert fake.api_requests[0].url.params["limit"] == "500"

@@ -13,7 +13,7 @@ from typing import Any
 from wgra.config import SAMPLE_SCOPE, Config
 from wgra.reddit.models import RedditItem
 from wgra.text import extract_terms
-from wgra.text.intents import INTENT_KINDS
+from wgra.text.intents import INTENT_KINDS, configure_names
 
 ITEM_COLUMNS = (
     "id",
@@ -76,6 +76,7 @@ class Processor:
         self._config = config
         self._author_hash_key = author_hash_key
         self._recent_texts = RecentKeys(capacity=50_000)
+        configure_names(config.radar.names)
 
     def author_hash(self, author: str) -> int:
         """A keyed hash, so stored values can't be linked back to reddit accounts."""
@@ -99,10 +100,11 @@ class Processor:
             return "duplicate"
         return None
 
-    def process(self, item: RedditItem) -> ProcessedItem:
-        # untracked subreddits only reach us through the background sample, their counts
-        # are pooled (the permalink still names the real subreddit)
-        scope = self._config.scope(item.subreddit)
+    def process(self, item: RedditItem, scope: str | None = None) -> ProcessedItem:
+        """The rows to store for an item, its counts under `scope` if given (the search's).
+        Otherwise untracked subreddits only reach us through the background sample, and
+        their counts are pooled (the permalink still names the real subreddit)."""
+        scope = scope or self._config.scope(item.subreddit)
         intents = self._config.intents
         terms = extract_terms(
             item.text,

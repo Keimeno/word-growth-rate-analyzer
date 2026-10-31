@@ -140,3 +140,40 @@ def test_next_feed_is_the_one_due_first():
     for index, feed in enumerate(feeds):
         feed.next_poll_at = 10 - index
     assert scheduler.next_feed() is feeds[-1]
+
+
+def radar_config(**overrides: object):
+    return make_config(
+        background={"requests_per_minute": 0},
+        radar={
+            "enabled": True,
+            "search_interval_minutes": 15,
+            "watchlists": {
+                "pkm": {"group": "tech", "products": {"notion": ["Notion AI"], "apple notes": []}}
+            },
+        },
+        **overrides,
+    )
+
+
+def test_watched_products_get_search_feeds():
+    feeds = build_feeds(radar_config())
+    searches = [feed for feed in feeds if feed.search]
+    assert [feed.name for feed in searches] == ["search-notion", "search-apple-notes"]
+    assert searches[0].path == "/search"
+    assert searches[0].params == {"q": '"notion" OR "notion ai"', "sort": "new", "type": "link"}
+    assert not searches[0].complete
+    assert feeds[0].params == {}
+
+
+def test_searches_poll_at_a_fixed_interval_and_take_their_share_of_the_budget():
+    config = radar_config(ingest={"requests_per_minute": 10, "max_subreddits_per_feed": 1})
+    feeds = build_feeds(config)
+    scheduler = FeedScheduler(feeds, config)
+    search = next(feed for feed in feeds if feed.search)
+
+    outcome = scheduler.record_success(search, listing(1000, 100, seconds_apart=1), now=0)
+    assert not outcome.gap
+    assert search.interval == 15 * 60
+    # two searches every 15 minutes leave 10 - 8/60 requests a minute for the tracked feeds
+    assert scheduler._tracked_budget == pytest.approx(10 - 2 * 4 / 60)

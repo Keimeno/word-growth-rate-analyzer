@@ -10,6 +10,10 @@ feeds cheap.
 The background feed (a sample of r/all) is different: reddit only returns the last
 second or two of r/all, so it can never be complete. It gets a fixed share of the
 request budget and is treated as a random sample.
+
+The churn radar's searches (posts naming a watched product, docs/CHURN-RADAR.md §2.2)
+aren't complete either: each is polled at a fixed interval, and its budget comes off the
+tracked feeds' like the background's.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from itertools import batched
 from typing import Literal
 
 from wgra.config import Config
+from wgra.ingest.search import search_query
 from wgra.reddit.client import LISTING_LIMIT
 from wgra.reddit.models import RedditItem
 
@@ -47,6 +52,8 @@ class Feed:
     kind: FeedKind
     subreddits: tuple[str, ...]
     background: bool = False
+    # a search for posts naming a watched product (the churn radar), all over reddit
+    search: str | None = None
     # estimated new items per second
     rate: float | None = None
     interval: float = 0.0
@@ -57,8 +64,20 @@ class Feed:
 
     @property
     def path(self) -> str:
+        if self.search is not None:
+            return "/search"
         endpoint = "comments" if self.kind == "comments" else "new"
         return f"/r/{'+'.join(self.subreddits)}/{endpoint}"
+
+    @property
+    def params(self) -> dict[str, str]:
+        return {} if self.search is None else {"q": self.search, "sort": "new", "type": "link"}
+
+    @property
+    def complete(self) -> bool:
+        """Whether polling it often enough sees every item: tracked subreddits do, the r/all
+        sample and searches don't, they get fixed intervals instead."""
+        return not self.background and self.search is None
 
 
 @dataclass(frozen=True)
@@ -88,6 +107,16 @@ def build_feeds(config: Config, subreddits: Sequence[str] | None = None) -> list
                 background=True,
             )
         )
+
+    for product, aliases in config.radar.searches.items():
+        feeds.append(
+            Feed(
+                name=f"search-{product.replace(' ', '-')}",
+                kind="posts",
+                subreddits=(),
+                search=search_query(aliases),
+            )
+        )
     return feeds
 
 
@@ -107,7 +136,11 @@ class FeedScheduler:
         self._ingest = config.ingest
         background_budget = config.background.requests_per_minute if self._background else 0
         self._background_interval = 60.0 / background_budget if background_budget else 0.0
-        self._tracked_budget = max(config.ingest.requests_per_minute - background_budget, 1.0)
+        self._search_interval = config.radar.search_interval_minutes * 60
+        search_budget = sum(60.0 / self._search_interval for feed in feeds if feed.search)
+        self._tracked_budget = max(
+            config.ingest.requests_per_minute - background_budget - search_budget, 1.0
+        )
 
     @property
     def _background(self) -> list[Feed]:
@@ -119,7 +152,7 @@ class FeedScheduler:
     def record_success(self, feed: Feed, items: Sequence[RedditItem], now: float) -> PollOutcome:
         ids = [item.id36 for item in items]
         gap = (
-            not feed.background
+            feed.complete
             and feed.newest_id is not None
             and len(ids) >= GAP_THRESHOLD
             and min(ids) > feed.newest_id
@@ -155,6 +188,8 @@ class FeedScheduler:
     def interval(self, feed: Feed) -> float:
         if feed.background:
             return self._background_interval
+        if feed.search is not None:
+            return self._search_interval
         return self._desired_interval(feed) * self._budget_scale()
 
     def _desired_interval(self, feed: Feed) -> float:
@@ -169,7 +204,5 @@ class FeedScheduler:
 
     def _budget_scale(self) -> float:
         """Stretch all tracked intervals when they'd need more than the budget."""
-        demand = sum(
-            60.0 / self._desired_interval(feed) for feed in self.feeds if not feed.background
-        )
+        demand = sum(60.0 / self._desired_interval(feed) for feed in self.feeds if feed.complete)
         return max(demand / self._tracked_budget, 1.0)

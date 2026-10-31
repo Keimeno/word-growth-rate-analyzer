@@ -22,6 +22,11 @@ TRACKED_GROUP = "tracked"
 # once. Subreddit names can't start with an underscore, so it can't clash with one.
 SAMPLE_SCOPE = "_sample"
 SAMPLE_GROUP = "sample"
+# Posts naming a watched product anywhere on reddit, found by search, and the comment
+# trees under some of them (the churn radar, docs/CHURN-RADAR.md §2.2). Search isn't a
+# complete stream, so these counts aren't shares of anything: the scope is in no group,
+# so the detectors never see it, only the radar counts it.
+SEARCH_SCOPE = "_search"
 
 # what the text says: words, phrases, linked domains, mentioned subreddits. The intents
 # behind it (switches, alternatives, complaints, needs) are kinds of terms too.
@@ -322,6 +327,71 @@ class WikipediaConfig:
 
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
+# what separates the parts of intent terms ("notion → obsidian", "reason: notion · price")
+# can't be part of a product's name
+_PRODUCT_RESERVED = ("→", ":", "·")
+
+
+@dataclass(frozen=True)
+class Watchlist:
+    """Products of one category and the subreddits where the category talks, see
+    docs/CHURN-RADAR.md §2.1."""
+
+    name: str
+    # the group of config.yaml whose subreddits are the category's, tracked completely
+    group: str
+    # canonical name -> every name it's written as, lowercase, the canonical one first
+    products: dict[str, tuple[str, ...]]
+    # also search all of reddit for posts naming a product
+    search: bool = True
+
+    @cached_property
+    def _products_by_alias(self) -> dict[str, str]:
+        return {alias: product for product, aliases in self.products.items() for alias in aliases}
+
+    def product(self, name: str) -> str | None:
+        """The product an alias or an intent's entity names, None if it isn't watched."""
+        return self._products_by_alias.get(name.lower())
+
+
+@dataclass(frozen=True)
+class RadarConfig:
+    """The churn radar: per watchlist, who leaves which product, for what and why. See
+    docs/CHURN-RADAR.md."""
+
+    enabled: bool = False
+    watchlists: dict[str, Watchlist] = field(default_factory=dict)
+    # every product of a watchlist with search is searched for this often
+    search_interval_minutes: float = 15
+    # a post the search found whose title asks or tells about a switch gets its comment
+    # tree fetched once, this long after it was posted, when most answers are in
+    tree_after_hours: float = 24
+
+    @cached_property
+    def searches(self) -> dict[str, tuple[str, ...]]:
+        """Product -> its aliases, for every product searched for (once, however many
+        watchlists have it)."""
+        searches: dict[str, tuple[str, ...]] = {}
+        for watchlist in self.watchlists.values():
+            if self.enabled and watchlist.search:
+                for product, aliases in watchlist.products.items():
+                    searches[product] = tuple(dict.fromkeys((*searches.get(product, ()), *aliases)))
+        return searches
+
+    @cached_property
+    def names(self) -> frozenset[str]:
+        """Single-word aliases of the watched products. Intents count them as names in any
+        case, like the hand-kept products_*.txt: "switched from evernote to obsidian"."""
+        if not self.enabled:
+            return frozenset()
+        return frozenset(
+            alias
+            for watchlist in self.watchlists.values()
+            for aliases in watchlist.products.values()
+            for alias in aliases
+            if " " not in alias
+        )
+
 
 @dataclass(frozen=True)
 class Config:
@@ -337,6 +407,7 @@ class Config:
     lead_lag: LeadLagConfig = field(default_factory=LeadLagConfig)
     forecast: ForecastConfig = field(default_factory=ForecastConfig)
     wikipedia: WikipediaConfig = field(default_factory=WikipediaConfig)
+    radar: RadarConfig = field(default_factory=RadarConfig)
 
     @cached_property
     def subreddits(self) -> tuple[str, ...]:
@@ -394,6 +465,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
         lead_lag=parse_lead_lag(raw.get("lead_lag") or {}),
         forecast=parse_forecast(raw.get("forecast") or {}),
         wikipedia=WikipediaConfig(**(raw.get("wikipedia") or {})),
+        radar=parse_radar(raw.get("radar") or {}, groups),
     )
 
 
@@ -518,6 +590,51 @@ def parse_forecast(raw: dict[str, Any]) -> ForecastConfig:
         if not 0 <= getattr(forecast, name) <= 1:
             raise ValueError(f"config: forecast.{name} is a probability, between 0 and 1")
     return forecast
+
+
+def _product_name(value: object) -> str:
+    return " ".join(str(value).lower().split())
+
+
+def parse_watchlist(
+    name: str, raw: dict[str, Any], groups: dict[str, tuple[str, ...]]
+) -> Watchlist:
+    raw = dict(raw)
+    where = f"config: radar.watchlists.{name}"
+    group = str(raw.pop("group", name))
+    if group not in groups:
+        raise ValueError(f"{where}: there is no group '{group}'")
+    products: dict[str, tuple[str, ...]] = {}
+    owners: dict[str, str] = {}
+    for product, aliases in (raw.pop("products", None) or {}).items():
+        canonical = _product_name(product)
+        if not canonical or any(mark in canonical for mark in _PRODUCT_RESERVED):
+            raise ValueError(f"{where}: '{product}' can't be a product's name")
+        if isinstance(aliases, str):
+            aliases = [aliases]
+        written = dict.fromkeys([canonical, *map(_product_name, aliases or ())])
+        names = tuple(alias for alias in written if alias)
+        for alias in names:
+            if owners.setdefault(alias, canonical) != canonical:
+                raise ValueError(f"{where}: '{alias}' names both {owners[alias]} and {canonical}")
+        products[canonical] = names
+    if not products:
+        raise ValueError(f"{where} needs products")
+    return Watchlist(name=name, group=group, products=products, **raw)
+
+
+def parse_radar(raw: dict[str, Any], groups: dict[str, tuple[str, ...]]) -> RadarConfig:
+    raw = dict(raw)
+    watchlists = {
+        str(name): parse_watchlist(str(name), options or {}, groups)
+        for name, options in (raw.pop("watchlists", None) or {}).items()
+    }
+    radar = RadarConfig(watchlists=watchlists, **raw)
+    if radar.enabled and not radar.watchlists:
+        raise ValueError("config: radar is enabled, but has no watchlists")
+    if radar.search_interval_minutes < 1 or radar.tree_after_hours <= 0:
+        raise ValueError("config: radar.search_interval_minutes and tree_after_hours too short")
+    return radar
 
 
 def load_config(path: Path) -> Config:

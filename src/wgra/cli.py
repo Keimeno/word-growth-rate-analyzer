@@ -1,6 +1,6 @@
 """wgra command line: ``wgra ingest | analyze | long-term | lead-lag | replay | trends |
-edges | forecasts | suggest-subreddits | wikipedia | intents | notify-test | migrate | status |
-term``."""
+edges | forecasts | suggest-subreddits | wikipedia | intents | radar | notify-test | migrate |
+status | term``."""
 
 from __future__ import annotations
 
@@ -676,6 +676,39 @@ def _print_intents(report: IntentReport) -> None:
     )
 
 
+def cmd_radar_candidates(args: argparse.Namespace) -> None:
+    from wgra.radar.candidates import ORIGINS, candidates
+
+    config = load_config(args.config)
+    unknown = set(args.watchlist or ()) - set(config.radar.watchlists)
+    if unknown or not config.radar.watchlists:
+        sys.exit(f"no such watchlist in radar.watchlists: {', '.join(sorted(unknown)) or 'none'}")
+    client = connect(Env.from_environ(require_reddit=False))
+    for name in args.watchlist or config.radar.watchlists:
+        watchlist = config.radar.watchlists[name]
+        table = candidates(client, config, watchlist, args.days)
+        print(
+            f"Watchlist {name}, last {args.days * 24} hours: comments and posts naming each "
+            f"product (its most named alias), and with an intent about it"
+        )
+        rows = []
+        for product in watchlist.products:
+            for origin in ORIGINS:
+                found = table[product, origin]
+                if not found.empty:
+                    rows.append(
+                        (
+                            product,
+                            origin,
+                            found.named,
+                            found.named_authors,
+                            *(found.intents[kind] or "" for kind in INTENT_KINDS),
+                        )
+                    )
+        _print_table(("product", "from", "naming it", "authors", *INTENT_KINDS), rows)
+        print()
+
+
 def cmd_term(args: argparse.Namespace) -> None:
     client = connect(Env.from_environ(require_reddit=False))
     points = term_series(client, args.term, args.scope, args.days, args.bucket)
@@ -872,6 +905,21 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="show up to N comments of the last 48 hours behind each term",
     )
     intents.set_defaults(func=cmd_intents)
+
+    radar = commands.add_parser("radar", help="the churn radar's watchlists (docs/CHURN-RADAR.md)")
+    radar_commands = radar.add_subparsers(dest="radar_command", required=True)
+    radar_candidates = radar_commands.add_parser(
+        "candidates",
+        help="how much there is to report on, per product and where it comes from",
+        description="Per watched product: comments and posts naming it and those with an "
+        "intent about it, from the watchlist's subreddits, the other tracked ones, the r/all "
+        "sample and the radar's search.",
+    )
+    radar_candidates.add_argument(
+        "--watchlist", action="append", help="repeatable (default: every watchlist)"
+    )
+    radar_candidates.add_argument("--days", type=int, default=1)
+    radar_candidates.set_defaults(func=cmd_radar_candidates)
 
     backfill = commands.add_parser(
         "backfill-intents",

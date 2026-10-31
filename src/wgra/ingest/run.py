@@ -11,11 +11,12 @@ from datetime import UTC, datetime
 
 from clickhouse_connect.driver.client import Client
 
-from wgra.config import Config, Env
+from wgra.config import SEARCH_SCOPE, Config, Env
 from wgra.ingest.feeds import Feed, FeedScheduler, build_feeds
 from wgra.ingest.pipeline import Processor, RecentKeys
+from wgra.ingest.search import due_trees, stored_ids
 from wgra.ingest.writer import Writer
-from wgra.reddit import RedditClient, RedditError
+from wgra.reddit import RedditClient, RedditError, RedditItem
 from wgra.store import connect, migrate
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,9 @@ MAX_ITEM_AGE = 36 * 3600
 # ids of items seen recently, to catch the r/all sample overlapping tracked feeds
 SEEN_CAPACITY = 300_000
 REPORT_INTERVAL = 60.0
+# how often due comment trees are looked for (search.TREE_WINDOW_HOURS gives each of them
+# many chances)
+TREE_CHECK_INTERVAL = 600.0
 
 
 def write_groups(client: Client, config: Config) -> None:
@@ -45,7 +49,7 @@ def seed_state(client: Client, feeds: list[Feed], seen: RecentKeys) -> None:
     for feed in feeds:
         source = "comment" if feed.kind == "comments" else "post"
         ids = [newest_id[source, sub] for sub in feed.subreddits if (source, sub) in newest_id]
-        if ids and not feed.background:
+        if ids and feed.complete:
             feed.newest_id = max(ids)
 
     recent = client.query(
@@ -83,6 +87,10 @@ class Ingester:
         self._seen = RecentKeys(SEEN_CAPACITY)
         self._skipped: Counter[str] = Counter()
         self._requests_at_report = 0
+        self._tracked = frozenset(config.subreddits)
+        # posts whose comment tree was fetched; after a restart a tree may be fetched again,
+        # its comments stored before are recognized then
+        self._trees_done: set[str] = set()
         self.scheduler: FeedScheduler | None = None
 
     async def run(self, stop: asyncio.Event) -> None:
@@ -101,6 +109,8 @@ class Ingester:
             asyncio.create_task(self._writer.run()),
             asyncio.create_task(self._report_forever()),
         ]
+        if self._config.radar.searches:
+            tasks.append(asyncio.create_task(self._trees_forever()))
         try:
             while not stop.is_set():
                 feed = self.scheduler.next_feed()
@@ -124,25 +134,23 @@ class Ingester:
         # takes seconds) shouldn't stretch the interval
         started = time.monotonic()
         try:
-            items = await self._reddit.listing(feed.path)
+            items = await self._reddit.listing(feed.path, feed.params)
         except RedditError as error:
             self.scheduler.record_failure(feed, time.monotonic(), error.retry_after)
             log.warning("polling %s failed: %s", feed.name, error)
             self._writer.add_poll(self._poll_row(feed, polled_at, error.status, 0, 0, False, 0))
             return
 
-        oldest_allowed = time.time() - MAX_ITEM_AGE
         new_items = 0
         for item in items:
-            if feed.newest_id is not None and item.id36 <= feed.newest_id:
+            if feed.search is None:
+                if feed.newest_id is not None and item.id36 <= feed.newest_id:
+                    continue
+            # search results aren't strictly newest first (posts are indexed with a delay),
+            # and those in tracked subreddits are in their feeds already
+            elif item.subreddit in self._tracked:
                 continue
-            if item.created_utc < oldest_allowed or not self._seen.add(item.fullname):
-                continue
-            new_items += 1
-            if reason := self._processor.skip_reason(item):
-                self._skipped[reason] += 1
-                continue
-            self._writer.add(self._processor.process(item))
+            new_items += self.ingest(item, SEARCH_SCOPE if feed.search else None)
 
         outcome = self.scheduler.record_success(feed, items, started)
         if outcome.gap:
@@ -152,6 +160,49 @@ class Ingester:
                 feed, polled_at, 200, len(items), new_items, outcome.gap, outcome.id_span
             )
         )
+
+    def ingest(self, item: RedditItem, scope: str | None = None) -> bool:
+        """Stores an item unless it's too old, seen before or skipped. Whether it was new."""
+        if item.created_utc < time.time() - MAX_ITEM_AGE or not self._seen.add(item.fullname):
+            return False
+        if reason := self._processor.skip_reason(item):
+            self._skipped[reason] += 1
+        else:
+            self._writer.add(self._processor.process(item, scope))
+        return True
+
+    async def _trees_forever(self) -> None:
+        while True:
+            await asyncio.sleep(TREE_CHECK_INTERVAL)
+            try:
+                await self.fetch_trees()
+            except Exception:
+                # ClickHouse unreachable for a moment: the next check catches up
+                log.exception("fetching comment trees failed")
+
+    async def fetch_trees(self) -> None:
+        """The comment trees of posts the search found that ask or tell about a switch,
+        once, when they are radar.tree_after_hours old (docs/CHURN-RADAR.md §2.2)."""
+        radar = self._config.radar
+        due = await asyncio.to_thread(due_trees, self._client, radar, self._trees_done)
+        new_comments = 0
+        for fullname in due:
+            self._trees_done.add(fullname)
+            try:
+                comments = await self._reddit.comment_tree(fullname.removeprefix("t3_"))
+            except RedditError as error:
+                log.warning("comment tree of %s failed: %s", fullname, error)
+                continue
+            stored = await asyncio.to_thread(
+                stored_ids, self._client, [comment.fullname for comment in comments]
+            )
+            new_comments += sum(
+                self.ingest(comment, SEARCH_SCOPE)
+                for comment in comments
+                if comment.fullname not in stored
+            )
+        if due:
+            log.info("comment trees: %d posts, %d new comments", len(due), new_comments)
 
     def _poll_row(
         self,

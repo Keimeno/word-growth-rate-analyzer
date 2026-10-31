@@ -49,6 +49,17 @@ groups:
     - de
     - Finanzen
     - de_EDV
+  # note-taking: the churn radar's pilot watchlist (radar: at the end), the products' own
+  # subreddits and those of the category
+  pkm:
+    - Notion
+    - ObsidianMD
+    - Evernote
+    - OneNote
+    - logseq
+    - PKMS
+    - NoteTaking
+    - Zettelkasten
 
 # Stopwords for phrases depend on the language. Unlisted subreddits are english.
 languages:
@@ -246,3 +257,30 @@ notify:
   report_size: 5
   # scored and shown in Grafana, but no alerts, digests or reports
   skip_scopes: [sample]
+
+# The churn radar (docs/CHURN-RADAR.md): per watchlist, who leaves which product, for what
+# and why. A watchlist's subreddits are a group above, tracked completely. Its products'
+# single-word names count as names in intents in any case ("switched from evernote to
+# obsidian"). With search, posts naming a product anywhere on reddit are collected too,
+# under the scope `_search` that no detector sees, and the comment trees of those that ask
+# or tell about a switch. `wgra radar candidates` shows how much there is per product.
+radar:
+  enabled: true
+  search_interval_minutes: 15  # every product is searched this often, one request each
+  tree_after_hours: 24         # a post's comment tree is fetched once it's this old
+  watchlists:
+    pkm:
+      group: pkm
+      search: true
+      # canonical name: the other ways it's written. Search finds every one, so avoid
+      # everyday words ("Bear", "Craft"): they'd bring hundreds of unrelated posts a day.
+      products:
+        notion: [Notion AI, notion.so]
+        obsidian: [ObsidianMD, obsidian.md]
+        evernote: []
+        onenote: [One Note]
+        logseq: []
+        joplin: []
+        anytype: []
+        apple notes: []
+        roam research: [RoamResearch]

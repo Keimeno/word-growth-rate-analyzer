@@ -17,13 +17,15 @@ from typing import Any, Self
 
 import httpx
 
-from wgra.reddit.models import RedditItem, parse_listing
+from wgra.reddit.models import RedditItem, parse_listing, parse_tree
 
 log = logging.getLogger(__name__)
 
 TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 API_URL = "https://oauth.reddit.com"
 LISTING_LIMIT = 100
+# comments of a comment tree in one request, reddit's maximum
+TREE_LIMIT = 500
 
 # app-only tokens can't be refreshed, request a new one well before it expires
 TOKEN_REFRESH_MARGIN = 3600.0
@@ -84,10 +86,17 @@ class RedditClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def listing(self, path: str) -> list[RedditItem]:
-        """Newest items of a listing such as ``/r/rust+golang/comments``."""
-        response = await self._get(path, {"limit": LISTING_LIMIT, "raw_json": 1})
+    async def listing(self, path: str, params: dict[str, Any] | None = None) -> list[RedditItem]:
+        """Newest items of a listing such as ``/r/rust+golang/comments``, or of a search
+        (``/search`` with ``q``)."""
+        response = await self._get(path, {"limit": LISTING_LIMIT, "raw_json": 1, **(params or {})})
         return parse_listing(response.json())
+
+    async def comment_tree(self, post_id36: str) -> list[RedditItem]:
+        """The comments of a post, at most TREE_LIMIT, without those behind "load more"."""
+        response = await self._get(f"/comments/{post_id36}", {"limit": TREE_LIMIT, "raw_json": 1})
+        listings = response.json()
+        return parse_tree(listings[1]) if isinstance(listings, list) and len(listings) > 1 else []
 
     async def subreddit_problem(self, name: str) -> str | None:
         """Why a subreddit can't be read (private, banned, missing), or None if it can."""

@@ -311,6 +311,29 @@ uv run wgra backfill-intents --before 2026-10-12T09:30 --dry-run
 uv run wgra backfill-intents --before 2026-10-12T09:30
 ```
 
+## Churn radar
+
+Being built, see [docs/CHURN-RADAR.md](docs/CHURN-RADAR.md): a weekly report per product
+and its competitors of who leaves which product, for what and why, at no cost. Phase 1
+(collection) runs. In `radar:` of [config.yaml](config.yaml), a watchlist names a
+category's products and the group of its subreddits (the pilot: note-taking, `pkm`). For
+its products the ingester:
+
+* counts their single-word names as names in intents in any case ("switched from evernote
+  to obsidian"),
+* searches all of reddit for new posts naming them, every 15 minutes per product,
+* and fetches, once, the comment tree of a post found that way whose title asks or tells
+  about a switch ("Alternatives to Notion?"), a day after it was posted.
+
+What search finds outside the tracked subreddits is counted under the scope `_search`. It
+isn't a complete stream, so it's in no group and no detector sees it. To see how much
+there is to report on, per product and where it comes from (the watchlist's subreddits,
+the other tracked ones, the r/all sample, the search):
+
+```bash
+uv run wgra radar candidates --days 1
+```
+
 ## Command line
 
 Needs [uv](https://docs.astral.sh/uv/). It reads `.env`, so it reaches the ClickHouse
@@ -330,6 +353,7 @@ uv run wgra lead-lag --once --dry-run           # one lead–lag run, prints the
 uv run wgra edges && uv run wgra forecasts
 uv run wgra suggest-subreddits                  # untracked subreddits worth adding
 uv run wgra intents --scope tech --kind switch  # who switches from what to what
+uv run wgra radar candidates                    # the churn radar's material per product
 uv run wgra wikipedia                           # reddit onsets vs Wikipedia pageviews
 uv run wgra notify-test
 ```
@@ -367,7 +391,8 @@ one of it with notifications on, or alerts go out twice.
 * Tracked subreddits are polled completely as multireddits (`r/a+b+c`), each feed as often
   as its volume needs. A sample of r/all serves as the "normal" vocabulary. Reddit only
   returns its last second or two, so it's a sample of a few percent. Its counts are
-  pooled into one scope, `_sample`.
+  pooled into one scope, `_sample`. What the churn radar's search finds is pooled into
+  `_search` the same way.
 
 ## Development
 

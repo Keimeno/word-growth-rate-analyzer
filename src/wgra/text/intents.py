@@ -49,7 +49,7 @@ from __future__ import annotations
 import re
 from bisect import bisect_right
 from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
@@ -107,15 +107,29 @@ def generic_words(language: str) -> frozenset[str]:
     return word_list("intent_words/generic_en") | word_list(f"intent_words/generic_{language}")
 
 
+# The single-word names of the churn radar's watched products (config.yaml), set by
+# `configure_names` when the ingester starts. They count like the lists below.
+_configured_names: frozenset[str] = frozenset()
+
+
+def configure_names(words: Iterable[str]) -> None:
+    """Makes these words names in any case and position, like products_*.txt."""
+    global _configured_names
+    _configured_names = frozenset(word.lower() for word in words)
+    name_words.cache_clear()
+
+
 @cache
 def name_words(language: str) -> frozenset[str]:
     """Words that are names even when written in lowercase or at the start of a sentence:
     the ones the corpus usually capitalizes in the middle of a sentence ("reddit",
-    "spotify", generated from live data by bench/intent_names.py), and products named
-    with everyday words ("notion", "windows", lists kept by hand). The english lists count
-    everywhere: brands are international, and in german a capital letter says nothing."""
+    "spotify", generated from live data by bench/intent_names.py), products named with
+    everyday words ("notion", "windows", lists kept by hand), and the watched products of
+    `configure_names`. The english lists count everywhere: brands are international, and
+    in german a capital letter says nothing."""
     lists = ("names_en", "products_en", f"names_{language}", f"products_{language}")
-    return frozenset().union(*(word_list(f"intent_words/{name}") for name in lists))
+    listed = frozenset().union(*(word_list(f"intent_words/{name}") for name in lists))
+    return listed | _configured_names
 
 
 @cache

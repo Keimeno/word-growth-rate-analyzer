@@ -58,3 +58,19 @@ def parse_listing(payload: dict[str, Any]) -> list[RedditItem]:
     """Items of a listing response, newest first like reddit returns them."""
     children = (payload.get("data") or {}).get("children") or []
     return [item for child in children if (item := _parse_child(child)) is not None]
+
+
+def parse_tree(payload: dict[str, Any]) -> list[RedditItem]:
+    """The comments of a post's comment tree (the second listing of /comments/<id>),
+    replies included, in no particular order. Comments behind "load more" aren't in it."""
+    items = []
+    stack = list((payload.get("data") or {}).get("children") or [])
+    while stack:
+        child = stack.pop()
+        if (item := _parse_child(child)) is not None:
+            items.append(item)
+        replies = (child.get("data") or {}).get("replies")
+        # a comment without replies has "" instead of a listing
+        if isinstance(replies, dict):
+            stack.extend((replies.get("data") or {}).get("children") or [])
+    return items

@@ -26,7 +26,7 @@ from clickhouse_connect.driver.client import Client
 from wgra.config import SAMPLE_SCOPE, Config
 from wgra.detect.short_term import as_utc
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS
-from wgra.text.intents import INTENT_KINDS, extract_intents
+from wgra.text.intents import INTENT_KINDS, configure_names, extract_intents
 from wgra.text.terms import clean
 
 log = logging.getLogger(__name__)
@@ -76,6 +76,7 @@ def backfill_intents(
     result = BackfillResult()
     term_rows: list[tuple] = []
     items: list[tuple] = []
+    configure_names(config.radar.names)
 
     def flush() -> None:
         if dry_run:
