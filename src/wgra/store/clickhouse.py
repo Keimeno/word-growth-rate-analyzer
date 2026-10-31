@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from importlib import resources
+from typing import Any
 
 import clickhouse_connect
 from clickhouse_connect.driver.client import Client
@@ -14,13 +15,15 @@ log = logging.getLogger(__name__)
 _STATEMENT_END = re.compile(r";\s*$", re.M)
 
 
-def connect(env: Env, database: str | None = None) -> Client:
+def connect(env: Env, database: str | None = None, **options: Any) -> Client:
+    """`options` go to clickhouse_connect.get_client, such as settings."""
     return clickhouse_connect.get_client(
         host=env.clickhouse_host,
         port=env.clickhouse_port,
         username=env.clickhouse_user,
         password=env.clickhouse_password,
         database=database or env.clickhouse_database,
+        **options,
     )
 
 

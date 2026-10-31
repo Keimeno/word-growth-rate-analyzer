@@ -57,13 +57,24 @@ Requires Docker. Works the same on a laptop and on a server.
 2. Choose subreddits and groups in `config.yaml`. A group lists channels: a subreddit is
    written `r/technology`.
 
-3. Start ClickHouse, Grafana, ntfy, the ingester and the analyzer:
+3. Start ClickHouse, Grafana, the web dashboard, ntfy, the ingester and the analyzer:
 
    ```bash
    docker compose up -d --build
    ```
 
-4. Open Grafana at <http://localhost:3608>, log in as `admin` with `GRAFANA_ADMIN_PASSWORD`.
+4. Open the web dashboard at <http://localhost:3610>. It shows what the Grafana
+   dashboards below show, presented more plainly: one row per trending term with where
+   else it trends, words instead of statistics' names (a q-value is "very strong",
+   "moderate" or "weak", with the number on hover), explanations next to the numbers, and
+   any term opens in a side panel with its chart, where it's discussed and the comments
+   behind it. Its pages are Trending (and a Quick look, Rising), Long-term, Why people
+   switch (Intent radar), Early warning, Explore (Term explorer) and Collection
+   (Ingestion). Every view is a link, and "Pro mode" opens the same view in Grafana. Set
+   `WEB_PASSWORD` in `.env` to ask for a password.
+
+   Grafana stays as the pro mode, with every panel and setting: open
+   <http://localhost:3608>, log in as `admin` with `GRAFANA_ADMIN_PASSWORD`.
    The dashboards are in the WGRA folder:
    * **Trending now**: what the analyzer found, per group and its channels: score,
      times the usual share, mentions, authors, breadth, a sparkline of the last week,
@@ -93,10 +104,10 @@ Requires Docker. Works the same on a laptop and on a server.
    uv run wgra notify-test
    ```
 
-On a server the ports only listen on localhost. Reach Grafana through an SSH tunnel:
+On a server the ports only listen on localhost. Reach the dashboards through an SSH tunnel:
 
 ```bash
-ssh -L 3608:localhost:3608 your-server
+ssh -L 3610:localhost:3610 -L 3608:localhost:3608 your-server
 ```
 
 The ingester and the analyzer keep running (and restart with Docker) until you stop them:
@@ -435,6 +446,11 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy
   `Sink`, a `Source`), like `sources/reddit/`.
 * The dashboards are generated: edit `grafana/build_dashboards.py` and run
   `uv run python grafana/build_dashboards.py`. Grafana reloads them within 10 seconds.
+* The web dashboard is `src/wgra/web/`: `queries.py` has the same queries as the Grafana
+  panels, as JSON endpoints, so a change to a panel's numbers usually belongs in both.
+  The page is plain JavaScript modules in `web/static/` with Preact and htm vendored (one
+  file, no build step): edit and reload. `uv run wgra web` serves it on port 3610 from
+  the ClickHouse in `.env`.
 * `bench/` measures at production scale: `bench/synthetic.py` writes a year of synthetic
   history into a database of its own, `bench/long_term.py` runs the long-term detector
   over it and reports time and memory per query. `bench/lead_lag.py` writes hourly

@@ -1,11 +1,13 @@
 # Everything WGRA needs, the same locally and in production. All of it is free and open
 # source software, the only cost is the server it runs on.
 #
-#   docker compose up -d --build     # ClickHouse, Grafana, ntfy, ingester and analyzer
+#   docker compose up -d --build     # ClickHouse, Grafana, the web dashboard, ntfy,
+#                                    # ingester and analyzer
 #
 # Ports are only bound to localhost. On a server, reach Grafana through an ssh tunnel
 # (ssh -L 3608:localhost:3608 your-server) or put a reverse proxy with TLS in front. The
-# same goes for ntfy, see the README for getting alerts onto a phone.
+# same goes for the web dashboard (3610) and ntfy, see the README for getting alerts onto
+# a phone.
 name: wgra
 
 services:
@@ -53,6 +55,27 @@ services:
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
     ports:
       - 127.0.0.1:3608:3000
+
+  # The web dashboard: what Grafana shows, plainer. Grafana stays as the pro mode. It only
+  # reads ClickHouse, so it gets no other secrets.
+  web:
+    build: .
+    command: ["wgra", "web", "--host", "0.0.0.0"]
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-wgra}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-wgra}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      # where its "Pro mode" links go
+      GRAFANA_URL: ${GRAFANA_URL:-http://localhost:3608}
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
+    ports:
+      - 127.0.0.1:3610:3610
 
   ingest:
     build: .

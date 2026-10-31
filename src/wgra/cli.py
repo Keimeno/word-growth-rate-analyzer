@@ -1,6 +1,6 @@
 """wgra command line: ``wgra ingest | analyze | long-term | lead-lag | replay | trends |
 edges | forecasts | suggest-subreddits | wikipedia | intents | radar | notify-test | migrate |
-status | term``."""
+status | web | term``."""
 
 from __future__ import annotations
 
@@ -569,6 +569,12 @@ def cmd_migrate(_: argparse.Namespace) -> None:
     print(f"applied: {', '.join(applied)}" if applied else "already up to date")
 
 
+def cmd_web(args: argparse.Namespace) -> None:
+    from wgra.web.server import serve
+
+    serve(Env.from_environ(), args.host, args.port, os.environ.get("WEB_PASSWORD", ""))
+
+
 def cmd_status(_: argparse.Namespace) -> None:
     status = ingestion_status(connect(Env.from_environ()))
     print("Feeds, last hour")
@@ -896,6 +902,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     commands.add_parser("migrate", help="apply database migrations").set_defaults(func=cmd_migrate)
     commands.add_parser("status", help="ingestion health").set_defaults(func=cmd_status)
+
+    web = commands.add_parser(
+        "web",
+        help="the web dashboard, a simpler view of what Grafana shows",
+        description="Serves the web dashboard and its data, read only. Set WEB_PASSWORD to "
+        "ask for it (HTTP basic auth, any user name).",
+    )
+    web.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to listen everywhere")
+    web.add_argument("--port", type=int, default=3610)
+    web.set_defaults(func=cmd_web)
 
     intents = commands.add_parser(
         "intents",
