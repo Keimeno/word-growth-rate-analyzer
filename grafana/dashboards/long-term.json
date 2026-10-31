@@ -91,7 +91,7 @@
         "type": "custom",
         "name": "kind",
         "label": "Kind",
-        "query": "word,phrase,domain,subreddit,switch,alternative,complaint,need",
+        "query": "word,phrase,domain,subreddit,switch,alternative,complaint,need,considering",
         "options": [
           {
             "text": "word",
@@ -131,6 +131,11 @@
           {
             "text": "need",
             "value": "need",
+            "selected": false
+          },
+          {
+            "text": "considering",
+            "value": "considering",
             "selected": false
           }
         ],

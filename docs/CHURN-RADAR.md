@@ -1,7 +1,8 @@
 # Churn radar: plan
 
-**Status: phase 1 built on 2026-10-31 and collecting.** Phase 0 runs on a laptop for now.
-Phases 2–5 are a reference for building them later.
+**Status: phases 1 and 2 built on 2026-10-31 and collecting; phase 2's precision isn't
+measured yet.** Phase 0 runs on a laptop for now. Phases 3–5 are a reference for building
+them later.
 
 A weekly report for one product and its competitors: who is leaving which product, for
 what, why, who is thinking about it, and what people in the category wish existed. Every
@@ -37,9 +38,11 @@ use and doesn't need that decided.
 * **Precision is below 80%.** It was measured at 50–79% per kind on the first 40 hours
   (§4.7). The most common errors are names that aren't products (game characters,
   countries, languages), entities cut so they lose what they are, and a trimming bug.
+  Phase 2 fixed these, not measured yet.
 * **No stance, no reasons.** The patterns drop "thinking of leaving Notion" as a
   hypothetical. "Moved to Obsidian because Notion is useless offline" counts as
   `notion → obsidian`, and "useless offline", the part a customer cares about, is lost.
+  Phase 2 added the stance (`considering`), phase 3 is the reasons.
 
 ## 2. Design
 
@@ -141,6 +144,16 @@ On top of the watchlist filter, take the open fixes from §4.7 "Still open":
 Measure with `bench/intent_precision.py`, with a new `--watchlist pkm` option that samples
 only intents about watched products. Hand-labeling is the only cost.
 
+As built (phase 2): the filter is `products_of` in
+[`radar/candidates.py`](../src/wgra/radar/candidates.py), which `wgra radar candidates`
+and `bench/intent_precision.py sample --watchlist` share. The fixes are in
+[ARCHITECTURE.md §4.7](ARCHITECTURE.md#47-intents-why-people-mention-things): one word in
+front of a name can be trimmed, more can't; a name with lowercase words cut after it doesn't
+count when it's possessive, has a determiner or the pattern ends the entity ("Figma's
+components", "the Windows sound panel"); 210 languages, countries, country codes and game
+characters in `generic_en.txt`. `names_en.txt` isn't regenerated yet: that needs 48 hours
+of items, which are there after 2026-11-02 15:00 UTC.
+
 ### 2.4 Stance: considering
 
 Today `_hypothetical` drops a switch that's asked about or only considered. A new kind,
@@ -155,6 +168,24 @@ The rules: a first-person subject (`i`, `we`), a verb of considering (thinking o
 considering, debating, about to, should I), and one known side, like switches. "If",
 "would" and "could" stay hypothetical and count as nothing. Golden tests for each line of
 the table, positives and negatives, like the 118 that exist.
+
+As built (phase 2), in [`text/intents.py`](../src/wgra/text/intents.py), english only:
+
+* The considering verbs as planned, plus "planning to" or "on", with adverbs in between
+  ("I'm seriously thinking of"), and with the "I" left out at the start of a sentence
+  ("Thinking about leaving Notion"). Negated ("I'm not thinking of"), "why should I" and
+  third persons ("my boss is thinking of") count as nothing, and so does "if", "would",
+  "could", "might" or "unless" anywhere before the first product.
+* `x → y`: switching, migrating, moving or jumping ship from x to y (or to y from x, with up
+  to two words in between: "moving my notes from Notion to Obsidian"), leaving, quitting,
+  ditching or abandoning x for y, replacing x with y.
+* `x`: leaving, quitting, ditching, abandoning, cancelling, uninstalling or deleting x,
+  getting rid of it, unsubscribing from it, switching or moving (away) from or off it. What
+  follows x has to end the thought ("for good", "because …", the end of the sentence), so
+  "leaving Notion open" counts as nothing. When a sentence also names where to, only the
+  flow counts ("leaving Notion for Obsidian" is `notion → obsidian`, not also `notion`).
+* A switch still needs to have happened: "should I switch from Notion to Obsidian?" is
+  only `considering`, and advice ("you should switch from …") is nothing.
 
 ### 2.5 Reasons and missing features without a model
 
@@ -260,13 +291,38 @@ Built:
 **Done when:** a week of candidates tells us, per product and day, how many items name it
 and how many intents the patterns find. That's 2026-11-07 at the earliest.
 
-### Phase 2: precision and stance (about 3 days)
+### Phase 2: precision and stance (built 2026-10-31, measurement pending)
 
-* The watchlist filter, the fixes of §2.3, the `considering` kind with golden tests.
-* `bench/intent_precision.py --watchlist`.
-* **Done when:** both judges agree that at least 80% of watched-product switch, alternative,
-  complaint and considering items are correct, 50 per kind on a held-out week. A paid
-  product would need 90% (§7).
+Built:
+
+* The watchlist filter: `products_of` counts an intent for a product when its entity is a
+  watched alias, or for a switch or a switch considered either side is. Needs are never
+  about a product. `wgra radar candidates` shows switch, considering, alternative and
+  complaint per product.
+* The fixes of §2.3 in `text/intents.py` and `generic_en.txt` (the trimming bug, cuts that
+  drop a part of the product, languages, countries and game characters), and advice ("you
+  should switch from …") no longer counts as a switch.
+* The `considering` kind (§2.4), with its gates in `config.yaml` (3 mentions by 3 authors
+  short term, 2 a week long term, onsets at 3), `--kind considering` in `wgra intents`, a
+  stat and a "Rising: switches considered" table on the Intent radar dashboard.
+* `bench/intent_precision.py sample --watchlist pkm`: only intents about the watchlist's
+  products, with the products each is about. It sets the watched names like the ingester
+  and refuses to write the sample inside the repository.
+* 55 more test cases (422 in all): golden tests of every fix and of `considering`
+  (positives and the negatives of §2.4), the filter on extracted intents, the candidates
+  with `considering`, against ClickHouse included, and the shipped gates for every kind.
+
+Still open:
+
+* Regenerate `names_en.txt` from 48 hours of items (`bench/intent_names.py`), after
+  2026-11-02 15:00 UTC.
+* Measure: sample a held-out week with `--watchlist pkm` and label it. Nothing is labeled
+  yet. The sample holds reddit text, so it stays outside the repository and is deleted
+  after labeling.
+
+**Done when:** both judges agree that at least 80% of watched-product switch, alternative,
+complaint and considering items are correct, 50 per kind on a held-out week. A paid
+product would need 90% (§7).
 
 ### Phase 3: reasons (about 3 days)
 

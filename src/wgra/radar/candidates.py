@@ -18,9 +18,20 @@ from dataclasses import dataclass, field
 from clickhouse_connect.driver.client import Client
 
 from wgra.config import SAMPLE_SCOPE, SEARCH_SCOPE, TEXT_KINDS, Config, Watchlist
-from wgra.text.intents import ARROW, INTENT_KINDS, SWITCH, intent_entity
+from wgra.text.intents import (
+    ALTERNATIVE,
+    ARROW,
+    COMPLAINT,
+    CONSIDERING,
+    INTENT_KINDS,
+    NEED,
+    SWITCH,
+    intent_entity,
+)
 
 ORIGINS = ("watchlist", "tracked", "sample", "search")
+# the intents about a product (a need is about what someone wants to do)
+RADAR_KINDS = (SWITCH, CONSIDERING, ALTERNATIVE, COMPLAINT)
 
 CANDIDATES_SQL = """
 SELECT
@@ -61,9 +72,15 @@ class Candidates:
 
 
 def products_of(watchlist: Watchlist, kind: str, term: str) -> list[str]:
-    """The watched products an intent is about: "evernote → obsidian" is about both."""
-    entity = intent_entity(term)
-    sides = entity.split(ARROW) if kind == SWITCH else [entity]
+    """The watched products an intent is about: "evernote → obsidian" and "considering:
+    evernote → obsidian" are about both, "alternative: notion ai" about notion.
+
+    This is the radar's filter: only intents about a watched product count, so a game
+    character, a country or a language can never be one (docs/CHURN-RADAR.md §2.1)."""
+    if kind == NEED:
+        return []
+    # no name contains the arrow (the config checks), so the sides of a flow are names
+    sides = intent_entity(term).split(ARROW)
     return list(dict.fromkeys(product for side in sides if (product := watchlist.product(side))))
 
 
@@ -100,7 +117,7 @@ def candidates(
             "watchlist": list(config.groups[watchlist.group]),
             "hours": days * 24,
             "text_kinds": [kind for kind in TEXT_KINDS if kind != "subreddit"],
-            "intent_kinds": list(INTENT_KINDS),
+            "intent_kinds": list(RADAR_KINDS),
             "aliases": aliases,
         },
     ).result_rows

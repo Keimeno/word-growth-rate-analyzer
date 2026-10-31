@@ -18,7 +18,8 @@ SCOPE = (
     "AND source IN (${source:singlequote})"
 )
 # the kinds of intents (docs/ARCHITECTURE.md §4.7), terms like words otherwise
-INTENT_KINDS = ["switch", "alternative", "complaint", "need"]
+INTENT_KINDS = ["switch", "alternative", "complaint", "need", "considering"]
+INTENT_KIND_LIST = ", ".join(f"'{kind}'" for kind in INTENT_KINDS)
 TERM_LIST = "arrayMap(t -> trimBoth(lower(t)), splitByChar(',', ${terms:sqlstring}))"
 TERMS = f"term IN {TERM_LIST}"
 # words of the text and of each term, joined by single spaces, so "GPT-5" matches "gpt 5"
@@ -1787,7 +1788,7 @@ WHERE {EDGE_ROWS}
 # Intents (docs/ARCHITECTURE.md §4.7): why people mention things. Switches are stored as
 # "x → y", the other kinds as "alternative: x", "complaint: x" and "need: x".
 # what an intent is about, without its kind
-ENTITY = "if(position(term, ' → ') > 0, term, substring(term, position(term, ': ') + 2))"
+ENTITY = "if(position(term, ': ') > 0, substring(term, position(term, ': ') + 2), term)"
 INTENT_DAYS = "day >= toDate($__fromTime) AND day <= toDate($__toTime)"
 # the same whole days, for scope_hourly
 INTENT_HOURS = (
@@ -1972,7 +1973,7 @@ RISING_COLUMNS = [
 RISING_DAYS = "day >= today() - 34"
 
 
-def rising_table(kind: str, title: str, x: int, description: str) -> dict:
+def rising_table(kind: str, title: str, x: int, description: str, y: int = 16) -> dict:
     """The last 7 days against the 28 before, the most extra mentions first."""
     table = with_daily_sparklines(
         panel(
@@ -2014,7 +2015,7 @@ ORDER BY excess DESC, mentions DESC
 LIMIT 30
 """,
             x,
-            16,
+            y,
             12,
             11,
             table=True,
@@ -2099,8 +2100,9 @@ LIMIT 10 BY group
     },
 )
 
-# the kind of an intent's term
-TERM_KIND = "if(position(t, ' → ') > 0, 'switch', splitByString(': ', t)[1])"
+# the kind of an intent's term: a switch has no kind in front ("notion → obsidian"), the
+# others do ("considering: notion → obsidian"), and no entity has a colon
+TERM_KIND = "if(position(t, ': ') > 0, splitByString(': ', t)[1], 'switch')"
 examples_table = panel(
     "table",
     "Comments behind intents, last 48 hours",
@@ -2174,7 +2176,7 @@ def intent_count(kind: str, title: str, x: int) -> dict:
         f"SELECT sum(docs) FROM term_daily WHERE {SCOPE} AND kind = '{kind}' AND {INTENT_DAYS}",
         x,
         0,
-        5,
+        4,
         5,
         table=True,
         description=f"Comments and posts with a {kind} intent in the time range.",
@@ -2184,17 +2186,17 @@ def intent_count(kind: str, title: str, x: int) -> dict:
 intent_dashboard = dashboard(
     "wgra-intents",
     "Intent radar",
-    "Why people mention things: switches between products, alternatives sought, complaints "
-    "and unmet needs.",
+    "Why people mention things: switches between products, switches considered, "
+    "alternatives sought, complaints and unmet needs.",
     [
         intent_count("switch", "Switches", 0),
-        intent_count("alternative", "Alternatives sought", 5),
-        intent_count("complaint", "Complaints", 10),
-        intent_count("need", "Needs", 15),
+        intent_count("considering", "Considering a switch", 4),
+        intent_count("alternative", "Alternatives sought", 8),
+        intent_count("complaint", "Complaints", 12),
+        intent_count("need", "Needs", 16),
         text_stat(
             "Counting intents since",
-            "SELECT toString(min(day)) FROM term_daily "
-            "WHERE kind IN ('switch', 'alternative', 'complaint', 'need')",
+            f"SELECT toString(min(day)) FROM term_daily WHERE kind IN ({INTENT_KIND_LIST})",
             20,
             0,
             4,
@@ -2221,20 +2223,30 @@ intent_dashboard = dashboard(
         ),
         needs_table,
         examples_table,
+        rising_table(
+            "considering",
+            "Rising: switches considered",
+            0,
+            "Someone thinks of switching from x to y ('x → y') or of leaving x ('x'), in the "
+            "first person: 'I'm thinking of switching from Notion to Obsidian', 'should I ditch "
+            "Notion?', 'about to cancel Netflix'. Not after if, would or could, not advice "
+            "('you could switch'). " + RISING_HELP,
+            y=39,
+        ),
         panel(
             "timeseries",
             "Intents per day",
             f"""
 SELECT toDateTime(day, 'UTC') AS time, kind, sum(docs) AS mentions
 FROM term_daily
-WHERE {SCOPE} AND kind IN ('switch', 'alternative', 'complaint', 'need') AND {INTENT_DAYS}
+WHERE {SCOPE} AND kind IN ({INTENT_KIND_LIST}) AND {INTENT_DAYS}
 GROUP BY time, kind
 ORDER BY time
 """,
-            0,
+            12,
             39,
-            24,
-            8,
+            12,
+            11,
             description="Comments and posts with an intent per day, by kind.",
             series_label="kind",
             draw_style="bars",

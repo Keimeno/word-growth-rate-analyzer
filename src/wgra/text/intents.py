@@ -1,6 +1,6 @@
 """Intents: why people mention things, not only that they do.
 
-Four more kinds of terms, extracted from the same cleaned text as words and phrases:
+Five more kinds of terms, extracted from the same cleaned text as words and phrases:
 
 * ``switch``: "x → y", someone switched from x to y ("I switched from Notion to Obsidian",
   "dropped Claude for Grok", "we replaced our Jenkins with GitHub Actions", "the Jira to
@@ -11,10 +11,14 @@ Four more kinds of terms, extracted from the same cleaned text as words and phra
   "cancelled my Netflix subscription", "Spotify raised prices", "YouTube enshittification")
 * ``need``: what someone wants a tool or a way for ("is there an app to track sleep",
   "I wish there was a way to mute subreddits", "I'd pay for an app that syncs notes")
+* ``considering``: "x → y" or x, someone thinks of switching from x to y or of leaving x,
+  in the first person ("I'm thinking of switching from Notion to Obsidian", "should I
+  ditch Notion?", "about to cancel Netflix")
 
 They are counted like words, under terms of their own: "notion → obsidian",
-"alternative: lastpass", "complaint: netflix", "need: track sleep". The trends tables are
-keyed by term, so an intent can't share its term with the word "netflix".
+"alternative: lastpass", "complaint: netflix", "need: track sleep", "considering: notion
+→ obsidian", "considering: notion". The trends tables are keyed by term, so an intent
+can't share its term with the word "netflix".
 
 Raw text is deleted after 48 hours, so this happens at ingest time or not at all.
 
@@ -25,7 +29,8 @@ Precision over recall (measured on live data, docs/ARCHITECTURE.md §4.7):
   only as "broken again" or "broken for me" (gamers call strong characters broken),
   "instead of" only after a verb of using or choosing ("use Y instead of X", not "instead
   of going outside"), a switch only when a person switched ("I switched", not "the traffic
-  light switched", "should I switch?").
+  light switched", "should I switch?"), considering only in the first person and not after
+  if, would or could ("should I switch?", not "if you switch" or "you could switch").
 * In english text, the thing has to be written like a name: capitalized in the middle of a
   sentence ("moved to Proton"), mixed case ("iPhone"), an acronym ("AWS") or letters with
   digits ("gpt-5"). Lowercase words ("switched from yellow to red"), numbers with units
@@ -39,7 +44,10 @@ Precision over recall (measured on live data, docs/ARCHITECTURE.md §4.7):
 
 Entities are 1–3 words, ended by stopwords, punctuation and words that can't be part of a
 name (intent_words/boundary_*.txt: time expressions, adjectives like "free" or "cheaper",
-adverbs), and normalized like words and phrases: lowercase, possessive 's removed. A need
+adverbs), and normalized like words and phrases: lowercase, possessive 's removed. They're
+trimmed to the name, but not past more than one word ("a free alternative to photoshop use
+Krita" isn't about Krita) or a part of the product ("Figma's components", "the Windows
+sound panel" aren't Figma or Windows). A need
 is a phrase like any other (inner stopwords allowed, not at the edges) of 2–3 words: "is
 there a way to fix this" says nothing about the need.
 """
@@ -60,13 +68,15 @@ SWITCH = "switch"
 ALTERNATIVE = "alternative"
 COMPLAINT = "complaint"
 NEED = "need"
-INTENT_KINDS = (SWITCH, ALTERNATIVE, COMPLAINT, NEED)
+CONSIDERING = "considering"
+INTENT_KINDS = (SWITCH, ALTERNATIVE, COMPLAINT, NEED, CONSIDERING)
 
-# between the two sides of a switch: "notion → obsidian"
+# between the two sides of a switch: "notion → obsidian", "considering: notion → obsidian"
 ARROW = " → "
 # between the kind and the entity of the other intents: "complaint: netflix". The tables
 # of trends are keyed by term, not kind, so an intent's term must differ from the word
-# "netflix"; no word or phrase contains a colon (it ends a phrase).
+# "netflix"; no word or phrase contains a colon (it ends a phrase), and neither does an
+# entity, so the term of a switch has none.
 KIND_SEPARATOR = ": "
 MAX_ENTITY_TOKENS = 3
 MIN_NEED_TOKENS = 2
@@ -90,12 +100,14 @@ _I_WORDS = frozenset({"i", "i'm", "i've", "i'd", "i'll"})
 
 
 def intent_term(kind: str, entity: str) -> str:
-    """The term an intent is counted as: "notion → obsidian", "alternative: notion"."""
+    """The term an intent is counted as: "notion → obsidian", "alternative: notion",
+    "considering: notion → obsidian"."""
     return entity if kind == SWITCH else f"{kind}{KIND_SEPARATOR}{entity}"
 
 
 def intent_entity(term: str) -> str:
-    """What an intent is about: "complaint: netflix" -> "netflix", switches unchanged."""
+    """What an intent is about: "complaint: netflix" -> "netflix", "considering: notion →
+    obsidian" -> "notion → obsidian", switches unchanged."""
     kind, separator, entity = term.partition(KIND_SEPARATOR)
     return entity if separator and kind in INTENT_KINDS else term
 
@@ -152,6 +164,8 @@ class Token:
     # more than capitalized: mixed case, an acronym, letters with digits, or on the lists.
     # "Emboar" or "Middle" are capitalized, "Spotify", "iX3" and "AWS" are known.
     known: bool = False
+    # written with a possessive 's, which `lower` leaves out: "Figma's components"
+    possessive: bool = False
 
     @property
     def is_break(self) -> bool:
@@ -225,16 +239,19 @@ def sentences_as_written(
         if only and not only.search(sentence):
             continue
         stretches = [
-            [word.removesuffix("'s").removesuffix("'S") for word in _TOKEN.findall(stretch)]
+            [
+                (word.removesuffix("'s").removesuffix("'S"), word.endswith(("'s", "'S")))
+                for word in _TOKEN.findall(stretch)
+            ]
             for stretch in _SOFT_BREAK.split(sentence)
         ]
-        case = _case([word for stretch in stretches for word in stretch], english, other)
+        case = _case([word for stretch in stretches for word, _ in stretch], english, other)
         tokens: list[Token] = []
         initial = True
         for stretch in stretches:
             if tokens and not tokens[-1].is_break:
                 tokens.append(Token(SOFT_BREAK))
-            for word in stretch:
+            for word, possessive in stretch:
                 if word:
                     lower = word.lower()
                     written = _written_like_a_name(word, initial, case)
@@ -244,6 +261,7 @@ def sentences_as_written(
                             lower,
                             name=listed or written > NOT_A_NAME,
                             known=listed or written == WRITTEN_LIKE_A_NAME,
+                            possessive=possessive,
                         )
                     )
                     initial = False
@@ -279,8 +297,10 @@ class Pattern:
     not_after: frozenset[str] = frozenset()
     # nor end like this: a "Linux-compatible alternative" runs on Linux, it doesn't replace it
     not_ending: tuple[str, ...] = ()
-    # switches: one side must be known, not only capitalized ("Emboar → Stoutland"), and the
-    # sentence must say it happened: not a question or a hypothetical ("if you switch")
+    # switches and considering: one side must be known, not only capitalized ("Emboar →
+    # Stoutland"), and the sentence must say where it stands: a switch happened (not a
+    # question or a hypothetical, "if you switch"), someone considers one (not after "if",
+    # "would" or "could")
     one_known: bool = False
     # what it matches, for measuring precision per pattern
     label: str = ""
@@ -386,6 +406,34 @@ def _english() -> list[Pattern]:
         r"(?= ?$| ,| \?| (?:again|for (?:me|anyone|everyone|anybody|you|us|hours|days)|"
         r"everywhere|globally|worldwide)(?!\S))"
     )
+    # someone considering it, in the first person: "i'm (seriously) thinking of", "we're
+    # considering", "about to", "should i", and opening a sentence with the "I" left out
+    # ("Thinking about leaving Notion"). Not negated ("i'm not thinking of"), not "you", not
+    # "why should i".
+    me = r"(?:i|im|i'm|i am|we|we're|we are|i've been|we've been|i have been|we have been)"
+    really = (
+        r"(?:(?:really|seriously|actually|honestly|genuinely|kinda|kind of|sort of|now|also|"
+        r"currently|still|already|just|slowly|finally) )*"
+    )
+    thinking = (
+        r"(?:thinking (?:of|about)|considering|debating(?: whether to)?|about to|"
+        r"planning (?:to|on))"
+    )
+    considering = rf"(?:(?:{B}{me} |^){really}{thinking} |{B}(?<!why )should (?:i|we) {really})"
+    moving = r"(?:switch|switching|migrate|migrating|move|moving|jump ship|jumping ship)"
+    # leaving x, the thing being left named after it: "thinking of (leaving) Notion"
+    leaving = (
+        rf"(?:leave|leaving|quit|quitting|ditch|ditching|abandon|abandoning|cancel|canceling|"
+        rf"cancelling|uninstall|uninstalling|delete|deleting|unsubscribe from|"
+        rf"unsubscribing from|(?:get|getting) rid of|{moving}(?: away)? (?:from|off)(?: of)?) "
+    )
+    # what can follow the thing someone thinks of leaving: "leaving Notion (for good)",
+    # "(because) …", the end of the sentence; not "leaving Notion open"
+    left = (
+        r"(?= ?$| [,?]| (?:for|to|and|or|but|because|cause|cuz|bc|since|after|before|when|"
+        r"once|in|at|this|next|soon|now|already|too|yet|altogether|entirely|forever|behind|"
+        r"so|then|as|due|over|if|until|though|lol|tbh|today|tomorrow|[^\s,?]+ly)(?!\S))"
+    )
     return [
         Pattern(
             SWITCH,
@@ -436,6 +484,54 @@ def _english() -> list[Pattern]:
             {"x": Span.EXACT, "y": Span.FORWARD},
             one_known=True,
             label="migration from x to y",
+        ),
+        Pattern(
+            CONSIDERING,
+            # "thinking of moving (my notes) from Notion to Obsidian"
+            re.compile(
+                rf"{considering}{moving}(?: {TOKEN}){{0,2}}? from {DET}(?P<x>{SPAN}) "
+                rf"(?:over )?to {_anchor('y')}"
+            ),
+            {"x": Span.EXACT, "y": Span.FORWARD},
+            one_known=True,
+            label="considering: thinking of switching from x to y",
+        ),
+        Pattern(
+            CONSIDERING,
+            re.compile(
+                rf"{considering}{moving}(?: {TOKEN}){{0,2}}? to {DET}(?P<y>{SPAN}) "
+                rf"from {_anchor('x')}"
+            ),
+            {"x": Span.FORWARD, "y": Span.EXACT},
+            one_known=True,
+            label="considering: thinking of switching to y from x",
+        ),
+        Pattern(
+            CONSIDERING,
+            re.compile(
+                rf"{considering}(?:leave|leaving|quit|quitting|ditch|ditching|abandon|"
+                rf"abandoning) {DET}(?P<x>{SPAN}) for {_anchor('y')}"
+            ),
+            {"x": Span.EXACT, "y": Span.FORWARD},
+            one_known=True,
+            label="considering: thinking of leaving x for y",
+        ),
+        Pattern(
+            CONSIDERING,
+            re.compile(
+                rf"{considering}(?:replace|replacing) {DET}(?P<x>{SPAN}) (?:with|by) "
+                rf"{_anchor('y')}"
+            ),
+            {"x": Span.EXACT, "y": Span.FORWARD},
+            one_known=True,
+            label="considering: thinking of replacing x with y",
+        ),
+        Pattern(
+            CONSIDERING,
+            re.compile(rf"{considering}{leaving}{DET}(?P<x>{SPAN}){left}"),
+            {"x": Span.EXACT},
+            one_known=True,
+            label="considering: thinking of leaving x",
         ),
         Pattern(
             ALTERNATIVE,
@@ -716,8 +812,8 @@ _DETERMINERS = frozenset(
 # what a cancelled or switched thing is called besides its name: "my Netflix subscription"
 _PRODUCT_SUFFIXES = frozenset(
     {"subscription", "subscriptions", "sub", "membership", "account", "plan", "order"}
-    | {"preorder", "pre-order", "service", "contract", "app", "abo", "abonnement", "vertrag"}
-    | {"mitgliedschaft", "konto"}
+    | {"preorder", "pre-order", "service", "contract", "app", "premium", "abo", "abonnement"}
+    | {"vertrag", "mitgliedschaft", "konto"}
 )
 # in front of a need: "an app that (lets me) track sleep"
 _NEED_HELPERS = frozenset(
@@ -748,7 +844,9 @@ _TRIGGERS = re.compile(
     r"switch|migrat|left|ditched|dropped|abandoned|quit|replac|alternativ|instead|"
     r"down|unusable|worse|broken|cancel|price|enshittif|is there|wish|pay|know|looking for|"
     r"recommend|suggest|any|wechsel|wechsl|migri|umgestiegen|umgezogen|umgestellt|umstieg|umsteig|"
-    r"ersatz|kaputt|unbrauchbar|offline|schlechter|preis|gekündigt|gibt es|gäbe es|kennt",
+    r"ersatz|kaputt|unbrauchbar|offline|schlechter|preis|gekündigt|gibt es|gäbe es|kennt|"
+    r"thinking\s+(?:of|about)|considering|debating|about\s+to|planning\s+(?:to|on)|"
+    r"should\s+(?:i|we)\b",
     re.IGNORECASE,
 )
 
@@ -778,6 +876,18 @@ def _hypothetical(tokens: Sequence[Token], start: int, starts: list[int]) -> boo
         return True
     before = bisect_right(starts, start)
     return any(token.lower in _HYPOTHETICAL for token in tokens[:before])
+
+
+# before someone considering a switch, these make it a condition or a possibility: "if I'm
+# thinking of leaving", "I would be about to switch"
+_CONDITIONAL = frozenset(
+    {"if", "would", "could", "might", "unless", "i'd", "we'd", "wouldn't", "couldn't"}
+)
+
+
+def _conditional(tokens: Sequence[Token], start: int, starts: list[int]) -> bool:
+    before = bisect_right(starts, start)
+    return any(token.lower in _CONDITIONAL for token in tokens[:before])
 
 
 def _qualifies(pattern: Pattern, tokens: Sequence[Token], indexes: list[int]) -> bool:
@@ -826,7 +936,18 @@ class Extractor:
             for match in pattern.regex.finditer(line):
                 if term := self._term(pattern, match, tokens, starts):
                     found.append((pattern, term))
-        return found
+        # "thinking of leaving Notion for Obsidian" considers one switch, not also leaving
+        # Notion for anything
+        flows = {
+            intent_entity(term).split(ARROW)[0]
+            for pattern, term in found
+            if pattern.kind == CONSIDERING and ARROW in term
+        }
+        return [
+            (pattern, term)
+            for pattern, term in found
+            if not (pattern.kind == CONSIDERING and intent_entity(term) in flows)
+        ]
 
     def _term(
         self, pattern: Pattern, match: re.Match[str], tokens: Sequence[Token], starts: list[int]
@@ -849,18 +970,20 @@ class Extractor:
                 indexes = self._backward(tokens, first)
             if span is Span.BACKWARD and indexes and _qualifies(pattern, tokens, indexes):
                 return None
-            entity = self._entity(tokens, indexes) if indexes else None
+            entity = self._entity(tokens, indexes, span) if indexes else None
             if not entity:
                 return None
             entities[group], known[group] = entity
-        if pattern.one_known and (
-            not any(known.values()) or _hypothetical(tokens, match.start(), starts)
-        ):
-            return None
-        if pattern.kind == SWITCH:
+        if pattern.one_known:
+            unsaid = _conditional if pattern.kind == CONSIDERING else _hypothetical
+            # the words up to the first entity: "you should switch from" is advice
+            said = min(match.start(group) for group in pattern.groups)
+            if not any(known.values()) or unsaid(tokens, said, starts):
+                return None
+        if "y" in entities:
             if entities["x"] == entities["y"]:
                 return None
-            return f"{entities['x']}{ARROW}{entities['y']}"
+            return intent_term(pattern.kind, f"{entities['x']}{ARROW}{entities['y']}")
         return intent_term(pattern.kind, entities["x"])
 
     def _bounds(self, token: Token) -> bool:
@@ -917,15 +1040,41 @@ class Extractor:
             index -= 1
         return indexes
 
-    def _entity(self, tokens: Sequence[Token], indexes: list[int]) -> tuple[str, bool] | None:
+    def _entity(
+        self, tokens: Sequence[Token], indexes: list[int], span: Span
+    ) -> tuple[str, bool] | None:
         """The entity the tokens name and whether it's known (not only capitalized), None
         if they don't name one."""
-        # trimmed to the name: "the crappy (Lattafa)", "(Microsoft) office"; numbers after a
-        # name stay ("Model 3", "Windows 11")
-        while indexes and not tokens[indexes[0]].name:
-            indexes = indexes[1:]
-        while indexes and not (tokens[indexes[-1]].name or _is_number(tokens[indexes[-1]].lower)):
-            indexes = indexes[:-1]
+        # "alternatives to (the) X": a determiner says the words up to the anchor are one
+        # thing
+        determined = indexes[0] > 0 and tokens[indexes[0] - 1].lower in _DETERMINERS
+        # trimmed to the name: "the crappy (Lattafa)", "people say (Reddit) is down"; numbers
+        # after a name stay ("Model 3", "Windows 11")
+        first, last = 0, len(indexes)
+        while first < last and not tokens[indexes[first]].name:
+            first += 1
+        while last > first and not (
+            tokens[indexes[last - 1]].name or _is_number(tokens[indexes[last - 1]].lower)
+        ):
+            last -= 1
+        # An entity that starts at the anchor is what stands there: in "a free alternative to
+        # photoshop use Krita" it's photoshop, not Krita. One word in front of the name is an
+        # adjective ("the crappy Lattafa"), more aren't.
+        if span is not Span.BACKWARD and first > 1:
+            return None
+        # A name with words cut after it is a part of the product when it's possessive, has
+        # a determiner or the pattern ends the entity: "Figma's components", "the Windows
+        # sound panel", "should I delete Notion pages?" aren't about Figma, Windows or
+        # Notion. Otherwise it's the brand of a product ("Google search is getting worse")
+        # or a verb follows ("the enshittification of Reddit continues"). What a product is
+        # called besides its name can go: "my Netflix subscription".
+        if (
+            last > first
+            and (span is Span.EXACT or determined or tokens[indexes[last - 1]].possessive)
+            and any(tokens[i].lower not in _PRODUCT_SUFFIXES for i in indexes[last:])
+        ):
+            return None
+        indexes = indexes[first:last]
         if not any(tokens[i].name and tokens[i].lower not in self.generic for i in indexes):
             return None
         words = [_strip_suffix(tokens[i].lower) for i in indexes]

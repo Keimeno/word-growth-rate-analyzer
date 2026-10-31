@@ -7,6 +7,7 @@ from wgra.text import extract_terms
 from wgra.text.intents import (
     ALTERNATIVE,
     COMPLAINT,
+    CONSIDERING,
     NEED,
     SWITCH,
     extract_intents,
@@ -23,6 +24,10 @@ def intents(text: str, language: str = "en") -> set[tuple[str, str]]:
 
 def switch(x: str, y: str) -> tuple[str, str]:
     return SWITCH, f"{x} → {y}"
+
+
+def considering(x: str, y: str | None = None) -> tuple[str, str]:
+    return CONSIDERING, intent_term(CONSIDERING, f"{x} → {y}" if y else x)
 
 
 @pytest.mark.parametrize(
@@ -77,10 +82,16 @@ def test_switches(text, expected):
         "The presale suddenly switched from AXS to Ticketmaster.",
         # capitalized, but nothing says these are products
         "I switched from Tremor Scorch to Middle in this run.",
-        # questions and hypotheticals: nobody switched
-        "Should I switch from Notion to Obsidian?",
+        # hypotheticals and advice: nobody switched (questions and "thinking about
+        # switching" are considering, see test_considering)
         "If you want speed you need to switch from Chrome to Firefox.",
-        "I'm thinking about switching from Windows to Linux.",
+        "You should switch from Notion to Obsidian.",
+        "We would switch from Jira to Linear if we could.",
+        # languages, game characters
+        "I switched from Hungarian to Portuguese on Duolingo.",
+        "I switched from Loucha to Robin for the boss.",
+        # a part of the product, not the product
+        "I switched from Notion's database to Obsidian.",
         # fantasy sports rosters, settings
         "Just dropped Bryce Young for Roman.",
         "Ronaldo left Real Madrid for Juventus.",
@@ -103,6 +114,8 @@ def test_switch_negatives(text):
         ("an open source alternative to Notion would be nice", "notion"),
         # "Windows" qualifies the alternative, MacWhisper is what it replaces
         ("I wanted a Windows alternative to MacWhisper for transcripts.", "macwhisper"),
+        # what a product is called besides its name goes, even after a determiner
+        ("Any alternatives to the Notion app?", "notion"),
     ],
 )
 def test_alternatives(text, entity):
@@ -126,6 +139,15 @@ def test_alternatives(text, entity):
         "I moved away from Norfolk 20 years ago.",
         "Is there an alternative for Mac?",
         "Any other alternatives for my MB?",
+        # x isn't a name, and Krita is what's used instead, not what's replaced
+        "a free alternative to photoshop use Krita",
+        # a part of the product: possessive, or after a determiner
+        "Is there an alternative to Figma's components?",
+        "Is there an alternative to the Windows sound panel?",
+        # game characters, languages
+        "Is there a good alternative to Faruzan for Wanderer?",
+        "Any alternatives to Yae?",
+        "Looking for a Hungarian alternative.",
     ],
 )
 def test_alternative_negatives(text):
@@ -144,6 +166,8 @@ def test_alternative_negatives(text):
         ("Thanks to the latest Disney+ price hike I'm out.", "disney"),
         ("The enshittification of Reddit continues.", "reddit"),
         ("After the update Windows is broken again", "windows"),
+        # one word in front of the name is trimmed
+        ("I cancelled my crappy Lattafa subscription.", "lattafa"),
     ],
 )
 def test_complaints(text, entity):
@@ -167,6 +191,10 @@ def test_complaints(text, entity):
         "Gas prices went up and the price hike hurts.",
         "When the chips are down, you find out who your friends are.",
         "FIRST DOWN?",
+        # a part of the product
+        "The Windows sound panel is broken again.",
+        "My Steam library is broken again.",
+        "Is Figma's autosave down?",
     ],
 )
 def test_complaint_negatives(text):
@@ -209,6 +237,85 @@ def test_needs(text, need):
 )
 def test_need_negatives(text):
     assert intents(text) == set()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "I'm thinking of switching from Notion to Obsidian.",
+            considering("notion", "obsidian"),
+        ),
+        ("Should I switch from Notion to Obsidian?", considering("notion", "obsidian")),
+        (
+            "Considering moving from Notion to Obsidian, any tips?",
+            considering("notion", "obsidian"),
+        ),
+        ("I'm thinking about switching from Windows to Linux.", considering("windows", "linux")),
+        ("I'm thinking of leaving Notion for Obsidian.", considering("notion", "obsidian")),
+        (
+            "I'm thinking of moving my notes from Notion to Obsidian.",
+            considering("notion", "obsidian"),
+        ),
+        ("We're considering migrating to Linear from Jira.", considering("jira", "linear")),
+        (
+            "I'm seriously thinking about replacing Notion with Obsidian.",
+            considering("notion", "obsidian"),
+        ),
+        (
+            "should we migrate from Jenkins to GitHub Actions?",
+            considering("jenkins", "github actions"),
+        ),
+        ("Thinking about leaving Notion.", considering("notion")),
+        ("About to cancel Notion.", considering("notion")),
+        ("Should I ditch Notion?", considering("notion")),
+        ("Thinking of leaving Notion for good.", considering("notion")),
+        ("I'm about to cancel my Notion subscription.", considering("notion")),
+        ("I've been thinking about getting rid of Spotify.", considering("spotify")),
+        # the destination isn't named
+        (
+            "I'm thinking about switching from Notion to something else.",
+            considering("notion"),
+        ),
+    ],
+)
+def test_considering(text, expected):
+    assert intents(text) == {expected}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # not the first person: advice, someone else, a question to someone
+        "If you switch from Chrome to Firefox, nothing changes.",
+        "You could switch to Obsidian.",
+        "You should switch from Notion to Obsidian.",
+        "Are you thinking of switching from Notion to Obsidian?",
+        "My boss is thinking of switching from Notion to Obsidian.",
+        "Why should I switch from Notion to Obsidian?",
+        # if, would, could, negated
+        "If we're considering moving from Notion to Obsidian, we need an export.",
+        "I would be thinking of leaving Notion if it got slower.",
+        "We could be about to cancel Notion.",
+        "I'm not thinking of leaving Notion.",
+        # leaving something else, or a part of the product
+        "Leaving Notion open all day drains my battery.",
+        "I'm thinking of leaving Notion open on my second monitor.",
+        "Should I leave a comment in Notion?",
+        "I'm thinking of leaving the Notion team.",
+        "Should I delete Notion pages?",
+        # places, nothing known
+        "I'm thinking of moving from Texas to Ohio.",
+        "I'm thinking of switching from Loucha to Robin.",
+    ],
+)
+def test_considering_negatives(text):
+    assert intents(text) == set()
+
+
+def test_a_switch_and_a_switch_considered_in_one_sentence():
+    text = "I switched from Notion to Obsidian and I'm thinking about leaving Spotify."
+    assert intents(text) == {switch("notion", "obsidian"), considering("spotify")}
 
 
 @pytest.mark.parametrize(
@@ -268,6 +375,11 @@ def test_every_pattern_has_a_trigger_word():
         "gibt es eine App",
         "does anyone know a tool",
         "I'd pay for an app",
+        "thinking about leaving Notion",
+        "Should I ditch Notion",
+        "about to cancel Notion",
+        "debating whether to quit Reddit",
+        "planning on getting rid of Spotify",
     ]
     assert all(_TRIGGERS.search(example) for example in examples)
 
@@ -306,6 +418,8 @@ def test_intent_entity():
     assert intent_entity("complaint: netflix") == "netflix"
     assert intent_entity("need: track my sleep") == "track my sleep"
     assert intent_entity("notion → obsidian") == "notion → obsidian"
+    assert intent_entity("considering: notion → obsidian") == "notion → obsidian"
+    assert intent_entity("considering: notion") == "notion"
     assert intent_entity("word: with a colon") == "word: with a colon"
 
 
@@ -315,3 +429,6 @@ def test_source_sentence_is_the_sentence_as_written():
         "But I switched from Notion to Obsidian last year!"
     )
     assert source_sentence(text, "complaint: reddit") is None
+    assert source_sentence("Hi all. Should I ditch Notion? Thanks", "considering: notion") == (
+        "Should I ditch Notion?"
+    )

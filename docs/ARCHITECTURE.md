@@ -121,9 +121,9 @@ Everything in the solid boxes is free, open source software (see §3.6).
   stopword (per-language stopword lists), so you get `right to repair` but
   not `of the`. Optional light lemmatization with `simplemma` (multilingual,
   so it covers r/de too): `agents` → `agent`.
-* **Intents** (built, §4.7): switches, alternatives sought, complaints and needs, from
-  patterns over the same tokens, as terms of their own kinds (`notion → obsidian`,
-  `complaint: reddit`). They can only be extracted here, before the text is deleted.
+* **Intents** (built, §4.7): switches, alternatives sought, complaints, needs and switches
+  considered, from patterns over the same tokens, as terms of their own kinds (`notion →
+  obsidian`, `complaint: reddit`, `considering: notion`). They can only be extracted here, before the text is deleted.
 * **The sample is pooled.** Items from untracked subreddits only arrive through
   the r/all sample, a few percent of each. Per subreddit that's far too thin
   to mean anything. Kept separate, thousands of tiny subreddits would add about
@@ -708,7 +708,7 @@ test.
 Counting that a product is mentioned more says little about what's happening to it.
 Counting why does: people leaving it, people looking for something else, people complaining,
 and what people wish existed. As built
-([`src/wgra/text/intents.py`](../src/wgra/text/intents.py)), the ingester extracts four
+([`src/wgra/text/intents.py`](../src/wgra/text/intents.py)), the ingester extracts five
 more kinds of terms from every comment and post, next to words and phrases:
 
 | Kind | Term | Extracted from (examples) |
@@ -717,6 +717,7 @@ more kinds of terms from every comment and post, next to words and phrases:
 | `alternative` | `alternative: lastpass` | "alternatives to LastPass", "a good Plex alternative?", "any alternatives for Plex", "looking for a replacement for Evernote", "I use Firefox instead of Chrome", "Alternative zu Notion" |
 | `complaint` | `complaint: reddit` | "is Reddit down?", "YouTube is down again", "Teams has been unusable since the update", "Windows is broken again", "Google search is getting worse", "cancelled my Netflix subscription", "Spotify raised prices", "the enshittification of Reddit", "Netflix hat die Preise erhöht", "mein Spotify-Abo gekündigt" |
 | `need` | `need: track my sleep` | "is there an app to track my sleep?", "I wish there was a way to mute subreddits", "I'd pay for an app that syncs notes", "does anyone know a tool for batch renaming files", "can anyone recommend an app for meal planning", "Gibt es eine App für Haushaltsbuch?" |
+| `considering` | `considering: notion → obsidian`, `considering: notion` | "I'm thinking of switching from Notion to Obsidian", "should I switch from Notion to Obsidian?", "we're considering migrating to Linear from Jira", "thinking about leaving Notion", "about to cancel Notion", "should I ditch Notion?" (english only, added for the churn radar, [CHURN-RADAR.md §2.4](CHURN-RADAR.md#24-stance-considering)) |
 
 **Only at ingest.** Raw text is deleted after 48 hours (§7), so an intent that isn't
 extracted when the item arrives is lost. There is no history from before the ingester
@@ -738,7 +739,15 @@ An entity is 1–3 tokens. It ends at stopwords, punctuation, the words of
 `intent_words/boundary_*.txt` (time expressions, adjectives that come before names: "last
 year", "a free Notion alternative") and -ly adverbs. What a product is called besides its
 name is dropped ("my Netflix subscription", "Spotify-Abo"), and so is a number before a time
-unit ("a 7800XT 2 years ago"). Needs are phrases: 2–3 tokens after the helper words ("an app
+unit ("a 7800XT 2 years ago"). Two cuts are refused, since they change the thing:
+
+* past more than one word in front of the name, when the entity starts at its anchor: "a
+  free alternative to photoshop use Krita" is about photoshop, not Krita, while "the crappy
+  Lattafa" is still `lattafa`
+* lowercase words after the name, when the name is possessive, has a determiner or the
+  pattern ends the entity: "Figma's components", "the Windows sound panel", "should I delete
+  Notion pages?". Without those it's a brand ("Google search is getting worse" counts
+  `google`) or a verb follows ("the enshittification of Reddit continues"). Needs are phrases: 2–3 tokens after the helper words ("an app
 that lets me track sleep"), not starting or ending with a stopword (one long german word is a
 need too: "Haushaltsbuch").
 
@@ -747,8 +756,8 @@ everyday word. Without a lexicon or a model, the writing has to tell:
 
 * In english text, X has to be written like a name: capitalized in the middle of a sentence
   ("moved to Proton"), mixed case ("iPhone", "GitLab"), an acronym ("AWS"), letters with
-  digits ("gpt-5", "iX3"), or on a list of names. The entity is trimmed to the name: "the
-  crappy Lattafa" counts as `lattafa`.
+  digits ("gpt-5", "iX3"), or on a list of names. The entity is trimmed to the name, as
+  far as the cuts above allow: "the crappy Lattafa" counts as `lattafa`.
 * Two lists of names count in any case and position. `names_en.txt`: the 4,208 words the live
   corpus capitalized in at least half of the items where they appear mid-sentence (at least
   5 items, 3 authors), generated by
@@ -761,8 +770,11 @@ everyday word. Without a lexicon or a model, the writing has to tell:
 * At the start of a sentence, in Title Case (post titles) and in german (every noun is
   capitalized) a capital letter says nothing; in ALL CAPS sentences acronyms say nothing.
 * `generic_*.txt` never name a thing: acronyms like AI, EU, OP, DLC, GP; countries,
-  nationalities, US states and big cities; months and weekdays; family words; placeholders
-  ("switch from X to Y").
+  nationalities, languages, country codes and game server regions ("RU", "EUW"), US states
+  and big cities; characters of popular games (Genshin Impact, Honkai: Star Rail, League of
+  Legends, Overwatch: "Faruzan", "Yae", "Robin"); months and weekdays; family words;
+  placeholders ("switch from X to Y"). Most languages and many characters are on
+  `names_en.txt`, so before they were added they counted as known names.
 
 **What the live data taught.** The patterns were developed on the first day of live items
 (293,005 items up to 2026-10-11 10:21 UTC), reading every extraction. Each rule below
@@ -770,7 +782,7 @@ removed a class of errors that made up most of a kind's mistakes:
 
 | Rule | Errors it removed |
 | --- | --- |
-| A switch needs a person switching: a subject (i, we, people, users, devs, companies, …), a gerund ("after switching"), or "Switched from" opening a sentence; plus "made the switch". Not in a question or after if, would, should, considering, thinking … | "the traffic light switched", "the Slavic rite switches", "they switched from Emboar to Stoutland" (game updates), "they had migrated from Urfa to Kırıkkale", "if I want that I need to switch from …", "do people really bother switching from …?" |
+| A switch needs a person switching: a subject (i, we, people, users, devs, companies, …), a gerund ("after switching"), or "Switched from" opening a sentence; plus "made the switch". Not in a question or after if, would, should, considering, thinking … anywhere before the first entity (since 2026-10-31: "you should switch from" is advice) | "the traffic light switched", "the Slavic rite switches", "they switched from Emboar to Stoutland" (game updates), "they had migrated from Urfa to Kırıkkale", "if I want that I need to switch from …", "do people really bother switching from …?" |
 | One side of a switch must be known (on the lists, mixed case, acronym or digits), not only capitalized | game characters and builds ("Tremor Scorch → Middle"), car parts |
 | No "went/moved from X to Y", "made the jump", "the switch from", "replace X with Y", "dropped/left X for Y"; "replaced" only with a first-person subject; settings and media aren't things ("video", "CLI") | travel ("went from Bangkok to Koh Phangan"), relocation, tube lines, game levels ("E2 → E6"), team building in game threads ("replace Zhongli with Jean"), fantasy football ("dropped Bryce Young for Roman"), transfers ("Ronaldo left Real Madrid for Juventus"), "switched from PNG to Video" (an upload option) |
 | "instead of X" only after a verb of using or choosing (not "bought": football transfers) | of the 1,516 items with "instead of", nearly all were not about products ("instead of going outside", "Clinton instead of Sanders") |
@@ -846,6 +858,12 @@ remain, in order of frequency:
   alternative to photoshop use Krita" counts `krita`)
 * features and settings of a product ("Figma's components", "the Windows sound panel")
 
+On 2026-10-31 (churn radar, phase 2) the first, third and fourth got fixes: game
+characters, languages, more countries and country codes in `generic_en.txt`, the trimming
+bug, and refusing cuts that drop a part of the product (see the entity rules above). The
+lists hold the common cases, not every character. None of it is measured yet: the next
+measurement is on a held-out week with `bench/intent_precision.py`.
+
 Tracked subreddits weren't cleaner than the r/all sample (17 of 25 vs 37 of 54 correct).
 
 **Cost.** Extraction takes the ingester from 30 to 77 µs per item (measured on 50,000 live
@@ -864,14 +882,16 @@ the term tables.
 * **A name isn't a product.** Capitalized people, places and game characters still get
   through where the pattern fits ("an alternative to Onyxia", a card game card). `generic_*.txt`
   catches the common ones.
-* No negation or hypotheticals: "I'd never switch from Windows to Linux", "if you switch from
-  Chrome to Firefox" count as switches. Sarcasm counts too.
+* No negation: "I'd never switch from Windows to Linux" counts as a switch. Sarcasm counts
+  too. Questions, hypotheticals and advice don't ("should I switch from …?", "if you switch
+  from Chrome to Firefox", "you should switch"); first-person ones are `considering`.
 * Entities and needs are cut at 3 words ("Marvel Rivals Moon Knights" → "marvel rivals moon").
 * German: fewer patterns, and too few german items to measure them well: r/de, r/Finanzen and
   r/de_EDV had 1,751 of the 374,224 items (10% of the tracked ones), and german posts in the
   r/all sample are counted with the english patterns only.
 * `names_en.txt` comes from one day of data. Regenerate it once more data is in (it only
-  grows the names; check precision again with `bench/intent_precision.py`).
+  grows the names; check precision again with `bench/intent_precision.py`). The words of
+  `generic_*.txt` never count as names, whatever `names_en.txt` says.
 * Reddit-wide intents come from the r/all sample, whose topics (sports, games, politics)
   bring most of the people and places that look like names. Tracked tech and finance
   subreddits are cleaner; `intents.sample: false` turns the sample off.
@@ -1257,7 +1277,7 @@ Next:
 * Consider volume: big subreddits cross sooner on the same relative rise (§7). If the
   edges are mostly big → small, compare onsets at matched mention counts.
 
-### Intents (built 2026-10-11, not deployed yet)
+### Intents (built 2026-10-11, deployed 2026-10-31)
 
 Built (see §4.7 for the method as built):
 
@@ -1344,26 +1364,34 @@ lead-lag run.
    docker compose run --rm --no-deps analyze wgra intents --scope sample --days 1
    ```
 
+Done since, with the churn radar's phase 2 (2026-10-31, [CHURN-RADAR.md](CHURN-RADAR.md)):
+the levers named here before, a list of game characters and languages, the trimming bug
+(reject instead of skipping to a later name) and rejecting cuts that drop a lowercase head
+noun ("Figma's components"); advice ("you should switch from …") no longer counts as a
+switch; and the fifth kind, `considering`.
+
 Still open:
 
 * **Done when:** precision at 80% or more per kind on a held-out week of live intents (50 per
-  kind) with `bench/intent_precision.py`. Not met yet. The next levers, by the errors above:
-  a list of game characters and languages (or skipping the r/all sample's gaming
-  subreddits), fixing the trimming bug (reject instead of skipping to a later name), and
-  rejecting cuts that drop a lowercase head noun ("Figma's components").
+  kind) with `bench/intent_precision.py`. Not met yet, and the fixes above aren't measured
+  yet. If game characters still show up, skip the r/all sample's gaming subreddits.
 * Regenerate `names_en.txt` from a full 48 hours of items (`bench/intent_names.py`) and
-  measure again.
+  measure again. The collector restarted on 2026-10-31 at 14:13 UTC, so that's possible
+  after 2026-11-02 15:00 UTC.
 * Recall: product names that are everyday words beyond the hand-kept list, negation ("I'd
-  never switch"), more german patterns once r/de has enough intents to measure.
+  never switch"), `considering` in german ("ich überlege, zu Linux zu wechseln"), more
+  german patterns once r/de has enough intents to measure.
 * Intent-specific alerts, e.g. an outage: "complaint: x" bursting across subreddits. Alerts
   already include intents, but at the words' alert gates (z ≥ 10, 20 authors).
 
-### Churn radar (phase 1 built 2026-10-31, collecting)
+### Churn radar (phases 1 and 2 built 2026-10-31, collecting)
 
 A weekly report per product and its competitors: switches, people considering leaving,
 complaints, reasons and missing features, with the threads behind them. Built on intents
 without paid APIs or a model. The plan, its phases and go/no-go gates are in
-[CHURN-RADAR.md](CHURN-RADAR.md).
+[CHURN-RADAR.md](CHURN-RADAR.md). Built so far: watchlists, brand search and comment trees,
+`wgra radar candidates` (phase 1); the watchlist filter, the precision fixes of §4.7 and
+the `considering` kind (phase 2, not measured yet).
 
 ### Cross-platform spread map (planned, not started)
 

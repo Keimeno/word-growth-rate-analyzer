@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+import yaml
 from helpers import make_config
 
 from wgra.config import (
@@ -11,6 +12,7 @@ from wgra.config import (
     load_config,
     parse_config,
 )
+from wgra.text.intents import INTENT_KINDS
 
 
 def test_subreddit_names_are_normalized_and_deduplicated():
@@ -147,9 +149,19 @@ def test_invalid_long_term_settings(section, values, message):
 
 def test_intents_have_their_own_gates_by_default():
     detect = make_config().detect
-    assert set(detect.kinds) >= {"word", "switch", "alternative", "complaint", "need"}
+    assert set(detect.kinds) >= {
+        "word",
+        "switch",
+        "alternative",
+        "complaint",
+        "need",
+        "considering",
+    }
     switch = detect.thresholds_for("tech", "switch")
     assert (switch.min_mentions, switch.min_authors, switch.min_z) == (3, 3, 3.0)
+    considering = detect.thresholds_for("tech", "considering")
+    assert (considering.min_mentions, considering.min_authors) == (3, 3)
+    assert detect.max_stored("considering") == 20
     assert detect.thresholds_for("tech", "word").min_mentions == 10
     assert (detect.max_stored("word"), detect.max_stored("need")) == (50, 20)
     config = make_config()
@@ -157,6 +169,8 @@ def test_intents_have_their_own_gates_by_default():
     assert config.long_term.min_mentions_per_week_for("phrase") == 20
     assert config.lead_lag.onset_min_mentions_for("complaint") == 3
     assert config.lead_lag.onset_min_mentions_for("word") == 5
+    assert config.long_term.min_mentions_per_week_for("considering") == 2
+    assert config.lead_lag.onset_min_mentions_for("considering") == 3
     assert config.intents.enabled and config.intents.sample
 
 
@@ -200,3 +214,8 @@ def test_the_shipped_config_parses_with_intents():
     config = load_config(Path(__file__).parents[1] / "config.yaml")
     assert config.intents.enabled
     assert config.detect.thresholds_for("tech", "switch").min_mentions <= 5
+    # every intent kind has its gates written out in the shipped config
+    raw = yaml.safe_load((Path(__file__).parents[1] / "config.yaml").read_text())
+    assert set(raw["detect"]["kind_thresholds"]) == set(INTENT_KINDS)
+    assert set(raw["long_term"]["kind_min_mentions_per_week"]) == set(INTENT_KINDS)
+    assert set(raw["lead_lag"]["kind_onset_min_mentions"]) == set(INTENT_KINDS)

@@ -10,6 +10,7 @@ from wgra.ingest.search import due_trees, names_any, search_query, stored_ids, w
 from wgra.radar.candidates import candidates, products_of, summarize
 from wgra.store import migrate
 from wgra.text.intents import configure_names, extract_intents
+from wgra.text.terms import clean
 
 PKM = {
     "groups": {"tech": ["technology"], "pkm": ["Notion", "ObsidianMD"]},
@@ -142,6 +143,38 @@ def test_intents_are_about_the_watched_products_on_either_side():
     assert products_of(watchlist, "switch", "notion → capacities") == ["notion"]
     assert products_of(watchlist, "alternative", "alternative: notion ai") == ["notion"]
     assert products_of(watchlist, "complaint", "complaint: craft") == []
+    assert products_of(watchlist, "considering", "considering: evernote → notion.so") == [
+        "evernote",
+        "notion",
+    ]
+    assert products_of(watchlist, "considering", "considering: obsidian") == ["obsidian"]
+    # a need is what someone wants to do, never a product
+    assert products_of(watchlist, "need", "need: apple notes") == []
+
+
+@pytest.mark.parametrize(
+    ("text", "products"),
+    [
+        ("I'm thinking of leaving Notion for Obsidian.", ["notion", "obsidian"]),
+        ("Should I ditch evernote?", ["evernote"]),
+        ("Any good alternatives to Notion AI?", ["notion"]),
+        # not watched: a game character, a language, a product nobody watches
+        ("Is there a good alternative to Faruzan for Wanderer?", []),
+        ("I switched from Hungarian to Portuguese.", []),
+        ("I switched from Notion to Capacities.", ["notion"]),
+        ("Is Reddit down?", []),
+    ],
+)
+def test_only_intents_about_watched_products_count(text, products):
+    """The radar's filter, on what the extraction finds with the watched names set."""
+    watchlist = pkm_config().radar.watchlists["pkm"]
+    Processor(pkm_config(), b"key")
+    found = [
+        product
+        for kind, term in extract_intents(clean(text))
+        for product in products_of(watchlist, kind, term)
+    ]
+    assert found == products
 
 
 def test_candidates_take_the_most_named_alias_and_add_up_intents():
@@ -153,14 +186,17 @@ def test_candidates_take_the_most_named_alias_and_add_up_intents():
             ("watchlist", "phrase", "notion ai", 12, 10),
             ("watchlist", "switch", "notion → obsidian", 3, 3),
             ("watchlist", "alternative", "alternative: notion", 2, 2),
+            ("watchlist", "considering", "considering: notion → obsidian", 2, 1),
+            ("watchlist", "considering", "considering: notion", 1, 1),
             ("search", "switch", "evernote → notion", 1, 1),
             ("sample", "word", "obsidian", 5, 5),
+            ("tracked", "need", "need: apple notes", 1, 1),
         ],
     )
     notion = table["notion", "watchlist"]
     assert (notion.named, notion.named_authors) == (40, 30)
-    assert notion.intents == {"switch": 3, "alternative": 2}
-    assert table["obsidian", "watchlist"].intents == {"switch": 3}
+    assert notion.intents == {"switch": 3, "alternative": 2, "considering": 3}
+    assert table["obsidian", "watchlist"].intents == {"switch": 3, "considering": 2}
     assert table["notion", "search"].intents == {"switch": 1}
     assert table["obsidian", "sample"].named == 5
     assert table["apple notes", "tracked"].empty
@@ -175,6 +211,7 @@ def test_candidates_from_clickhouse(client):
         [
             ("notion", "I switched from Notion to Obsidian, Notion is too slow"),
             ("technology", "Is there an alternative to Notion?"),
+            ("technology", "Should I ditch Evernote for Obsidian?"),
             (SAMPLE_SCOPE, "Notion and Obsidian"),
             (SEARCH_SCOPE, "We migrated from Evernote to Notion"),
         ]
@@ -191,6 +228,8 @@ def test_candidates_from_clickhouse(client):
     assert table["notion", "watchlist"].named == 1
     assert table["notion", "watchlist"].intents == {"switch": 1}
     assert table["notion", "tracked"].intents == {"alternative": 1}
+    assert table["evernote", "tracked"].intents == {"considering": 1}
+    assert table["obsidian", "tracked"].intents == {"considering": 1}
     assert table["obsidian", "sample"].named == 1
     assert table["evernote", "search"].intents == {"switch": 1}
 

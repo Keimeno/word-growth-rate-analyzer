@@ -24,8 +24,8 @@ reach other subreddits, groups or all of reddit ([Early warning](#early-warning)
 needs 4–6 weeks of history.
 
 Beyond what is mentioned, it counts why ([Intents](#intents)): people switching from one
-product to another, looking for alternatives, complaining, and asking for tools that don't
-exist. They can only be extracted while the raw text is kept (48 hours), so they're counted
+product to another or thinking about it, looking for alternatives, complaining, and asking
+for tools that don't exist. They can only be extracted while the raw text is kept (48 hours), so they're counted
 from the moment the ingester extracts them.
 
 ## Cost
@@ -69,8 +69,8 @@ Requires Docker. Works the same on a laptop and on a server.
      size, as a table and a graph), recent cascades, the current forecasts and how past
      forecasts turned out.
    * **Intent radar**: the top switching flows (x → y) with the flow the other way and a
-     daily sparkline, rising alternatives sought and complaints, the top needs per group,
-     and the comments behind each of them from the last 48 hours.
+     daily sparkline, rising alternatives sought, complaints and switches considered, the
+     top needs per group, and the comments behind each of them from the last 48 hours.
    * **Term explorer**: how often terms are mentioned over time, where, and recent
      examples. Per hour, day or week, and for groups pooled or as the average of the
      subreddits' shares.
@@ -265,7 +265,7 @@ prints how often reddit was first and a sign test.
 
 ## Intents
 
-Every comment and post is also searched for why something is mentioned. Four kinds, each
+Every comment and post is also searched for why something is mentioned. Five kinds, each
 counted like a word under a term of its own:
 
 | Kind | Term | From, for example |
@@ -274,18 +274,22 @@ counted like a word under a term of its own:
 | alternative | `alternative: lastpass` | "any alternatives to LastPass?", "a good Plex alternative", "I use Firefox instead of Chrome" |
 | complaint | `complaint: reddit` | "is Reddit down?", "Teams is unusable", "cancelled my Netflix subscription", "Spotify raised prices", "YouTube enshittification" |
 | need | `need: track my sleep` | "is there an app to track my sleep?", "I wish there was a way to mute subreddits", "I'd pay for an app that …" |
+| considering | `considering: notion → obsidian`, `considering: notion` | "I'm thinking of switching from Notion to Obsidian", "should I switch from Notion to Obsidian?", "thinking about leaving Notion", "about to cancel Notion", "should I ditch Notion?" |
 
 English patterns run everywhere, german ones ("von Windows zu Linux gewechselt", "Alternative
 zu Notion", "Gibt es eine App für …") in german subreddits. Precision comes first: a pattern
 only counts with the exact wording, and what it's about has to be written like a name
 ("Notion", "iPhone", "AWS", "gpt-5", or on the lists of known names), so "switched from 2 to 3
-monitors", "went from 60 to 144 Hz" and "instead of going outside" count as nothing. The
-price is recall: on the first days about 1 item in 6,000 had an intent. Precision is not
-where it should be yet: on the first 40 hours of live data 50–79% per kind were judged
-correct (the target is 80%), mostly because game characters, countries and languages look
-like names. Check the comments behind a surprising intent (the Intent radar links them). How
-the patterns were tuned and measured is in the
-[architecture](docs/ARCHITECTURE.md#47-intents-why-people-mention-things).
+monitors", "went from 60 to 144 Hz" and "instead of going outside" count as nothing. A
+switch has to have happened; a switch only thought about counts as `considering`, and only
+in the first person ("I'm thinking of", "should I"), not as advice ("you could switch") or
+after "if", "would" or "could". The price is recall: on the first days about 1 item in 6,000
+had an intent. Precision is not where it should be yet: on the first 40 hours of live data
+50–79% per kind were judged correct (the target is 80%), mostly because game characters,
+countries and languages look like names. Lists of those and stricter cuts ("Figma's
+components" isn't Figma) were added since, and haven't been measured yet. Check the comments
+behind a surprising intent (the Intent radar links them). How the patterns were tuned and
+measured is in the [architecture](docs/ARCHITECTURE.md#47-intents-why-people-mention-things).
 
 Intents go through the same detection as words: a switch trending in a subreddit, a
 complaint emerging over months, a need picked up by one community before others. They have
@@ -294,7 +298,7 @@ long-term trends) and are ranked apart from words, in `config.yaml` (`detect.kin
 `long_term.kind_min_mentions_per_week`, `lead_lag.kind_onset_min_mentions`).
 
 ```bash
-uv run wgra intents --scope tech                           # all four kinds, last 7 days
+uv run wgra intents --scope tech                           # all five kinds, last 7 days
 uv run wgra intents --scope sample --kind switch --days 30 --examples 2
 uv run wgra term "complaint: reddit" --scope tech --bucket hour --days 2
 ```
@@ -314,10 +318,10 @@ uv run wgra backfill-intents --before 2026-10-12T09:30
 ## Churn radar
 
 Being built, see [docs/CHURN-RADAR.md](docs/CHURN-RADAR.md): a weekly report per product
-and its competitors of who leaves which product, for what and why, at no cost. Phase 1
-(collection) runs. In `radar:` of [config.yaml](config.yaml), a watchlist names a
-category's products and the group of its subreddits (the pilot: note-taking, `pkm`). For
-its products the ingester:
+and its competitors of who leaves which product, for what and why, at no cost. Phases 1
+(collection) and 2 (precision and the `considering` kind) run. In `radar:` of
+[config.yaml](config.yaml), a watchlist names a category's products and the group of its
+subreddits (the pilot: note-taking, `pkm`). For its products the ingester:
 
 * counts their single-word names as names in intents in any case ("switched from evernote
   to obsidian"),
@@ -326,9 +330,14 @@ its products the ingester:
   about a switch ("Alternatives to Notion?"), a day after it was posted.
 
 What search finds outside the tracked subreddits is counted under the scope `_search`. It
-isn't a complete stream, so it's in no group and no detector sees it. To see how much
-there is to report on, per product and where it comes from (the watchlist's subreddits,
-the other tracked ones, the r/all sample, the search):
+isn't a complete stream, so it's in no group and no detector sees it.
+
+The radar only counts intents about a watched product: a switch or a switch considered
+with a watched product on either side ("considering: notion → obsidian" counts for both),
+an alternative sought to one, a complaint about one. A game character, a country or a
+language can't be a watched name, so the most common errors of intents never reach it. To
+see how much there is to report on, per product and where it comes from (the watchlist's
+subreddits, the other tracked ones, the r/all sample, the search):
 
 ```bash
 uv run wgra radar candidates --days 1

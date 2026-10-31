@@ -80,9 +80,11 @@ ingest:
 # own. "switch": "notion → obsidian" (switched from Notion to Obsidian), "alternative":
 # "alternative: lastpass" (alternatives to LastPass sought), "complaint": "complaint:
 # reddit" (is Reddit down?), "need": "need: track my sleep" (is there an app to track my
-# sleep?). English patterns everywhere, german ones in german subreddits. Extracted by the
-# ingester from the raw text, which is deleted after 48 hours: no history before it runs.
-# See docs/ARCHITECTURE.md §4.7, `wgra intents` and the Intent radar dashboard.
+# sleep?), "considering": "considering: notion → obsidian" or "considering: notion" (I'm
+# thinking of switching from Notion to Obsidian, should I ditch Notion?). English patterns
+# everywhere (considering only in english), german ones in german subreddits. Extracted by
+# the ingester from the raw text, which is deleted after 48 hours: no history before it
+# runs. See docs/ARCHITECTURE.md §4.7, `wgra intents` and the Intent radar dashboard.
 intents:
   enabled: true
   sample: true               # also in the r/all sample (reddit-wide, and the prior)
@@ -111,6 +113,7 @@ detect:
     alternative: {min_mentions: 3, min_authors: 3}
     complaint: {min_mentions: 3, min_authors: 3}
     need: {min_mentions: 3, min_authors: 3}
+    considering: {min_mentions: 3, min_authors: 3}
   # The prior: each term's share in the r/all sample over the last 90 days, worth 5% of
   # the documents compared. It keeps rare terms stable and damps terms that are common
   # everywhere on reddit but rare in the scope. Every term also gets one pseudo-mention,
@@ -143,6 +146,7 @@ long_term:
     alternative: 2
     complaint: 2
     need: 2
+    considering: 2
   # a group's weekly share: macro averages its subreddits' shares (each counts the same,
   # so r/technology doesn't drown out r/hardware), pooled divides all mentions by all
   # comments and posts
@@ -187,6 +191,7 @@ lead_lag:
     alternative: 3
     complaint: 3
     need: 3
+    considering: 3
   onset_min_ratio: 2         # times its usual share
   onset_min_z: 3
   min_reference_days: 3      # no onsets in a scope with less history

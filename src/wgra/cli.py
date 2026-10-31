@@ -588,6 +588,7 @@ INTENT_TITLES = {
     "alternative": ("Alternatives sought", "alternative to"),
     "complaint": ("Complaints", "about"),
     "need": ("Needs", "need"),
+    "considering": ("Considering a switch", "from (→ to)"),
 }
 
 
@@ -677,7 +678,7 @@ def _print_intents(report: IntentReport) -> None:
 
 
 def cmd_radar_candidates(args: argparse.Namespace) -> None:
-    from wgra.radar.candidates import ORIGINS, candidates
+    from wgra.radar.candidates import ORIGINS, RADAR_KINDS, candidates
 
     config = load_config(args.config)
     unknown = set(args.watchlist or ()) - set(config.radar.watchlists)
@@ -702,10 +703,10 @@ def cmd_radar_candidates(args: argparse.Namespace) -> None:
                             origin,
                             found.named,
                             found.named_authors,
-                            *(found.intents[kind] or "" for kind in INTENT_KINDS),
+                            *(found.intents[kind] or "" for kind in RADAR_KINDS),
                         )
                     )
-        _print_table(("product", "from", "naming it", "authors", *INTENT_KINDS), rows)
+        _print_table(("product", "from", "naming it", "authors", *RADAR_KINDS), rows)
         print()
 
 
@@ -884,16 +885,18 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     intents = commands.add_parser(
         "intents",
-        help="why people mention things: switches, alternatives, complaints, needs",
+        help="why people mention things: switches, alternatives, complaints, needs, "
+        "switches considered",
         description="The most mentioned intents in a group or subreddit over the last days, "
         "compared with as many days before. Switches are 'x → y'; the other kinds are "
-        "stored as 'alternative: x', 'complaint: x', 'need: x' (use those with `wgra term`).",
+        "stored as 'alternative: x', 'complaint: x', 'need: x', 'considering: x → y' or "
+        "'considering: x' (use those with `wgra term`).",
     )
     intents.add_argument(
         "--scope", default="tracked", help="group or r/subreddit (default: tracked)"
     )
     intents.add_argument(
-        "--kind", action="append", choices=INTENT_KINDS, help="repeatable (default: all four)"
+        "--kind", action="append", choices=INTENT_KINDS, help="repeatable (default: all)"
     )
     intents.add_argument("--days", type=int, default=7)
     intents.add_argument("--limit", type=int, default=20)

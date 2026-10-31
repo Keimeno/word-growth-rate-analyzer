@@ -1,15 +1,19 @@
 """Measures the precision of intent extraction on live data.
 
 1. `sample` runs the extractor over the raw items in ClickHouse (read-only, the last 48
-   hours) and writes up to N random extractions per kind to a JSON lines file, with the
-   sentence each came from. The file holds reddit text: keep it out of the repository and
-   delete it after labeling (reddit asks API users to delete stored content within 48h).
+   hours, with the watched products' names like the ingester) and writes up to N random
+   extractions per kind to a JSON lines file, with the sentence each came from. With
+   `--watchlist`, only the intents about its products, the churn radar's filter
+   (docs/CHURN-RADAR.md §2.1). The file holds reddit text: it has to be outside the
+   repository, and delete it after labeling (reddit asks API users to delete stored content
+   within 48h).
 2. Label it: set "correct" to true or false on every line (docs/ARCHITECTURE.md §4.7
    has the rules).
 3. `score` prints the precision per kind and per pattern, with 95% Wilson intervals.
 
     uv run python bench/intent_precision.py sample /tmp/intents.jsonl --per-kind 50 \\
         --since 2026-10-11T11:09:20
+    uv run python bench/intent_precision.py sample /tmp/pkm.jsonl --watchlist pkm
     uv run python bench/intent_precision.py score /tmp/intents.jsonl
 """
 
@@ -27,14 +31,26 @@ from dotenv import load_dotenv
 
 from wgra.config import Env, load_config
 from wgra.ingest.backfill import real_subreddit
+from wgra.radar.candidates import RADAR_KINDS, products_of
 from wgra.store import connect
-from wgra.text.intents import INTENT_KINDS, extractor, sentences_as_written
+from wgra.text.intents import INTENT_KINDS, configure_names, extractor, sentences_as_written
 from wgra.text.terms import clean
+
+REPOSITORY = Path(__file__).resolve().parent.parent
 
 
 def sample(args: argparse.Namespace) -> None:
+    if args.out.resolve().is_relative_to(REPOSITORY):
+        raise SystemExit(f"{args.out} holds reddit text, write it outside the repository")
     load_dotenv()
     config = load_config(args.config)
+    watchlist = None
+    if args.watchlist:
+        if args.watchlist not in config.radar.watchlists:
+            raise SystemExit(f"no watchlist {args.watchlist!r} in radar.watchlists")
+        watchlist = config.radar.watchlists[args.watchlist]
+    # the watched products' single-word names count as names, as in the ingester
+    configure_names(config.radar.names)
     client = connect(Env.from_environ(require_reddit=False))
     found: dict[str, list[dict[str, object]]] = defaultdict(list)
     items = 0
@@ -49,10 +65,14 @@ def sample(args: argparse.Namespace) -> None:
             extract = extractor(language)
             for sentence, tokens in sentences_as_written(clean(text), language):
                 for pattern, term in extract.matches(tokens):
+                    products = products_of(watchlist, pattern.kind, term) if watchlist else []
+                    if watchlist and not products:
+                        continue
                     found[pattern.kind].append(
                         {
                             "kind": pattern.kind,
                             "term": term,
+                            **({"products": products} if watchlist else {}),
                             "pattern": pattern.label,
                             "language": language,
                             "scope": scope,
@@ -65,12 +85,15 @@ def sample(args: argparse.Namespace) -> None:
                     )
     rng = random.Random(args.seed)
     with args.out.open("w", encoding="utf-8") as out:
-        for kind in INTENT_KINDS:
+        for kind in RADAR_KINDS if watchlist else INTENT_KINDS:
             chosen = rng.sample(found[kind], min(args.per_kind, len(found[kind])))
             for row in chosen:
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
             print(f"{kind}: {len(found[kind])} extractions, {len(chosen)} sampled")
-    print(f"from {items:,} items created after {args.since:%Y-%m-%d %H:%M} UTC -> {args.out}")
+    about = f", about the products of {args.watchlist}" if watchlist else ""
+    print(
+        f"from {items:,} items created after {args.since:%Y-%m-%d %H:%M} UTC{about} -> {args.out}"
+    )
 
 
 def wilson(correct: int, total: int, z: float = 1.96) -> tuple[float, float]:
@@ -124,6 +147,9 @@ def main() -> None:
     sampler.add_argument("--per-kind", type=int, default=50)
     sampler.add_argument("--since", type=_utc, default=datetime(2000, 1, 1, tzinfo=UTC))
     sampler.add_argument("--seed", type=int, default=1)
+    sampler.add_argument(
+        "--watchlist", help="only the intents about this watchlist's products (radar.watchlists)"
+    )
     sampler.add_argument("--config", type=Path, default=Path("config.yaml"))
     sampler.set_defaults(func=sample)
     scorer = commands.add_parser("score", help="precision of a labeled sample")
