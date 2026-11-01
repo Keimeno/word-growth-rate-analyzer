@@ -14,6 +14,7 @@ import { Sparkline } from "@/charts/micro";
 import { type Series, timeSeries } from "@/charts/options";
 import { Filters, PageHeader } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
+import { BumpPanel, WhatIfPanel } from "@/components/Extras";
 import { ALERT_HELP, AlertBadge, KindBadge, StrengthWord, TermLink } from "@/components/Entity";
 import { EmptyState, Loaded, Notice, Panel } from "@/components/Panel";
 import {
@@ -351,6 +352,15 @@ function Scored() {
           }
         </Loaded>
       </Panel>
+
+      <BumpPanel scope={search.scope} horizon={search.horizon} />
+
+      {data && data.trends.length > 0 && (
+        <WhatIfPanel
+          trends={data.trends}
+          defaults={{ mentions: 10, authors: 5, ratio: 2, score: 3 }}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel

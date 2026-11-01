@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import * as echarts from "echarts";
 import { describe, expect, it } from "vitest";
-import { heatmap, network, resolveColor, timeSeries } from "./options";
+import { flows, heatmap, network, resolveColor, timeSeries } from "./options";
 import { buildTheme, chartTokens } from "./theme";
 
 const css = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8");
@@ -125,5 +125,25 @@ describe("resolveColor", () => {
   it("turns series variables into the hex the canvas needs", () => {
     expect(resolveColor("var(--series-3)", tokens)).toBe("#8e65d4");
     expect(resolveColor("#123456", tokens)).toBe("#123456");
+  });
+});
+
+describe("flows", () => {
+  it("draws both sides and the links between them", () => {
+    const svg = render(
+      flows(
+        {
+          flows: [
+            { from: "notion", to: "obsidian", mentions: 61 },
+            { from: "obsidian", to: "notion", mentions: 11 },
+            { from: "evernote", to: "notion", mentions: 54 },
+          ],
+        },
+        tokens,
+      ),
+    );
+    expect(svg).toContain("evernote");
+    expect(svg).toContain(">obsidian<");
+    expect((svg.match(/<path/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 });

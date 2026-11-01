@@ -378,3 +378,230 @@ export function strip(
     ],
   };
 }
+
+/** Switching flows as a bipartite Sankey: products on the left as "from", on the right as
+ * "to", so flows both ways don't make cycles. */
+export function flows(
+  spec: { flows: Array<{ from: string; to: string; mentions: number }>; reducedMotion?: boolean },
+  tokens: ChartTokens,
+): EChartsOption {
+  const left = [...new Set(spec.flows.map((flow) => flow.from))];
+  const right = [...new Set(spec.flows.map((flow) => flow.to))];
+  const colors = new Map(
+    [...left, ...right].map((name, index) => [name, tokens.series[index % 8]]),
+  );
+  return {
+    animation: !spec.reducedMotion,
+    aria: { enabled: true },
+    tooltip: {
+      trigger: "item",
+      formatter: (param: {
+        dataType: string;
+        data: { source?: string; target?: string; value?: number; name?: string };
+      }) =>
+        param.dataType === "edge"
+          ? `${escape((param.data.source ?? "").slice(5))} → ${escape((param.data.target ?? "").slice(3))}<br><b style="font-weight:500">${param.data.value ?? 0} mentions</b>`
+          : escape((param.data.name ?? "").replace(/^(from|to): /, "")),
+    },
+    series: [
+      {
+        type: "sankey",
+        left: 8,
+        right: 96,
+        top: 8,
+        bottom: 8,
+        nodeAlign: "justify",
+        layoutIterations: 0,
+        label: {
+          color: tokens.inkSecondary,
+          fontSize: 12,
+          formatter: ({ name }: { name: string }) => name.replace(/^(from|to): /, ""),
+        },
+        lineStyle: { color: "source", opacity: 0.35, curveness: 0.5 },
+        data: [
+          ...left.map((name) => ({
+            name: `from: ${name}`,
+            itemStyle: { color: colors.get(name) },
+          })),
+          ...right.map((name) => ({ name: `to: ${name}`, itemStyle: { color: colors.get(name) } })),
+        ],
+        links: spec.flows.map((flow) => ({
+          source: `from: ${flow.from}`,
+          target: `to: ${flow.to}`,
+          value: flow.mentions,
+        })),
+      },
+    ],
+  };
+}
+
+/** Ranks over time on an inverted axis, one line per term: a bump chart. */
+export function bump(
+  spec: { series: Series[]; top: number; reducedMotion?: boolean },
+  tokens: ChartTokens,
+): EChartsOption {
+  return {
+    animation: !spec.reducedMotion,
+    aria: { enabled: true },
+    legend: { type: "scroll" },
+    grid: { left: 8, right: 112, top: 32, bottom: 8, containLabel: true },
+    tooltip: { trigger: "axis" },
+    xAxis: { type: "time", axisLabel: { hideOverlap: true } },
+    yAxis: {
+      type: "value",
+      inverse: true,
+      min: 1,
+      max: spec.top,
+      interval: 1,
+      axisLabel: { formatter: (value: number) => `#${value}` },
+    },
+    series: spec.series.map((series, index) => ({
+      name: series.name,
+      type: "line",
+      data: series.points,
+      color: resolveColor(series.color, tokens) ?? tokens.series[index % 8],
+      showSymbol: true,
+      symbolSize: 5,
+      connectNulls: false,
+      endLabel: { show: true, formatter: ({ seriesName }: { seriesName: string }) => seriesName },
+      labelLayout: { moveOverlap: "shiftY" },
+      emphasis: { focus: "series" },
+    })),
+  };
+}
+
+/** A year of days, sequential Current by value. */
+export function calendar(
+  spec: {
+    days: Array<[string, number | null]>;
+    format: (value: number) => string;
+    reducedMotion?: boolean;
+  },
+  tokens: ChartTokens,
+): EChartsOption {
+  const values = spec.days.map((day) => day[1]).filter((value): value is number => value !== null);
+  const first = spec.days[0]?.[0];
+  const last = spec.days.at(-1)?.[0];
+  return {
+    animation: !spec.reducedMotion,
+    aria: { enabled: true },
+    tooltip: {
+      trigger: "item",
+      formatter: ({ value }: { value: [string, number | null] }) =>
+        `${value[0]}<br><b style="font-weight:500">${value[1] === null ? "–" : spec.format(value[1])}</b>`,
+    },
+    visualMap: {
+      show: false,
+      min: 0,
+      max: Math.max(...values, 0) || 1,
+      inRange: { color: tokens.sequential.slice(0, 8) },
+    },
+    calendar: {
+      range: first && last ? [first, last] : undefined,
+      top: 24,
+      left: 32,
+      right: 8,
+      cellSize: ["auto", 12],
+      splitLine: { show: false },
+      itemStyle: { color: tokens.surface, borderColor: tokens.surface, borderWidth: 2 },
+      dayLabel: {
+        color: tokens.muted,
+        fontSize: 10,
+        firstDay: 1,
+        nameMap: ["S", "M", "T", "W", "T", "F", "S"],
+      },
+      monthLabel: { color: tokens.muted, fontSize: 10 },
+      yearLabel: { show: false },
+    },
+    series: [{ type: "heatmap", coordinateSystem: "calendar", data: spec.days }],
+  };
+}
+
+/** Forecast calibration: what was said against what came true per bin, with Wilson
+ * intervals, the diagonal of perfect calibration and the base rate. */
+export function calibration(
+  spec: {
+    bins: Array<{
+      predicted: number;
+      cameTrue: number;
+      low: number;
+      high: number;
+      forecasts: number;
+      baseRate: number;
+    }>;
+    reducedMotion?: boolean;
+  },
+  tokens: ChartTokens,
+): EChartsOption {
+  const percent = (value: number) => `${Math.round(100 * value)}%`;
+  return {
+    animation: !spec.reducedMotion,
+    aria: { enabled: true },
+    grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: true },
+    tooltip: {
+      trigger: "item",
+      formatter: ({ value }: { value: [number, number, number] }) =>
+        `Said ${percent(value[0])}, came true ${percent(value[1])}<br>${value[2]} forecasts`,
+    },
+    xAxis: {
+      type: "value",
+      min: 0,
+      max: 1,
+      name: "said",
+      nameLocation: "middle",
+      nameGap: 24,
+      axisLabel: { formatter: percent },
+    },
+    yAxis: { type: "value", min: 0, max: 1, axisLabel: { formatter: percent } },
+    series: [
+      {
+        type: "line",
+        silent: true,
+        symbol: "none",
+        data: [
+          [0, 0],
+          [1, 1],
+        ],
+        lineStyle: { color: tokens.threshold, type: [4, 3], width: 1 },
+      },
+      {
+        type: "line",
+        silent: true,
+        symbol: "none",
+        connectNulls: false,
+        lineStyle: { color: tokens.series[0], width: 2, opacity: 0.6 },
+        data: spec.bins.flatMap((bin) => [
+          [bin.predicted, bin.low],
+          [bin.predicted, bin.high],
+          null,
+        ]),
+      },
+      {
+        type: "scatter",
+        name: "came true",
+        data: spec.bins.map((bin) => [bin.predicted, bin.cameTrue, bin.forecasts]),
+        symbolSize: (value: [number, number, number]) => 6 + Math.min(14, Math.sqrt(value[2]) * 2),
+        itemStyle: { color: tokens.series[0] },
+      },
+      {
+        type: "scatter",
+        name: "usually",
+        data: spec.bins.map((bin) => [bin.predicted, bin.baseRate, bin.forecasts]),
+        symbol: "diamond",
+        symbolSize: 7,
+        itemStyle: { color: tokens.muted },
+      },
+    ],
+  };
+}
+
+/** Wilson's interval for `hits` of `trials`, at about 90%. */
+export function wilson(hits: number, trials: number, z = 1.645): [number, number] {
+  if (!trials) return [0, 1];
+  const p = hits / trials;
+  const denominator = 1 + (z * z) / trials;
+  const centre = (p + (z * z) / (2 * trials)) / denominator;
+  const margin =
+    (z * Math.sqrt((p * (1 - p)) / trials + (z * z) / (4 * trials * trials))) / denominator;
+  return [Math.max(0, centre - margin), Math.min(1, centre + margin)];
+}

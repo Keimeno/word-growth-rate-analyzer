@@ -8,6 +8,7 @@ import { Meter } from "@/charts/micro";
 import { network, timeSeries } from "@/charts/options";
 import { Filters, PageHeader } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
+import { Arrivals, CalibrationChart, SpreadMap } from "@/components/Spread";
 import { EventLink, StatusBadge, StrengthWord, TermLink } from "@/components/Entity";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, MultiPicker, Segmented } from "@/components/Pickers";
@@ -191,6 +192,16 @@ function SpreadPage() {
             help="Forecast alerts are off by default (forecast.alert in config.yaml). They share the daily cap with trend alerts."
           />
         </KpiRow>
+
+        {data && <SpreadMap edges={data.edges} />}
+
+        <Panel
+          title="What's arriving"
+          flush
+          subtitle="Pending forecasts: the window from the leader's onset to the due date, the expected time marked, now as the thin line"
+        >
+          <Loaded query={forecasts}>{(rows) => <Arrivals forecasts={rows} />}</Loaded>
+        </Panel>
 
         <Panel
           title="What's expected to spread"
@@ -545,55 +556,60 @@ function SpreadPage() {
           <Panel
             title="Calibration, last 90 days"
             flush
-            help="Well calibrated forecasts come true about as often as they say. Usually: what always forecasting the follower's usual rate would say."
+            help="Well calibrated forecasts come true about as often as they say: the dots near the dashed diagonal, with their 90% intervals. Diamonds and Usually: what always forecasting the follower's usual rate would say."
           >
             <Loaded query={record}>
               {(loaded) => (
-                <DataTable
-                  label="Calibration"
-                  rows={loaded.calibration}
-                  rowKey={(row) => String(row.bin)}
-                  limit={5}
-                  empty={<EmptyState title="Nothing resolved in 90 days" />}
-                  columns={[
-                    {
-                      id: "bin",
-                      header: "Forecast said",
-                      cell: (row) => `${row.bin * 20}–${row.bin * 20 + 20}%`,
-                    },
-                    {
-                      id: "n",
-                      header: "Forecasts",
-                      numeric: true,
-                      cell: (row) => count(row.forecasts),
-                    },
-                    {
-                      id: "predicted",
-                      header: "On average",
-                      numeric: true,
-                      cell: (row) => percent(row.predicted),
-                    },
-                    {
-                      id: "came",
-                      header: "Came true",
-                      numeric: true,
-                      cell: (row) =>
-                        row.forecasts < 10 ? (
-                          `${Math.round((row.came_true ?? 0) * row.forecasts)} of ${row.forecasts}`
-                        ) : (
-                          <Meter value={row.came_true} max={1}>
-                            {percent(row.came_true)}
-                          </Meter>
-                        ),
-                    },
-                    {
-                      id: "base",
-                      header: "Usually",
-                      numeric: true,
-                      cell: (row) => percent(row.base_rate),
-                    },
-                  ]}
-                />
+                <>
+                  <div className="px-4">
+                    <CalibrationChart bins={loaded.calibration} />
+                  </div>
+                  <DataTable
+                    label="Calibration"
+                    rows={loaded.calibration}
+                    rowKey={(row) => String(row.bin)}
+                    limit={5}
+                    empty={<EmptyState title="Nothing resolved in 90 days" />}
+                    columns={[
+                      {
+                        id: "bin",
+                        header: "Forecast said",
+                        cell: (row) => `${row.bin * 20}–${row.bin * 20 + 20}%`,
+                      },
+                      {
+                        id: "n",
+                        header: "Forecasts",
+                        numeric: true,
+                        cell: (row) => count(row.forecasts),
+                      },
+                      {
+                        id: "predicted",
+                        header: "On average",
+                        numeric: true,
+                        cell: (row) => percent(row.predicted),
+                      },
+                      {
+                        id: "came",
+                        header: "Came true",
+                        numeric: true,
+                        cell: (row) =>
+                          row.forecasts < 10 ? (
+                            `${Math.round((row.came_true ?? 0) * row.forecasts)} of ${row.forecasts}`
+                          ) : (
+                            <Meter value={row.came_true} max={1}>
+                              {percent(row.came_true)}
+                            </Meter>
+                          ),
+                      },
+                      {
+                        id: "base",
+                        header: "Usually",
+                        numeric: true,
+                        cell: (row) => percent(row.base_rate),
+                      },
+                    ]}
+                  />
+                </>
               )}
             </Loaded>
           </Panel>

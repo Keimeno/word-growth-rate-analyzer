@@ -15,6 +15,7 @@ import { timeSeries } from "@/charts/options";
 import { Filters, PageHeader } from "@/components/AppShell";
 import { Comments } from "@/components/Comments";
 import { DataTable } from "@/components/DataTable";
+import { FlowsPanel } from "@/components/Extras";
 import { ProductLink, TermLink } from "@/components/Entity";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, MultiPicker, ScopePicker, Segmented } from "@/components/Pickers";
@@ -296,6 +297,8 @@ function IntentsPage() {
             )}
           </Loaded>
         </Panel>
+
+        {flows.data && <FlowsPanel rows={flows.data.flows} />}
 
         <Panel flush>
           <Tabs value={search.rising} onValueChange={(value) => set({ rising: value })}>

@@ -419,3 +419,47 @@ def test_scope_product_alerts_and_search(stored, web):
     )
     assert [hit["term"] for hit in get(web, "/api/v1/search?q=Rus")][:2] == ["rust", "rustacean"]
     assert get(web, "/api/v1/edge?leader=r/a&follower=tech")["edge"] is None
+
+
+def test_beyond_grafana_endpoints(web):
+    related = get(web, "/api/v1/terms/word/rust/related?scope=tech")
+    # the three comments with "rust" in tech, none sharing another term three times
+    assert (related["documents"], related["terms"]) == (3, [])
+    channels = get(web, "/api/v1/terms/word/rust/channels?scope=tech&range=2d")
+    assert channels["bucket"] == "hour"
+    assert {series["channel"]: series["mentions"] for series in channels["channels"]} == {
+        "r/technology": 2,
+        "r/programming": 1,
+    }
+    # 2 of 4 comments in r/technology, 1 of 1 in r/programming
+    assert channels["channels"][0]["points"][0][1] == pytest.approx(500)
+    rhythm = get(web, "/api/v1/terms/word/rust/rhythm?scope=tech")
+    [hour] = [row for row in rhythm["hours"] if row["mentions"]]
+    assert hour["relative"] == pytest.approx(1)
+    assert sum(day["mentions"] for day in rhythm["days"]) == 3
+    assert [point["term"] for point in get(web, "/api/v1/trends/ranks?scope=tech")] == ["rust"]
+    assert get(web, "/api/v1/spread/map") == []
+
+
+def test_a_story_s_page(stored, web):
+    start = HOUR - timedelta(hours=2)
+    onsets = [
+        ("r/technology", "", HOUR - timedelta(hours=1), 2, 4.0, 6.0),
+        ("r/programming", "", HOUR, 1, 3.0, 4.0),
+    ]
+    stored.insert(
+        "lead_lag_events",
+        [["word", "rust", start, HOUR, "tech", {}, {}, onsets, HOUR, False]],
+        column_names=[
+            "kind", "term", "start", "last_seen", "topic", "scopes", "first_scopes", "onsets",
+            "onsets_until", "closed",
+        ],
+    )  # fmt: skip
+    path = f"/api/v1/events/word/{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/rust"
+    story = get(web, path)
+    assert [onset["scope"] for onset in story["onsets"]] == ["r/technology", "r/programming"]
+    assert {point["scope"] for point in story["series"]} == {"r/technology", "r/programming"}
+    [event] = get(web, "/api/v1/terms/word/rust/events")
+    assert [onset["scope"] for onset in event["cascade"]] == ["r/technology", "r/programming"]
+    nodes = {node["scope"]: node["median_lag"] for node in get(web, "/api/v1/spread/map")}
+    assert nodes == {"r/technology": 0, "r/programming": 1}

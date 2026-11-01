@@ -17,6 +17,7 @@ import { Comments } from "@/components/Comments";
 import { DataTable } from "@/components/DataTable";
 import { EventLink, ScopeLink, StrengthWord } from "@/components/Entity";
 import { Explainer } from "@/components/Explainer";
+import { ChannelsPanel, RelatedPanel, RhythmPanel } from "@/components/TermSections";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, ScopePicker, Segmented } from "@/components/Pickers";
 import { Button } from "@/components/ui/button";
@@ -128,6 +129,18 @@ function TermPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Where kind={kind} term={term} />
         <Spread kind={kind} term={term} summary={summary.data} />
+      </div>
+
+      <ChannelsPanel
+        kind={kind}
+        term={term}
+        scope={scope}
+        range={search.range === "24h" || search.range === "2d" ? "7d" : search.range}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <RelatedPanel kind={kind} term={term} scope={scope} />
+        <RhythmPanel kind={kind} term={term} scope={scope} />
       </div>
 
       <LongTerm summary={summary.data} />

@@ -180,6 +180,139 @@ export const TermExplainResponse = zod
   .describe("What a trend's score is made of, recomputed with the detector's own code.");
 
 /**
+ * Terms mentioned with it in the last 48 hours, far more than without it.
+ * @summary Term Related
+ */
+export const TermRelatedParams = zod.object({
+  kind: zod.string(),
+  term: zod.string(),
+});
+
+export const termRelatedQueryScopeDefault = `reddit`;
+
+export const TermRelatedQueryParams = zod.object({
+  scope: zod
+    .string()
+    .default(termRelatedQueryScopeDefault)
+    .describe("a platform, group or channel"),
+  as_of: zod
+    .union([zod.iso.datetime({ offset: true }), zod.null()])
+    .optional()
+    .describe("show it as it was then, as far as the stored history goes"),
+});
+
+export const TermRelatedResponse = zod.object({
+  documents: zod.int().describe("comments and posts of the last 48 hours with the term"),
+  terms: zod.array(
+    zod.object({
+      kind: zod.string(),
+      term: zod.string(),
+      together: zod.int().describe("comments and posts with both, of `documents`"),
+      ratio: zod
+        .union([zod.number(), zod.null()])
+        .describe("how much more often it appears with the term than without"),
+      score: zod.union([zod.number(), zod.null()]),
+    }),
+  ),
+});
+
+/**
+ * The term in every channel of the scope, in the order they took it up.
+ * @summary Term Channels
+ */
+export const TermChannelsParams = zod.object({
+  kind: zod.string(),
+  term: zod.string(),
+});
+
+export const termChannelsQueryRangeOneRegExp = new RegExp("^(\\d+)([hdw])$");
+export const termChannelsQueryFromOneMin = 0;
+
+export const termChannelsQueryToOneMin = 0;
+
+export const termChannelsQueryScopeDefault = `reddit`;
+
+export const TermChannelsQueryParams = zod.object({
+  range: zod
+    .union([zod.string().regex(termChannelsQueryRangeOneRegExp), zod.null()])
+    .optional()
+    .describe("back from now: 6h, 7d, 26w"),
+  from: zod
+    .union([zod.int().min(termChannelsQueryFromOneMin), zod.null()])
+    .optional()
+    .describe("unix seconds"),
+  to: zod
+    .union([zod.int().min(termChannelsQueryToOneMin), zod.null()])
+    .optional()
+    .describe("unix seconds"),
+  scope: zod
+    .string()
+    .default(termChannelsQueryScopeDefault)
+    .describe("a platform or group: its channels"),
+  as_of: zod
+    .union([zod.iso.datetime({ offset: true }), zod.null()])
+    .optional()
+    .describe("show it as it was then, as far as the stored history goes"),
+});
+
+export const TermChannelsResponse = zod.object({
+  bucket: zod.enum(["hour", "day", "week"]),
+  channels: zod.array(
+    zod.object({
+      channel: zod.string(),
+      onset: zod
+        .union([zod.iso.datetime({ offset: true }), zod.null()])
+        .describe("when its share first reached half its peak"),
+      mentions: zod.int(),
+      points: zod
+        .array(
+          zod.tuple([zod.iso.datetime({ offset: true }), zod.union([zod.number(), zod.null()])]),
+        )
+        .describe("share per 1,000 per bucket"),
+    }),
+  ),
+});
+
+/**
+ * When it's talked about: hour of week, and a year of days.
+ * @summary Term Rhythm
+ */
+export const TermRhythmParams = zod.object({
+  kind: zod.string(),
+  term: zod.string(),
+});
+
+export const termRhythmQueryScopeDefault = `reddit`;
+
+export const TermRhythmQueryParams = zod.object({
+  scope: zod.string().default(termRhythmQueryScopeDefault).describe("a platform, group or channel"),
+  as_of: zod
+    .union([zod.iso.datetime({ offset: true }), zod.null()])
+    .optional()
+    .describe("show it as it was then, as far as the stored history goes"),
+});
+
+export const TermRhythmResponse = zod.object({
+  hours: zod.array(
+    zod.object({
+      weekday: zod.int().describe("1 is Monday"),
+      hour: zod.int().describe("UTC"),
+      mentions: zod.int(),
+      relative: zod
+        .union([zod.number(), zod.null()])
+        .describe("its share at that hour, divided by its overall share"),
+    }),
+  ),
+  days: zod.array(
+    zod.object({
+      day: zod.iso.date(),
+      mentions: zod.int(),
+      per_1000: zod.union([zod.number(), zod.null()]),
+    }),
+  ),
+});
+
+/**
  * The stories it was part of, as cascades.
  * @summary Term Events
  */
@@ -597,3 +730,57 @@ export const SearchResponseItem = zod.object({
   last_seen: zod.union([zod.iso.datetime({ offset: true }), zod.null()]),
 });
 export const SearchResponse = zod.array(SearchResponseItem);
+
+/**
+ * A scope's top terms over the last 7 days, an hour at a time: a bump chart.
+ * @summary Trend Ranks
+ */
+export const trendRanksQueryScopeDefault = `reddit`;
+export const trendRanksQueryHorizonDefault = `24h`;
+export const trendRanksQueryHorizonRegExp = new RegExp("^(24h|6h)$");
+export const trendRanksQueryTopDefault = 10;
+export const trendRanksQueryTopMin = 3;
+export const trendRanksQueryTopMax = 20;
+
+export const TrendRanksQueryParams = zod.object({
+  scope: zod.string().default(trendRanksQueryScopeDefault),
+  horizon: zod.string().regex(trendRanksQueryHorizonRegExp).default(trendRanksQueryHorizonDefault),
+  top: zod
+    .int()
+    .min(trendRanksQueryTopMin)
+    .max(trendRanksQueryTopMax)
+    .default(trendRanksQueryTopDefault),
+  as_of: zod
+    .union([zod.iso.datetime({ offset: true }), zod.null()])
+    .optional()
+    .describe("show it as it was then, as far as the stored history goes"),
+});
+
+export const TrendRanksResponseItem = zod.object({
+  time: zod.iso.datetime({ offset: true }),
+  kind: zod.string(),
+  term: zod.string(),
+  rank: zod.int(),
+});
+export const TrendRanksResponse = zod.array(TrendRanksResponseItem);
+
+/**
+ * Where each scope usually is in a story: its median lag behind the first mover.
+ * @summary Spread Map
+ */
+export const SpreadMapQueryParams = zod.object({
+  as_of: zod
+    .union([zod.iso.datetime({ offset: true }), zod.null()])
+    .optional()
+    .describe("show it as it was then, as far as the stored history goes"),
+});
+
+export const SpreadMapResponseItem = zod.object({
+  scope: zod.string(),
+  median_lag: zod
+    .union([zod.number(), zod.null()])
+    .describe("hours from a story's first onset to its own"),
+  events: zod.int(),
+  first_mover: zod.int().describe("stories it was first in"),
+});
+export const SpreadMapResponse = zod.array(SpreadMapResponseItem);

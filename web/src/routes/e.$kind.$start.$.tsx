@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { useMemo } from "react";
 import { useEventDetail } from "@/api/generated/endpoints";
 import type { EventDetail } from "@/api/generated/model";
@@ -9,11 +10,16 @@ import { PageHeader } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
 import { ScopeLink, StatusBadge, TermLink } from "@/components/Entity";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
+import { Replay } from "@/components/Spread";
+import { useSetSearch } from "@/lib/navigation";
 import { duration, formatDate, formatDateTime, percent, perThousand, times } from "@/lib/format";
 import { pathPart } from "@/lib/links";
 import { seriesColor } from "@/lib/colors";
 
-export const Route = createFileRoute("/e/$kind/$start/$")({ component: EventPage });
+export const Route = createFileRoute("/e/$kind/$start/$")({
+  validateSearch: z.object({ at: z.string().optional().catch(undefined) }),
+  component: EventPage,
+});
 
 /** A story (WEB-DASHBOARD.md §6.3): its cascade in order, every scope's share over its span
  * as small multiples on one scale, the forecasts made during it. */
@@ -35,6 +41,8 @@ function EventPage() {
 }
 
 function Story({ data }: { data: EventDetail }) {
+  const search = Route.useSearch();
+  const set = useSetSearch();
   const tokens = useChartTokens();
   const reducedMotion = useReducedMotion();
   const first = data.onsets[0] ? Date.parse(data.onsets[0].at) : Date.parse(data.start);
@@ -77,6 +85,12 @@ function Story({ data }: { data: EventDetail }) {
           ? ` · Wikipedia views rose from ${formatDate(data.wikipedia_onset)}`
           : ""}
       </p>
+      <Panel
+        title="Replay"
+        subtitle="Hour by hour: each place sized by its share of the term, ringed once it crossed its onset; the learned edges light up when both ends have"
+      >
+        <Replay data={data} at={search.at} onAt={(at) => set({ at })} />
+      </Panel>
       <Panel title="The cascade" flush subtitle="Each place's onset, with the time since the first">
         <DataTable
           label="Onsets"

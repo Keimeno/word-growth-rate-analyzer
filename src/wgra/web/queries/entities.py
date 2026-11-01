@@ -465,16 +465,21 @@ def event_detail(db: Db, kind: str, term: str, start: datetime) -> EventDetail:
     if not found:
         raise NotFound(f"no event of {term} starting {start:%Y-%m-%d %H:%M}")
     event = found[0]
+    # named tuples arrive as dicts
     onsets = sorted(
         (
             FullOnset(
-                scope=onset[0], without=onset[1], at=onset[2], mentions=onset[3],
-                ratio=onset[4], score=onset[5],
+                scope=onset["scope"],
+                without=onset["without"],
+                at=onset["at"],
+                mentions=onset["mentions"],
+                ratio=onset["ratio"],
+                score=onset["z"],
             )
             for onset in event["onsets"]
         ),
         key=lambda onset: onset.at,
-    )  # fmt: skip
+    )
     forecasts = db.rows(
         f"""
         SELECT leader, follower, created_at, probability, outcome, expected_at, follower_onset

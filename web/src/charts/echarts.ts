@@ -1,8 +1,16 @@
 /** ECharts with only what the kit uses, so the bundle carries nothing else. */
-import { BarChart, GraphChart, HeatmapChart, LineChart, ScatterChart } from "echarts/charts";
+import {
+  BarChart,
+  GraphChart,
+  HeatmapChart,
+  LineChart,
+  SankeyChart,
+  ScatterChart,
+} from "echarts/charts";
 import {
   AriaComponent,
   BrushComponent,
+  CalendarComponent,
   DataZoomComponent,
   GridComponent,
   LegendComponent,
@@ -21,6 +29,7 @@ echarts.use([
   HeatmapChart,
   GraphChart,
   ScatterChart,
+  SankeyChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -29,6 +38,7 @@ echarts.use([
   MarkPointComponent,
   DataZoomComponent,
   BrushComponent,
+  CalendarComponent,
   VisualMapComponent,
   AriaComponent,
   CanvasRenderer,

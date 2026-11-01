@@ -728,3 +728,63 @@ class SearchHit(Model):
     term: str
     mentions: int
     last_seen: Time | None
+
+
+# --- beyond Grafana -----------------------------------------------------------------------
+
+
+class RelatedTerm(Model):
+    kind: str
+    term: str
+    together: int = Field(description="comments and posts with both, of `documents`")
+    ratio: Num = Field(description="how much more often it appears with the term than without")
+    score: Num
+
+
+class Related(Model):
+    documents: int = Field(description="comments and posts of the last 48 hours with the term")
+    terms: list[RelatedTerm]
+
+
+class ChannelSeries(Model):
+    channel: str
+    onset: Time | None = Field(description="when its share first reached half its peak")
+    mentions: int
+    points: list[tuple[Time, Num]] = Field(description="share per 1,000 per bucket")
+
+
+class SmallMultiples(Model):
+    bucket: Bucket
+    channels: list[ChannelSeries]
+
+
+class HourOfWeek(Model):
+    weekday: int = Field(description="1 is Monday")
+    hour: int = Field(description="UTC")
+    mentions: int
+    relative: Num = Field(description="its share at that hour, divided by its overall share")
+
+
+class CalendarDay(Model):
+    day: date
+    mentions: int
+    per_1000: Num
+
+
+class Rhythm(Model):
+    hours: list[HourOfWeek]
+    days: list[CalendarDay]
+
+
+class RankPoint(Model):
+    time: Time
+    kind: str
+    term: str
+    rank: int
+
+
+class MapNode(Model):
+    scope: str
+    median_lag: Num = Field(description="hours from a story's first onset to its own")
+    events: int
+    first_mover: int = Field(description="stories it was first in")

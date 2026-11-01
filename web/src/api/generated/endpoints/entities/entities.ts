@@ -26,19 +26,29 @@ import type {
   EventDetail,
   EventDetailParams,
   Explanation,
+  MapNode,
   ProductDetail,
   ProductDetailParams,
+  RankPoint,
+  Related,
+  Rhythm,
   ScopeDetail,
   ScopeDetailParams,
   SearchHit,
   SearchParams,
   SentAlert,
+  SmallMultiples,
+  SpreadMapParams,
   TermAnnotationsParams,
+  TermChannelsParams,
   TermEvent,
   TermEventsParams,
   TermExplainParams,
+  TermRelatedParams,
+  TermRhythmParams,
   TermSummary,
   TermSummaryParams,
+  TrendRanksParams,
 } from "../../model";
 
 import { apiFetch } from "../../../fetcher";
@@ -359,6 +369,457 @@ export function useTermExplain<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getTermExplainQueryOptions(kind, term, params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getTermRelatedUrl = (kind: string, term: string, params?: TermRelatedParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/terms/${kind}/${term}/related?${stringifiedParams}`
+    : `/api/v1/terms/${kind}/${term}/related`;
+};
+
+/**
+ * Terms mentioned with it in the last 48 hours, far more than without it.
+ * @summary Term Related
+ */
+export const termRelated = async (
+  kind: string,
+  term: string,
+  params?: TermRelatedParams,
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<Related> => {
+  return apiFetch<Related>(getTermRelatedUrl(kind, term, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTermRelatedQueryKey = (kind: string, term: string, params?: TermRelatedParams) => {
+  return [`/api/v1/terms/${kind}/${term}/related`, ...(params ? [params] : [])] as const;
+};
+
+export const getTermRelatedQueryOptions = <
+  TData = Awaited<ReturnType<typeof termRelated>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRelatedParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRelated>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTermRelatedQueryKey(kind, term, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof termRelated>>> = ({ signal }) =>
+    termRelated(kind, term, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: kind !== null && kind !== undefined && term !== null && term !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof termRelated>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type TermRelatedQueryResult = NonNullable<Awaited<ReturnType<typeof termRelated>>>;
+export type TermRelatedQueryError = ErrorType<Error>;
+
+export function useTermRelated<
+  TData = Awaited<ReturnType<typeof termRelated>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params: undefined | TermRelatedParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRelated>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof termRelated>>,
+          TError,
+          Awaited<ReturnType<typeof termRelated>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTermRelated<
+  TData = Awaited<ReturnType<typeof termRelated>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRelatedParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRelated>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof termRelated>>,
+          TError,
+          Awaited<ReturnType<typeof termRelated>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTermRelated<
+  TData = Awaited<ReturnType<typeof termRelated>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRelatedParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRelated>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Term Related
+ */
+
+export function useTermRelated<
+  TData = Awaited<ReturnType<typeof termRelated>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRelatedParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRelated>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getTermRelatedQueryOptions(kind, term, params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getTermChannelsUrl = (kind: string, term: string, params?: TermChannelsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/terms/${kind}/${term}/channels?${stringifiedParams}`
+    : `/api/v1/terms/${kind}/${term}/channels`;
+};
+
+/**
+ * The term in every channel of the scope, in the order they took it up.
+ * @summary Term Channels
+ */
+export const termChannels = async (
+  kind: string,
+  term: string,
+  params?: TermChannelsParams,
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<SmallMultiples> => {
+  return apiFetch<SmallMultiples>(getTermChannelsUrl(kind, term, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTermChannelsQueryKey = (
+  kind: string,
+  term: string,
+  params?: TermChannelsParams,
+) => {
+  return [`/api/v1/terms/${kind}/${term}/channels`, ...(params ? [params] : [])] as const;
+};
+
+export const getTermChannelsQueryOptions = <
+  TData = Awaited<ReturnType<typeof termChannels>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermChannelsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termChannels>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTermChannelsQueryKey(kind, term, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof termChannels>>> = ({ signal }) =>
+    termChannels(kind, term, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: kind !== null && kind !== undefined && term !== null && term !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof termChannels>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type TermChannelsQueryResult = NonNullable<Awaited<ReturnType<typeof termChannels>>>;
+export type TermChannelsQueryError = ErrorType<Error>;
+
+export function useTermChannels<
+  TData = Awaited<ReturnType<typeof termChannels>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params: undefined | TermChannelsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof termChannels>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof termChannels>>,
+          TError,
+          Awaited<ReturnType<typeof termChannels>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTermChannels<
+  TData = Awaited<ReturnType<typeof termChannels>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermChannelsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termChannels>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof termChannels>>,
+          TError,
+          Awaited<ReturnType<typeof termChannels>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTermChannels<
+  TData = Awaited<ReturnType<typeof termChannels>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermChannelsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termChannels>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Term Channels
+ */
+
+export function useTermChannels<
+  TData = Awaited<ReturnType<typeof termChannels>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermChannelsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termChannels>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getTermChannelsQueryOptions(kind, term, params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getTermRhythmUrl = (kind: string, term: string, params?: TermRhythmParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/terms/${kind}/${term}/rhythm?${stringifiedParams}`
+    : `/api/v1/terms/${kind}/${term}/rhythm`;
+};
+
+/**
+ * When it's talked about: hour of week, and a year of days.
+ * @summary Term Rhythm
+ */
+export const termRhythm = async (
+  kind: string,
+  term: string,
+  params?: TermRhythmParams,
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<Rhythm> => {
+  return apiFetch<Rhythm>(getTermRhythmUrl(kind, term, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTermRhythmQueryKey = (kind: string, term: string, params?: TermRhythmParams) => {
+  return [`/api/v1/terms/${kind}/${term}/rhythm`, ...(params ? [params] : [])] as const;
+};
+
+export const getTermRhythmQueryOptions = <
+  TData = Awaited<ReturnType<typeof termRhythm>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRhythmParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRhythm>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTermRhythmQueryKey(kind, term, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof termRhythm>>> = ({ signal }) =>
+    termRhythm(kind, term, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: kind !== null && kind !== undefined && term !== null && term !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof termRhythm>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type TermRhythmQueryResult = NonNullable<Awaited<ReturnType<typeof termRhythm>>>;
+export type TermRhythmQueryError = ErrorType<Error>;
+
+export function useTermRhythm<
+  TData = Awaited<ReturnType<typeof termRhythm>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params: undefined | TermRhythmParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRhythm>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof termRhythm>>,
+          TError,
+          Awaited<ReturnType<typeof termRhythm>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTermRhythm<
+  TData = Awaited<ReturnType<typeof termRhythm>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRhythmParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRhythm>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof termRhythm>>,
+          TError,
+          Awaited<ReturnType<typeof termRhythm>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTermRhythm<
+  TData = Awaited<ReturnType<typeof termRhythm>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRhythmParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRhythm>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Term Rhythm
+ */
+
+export function useTermRhythm<
+  TData = Awaited<ReturnType<typeof termRhythm>>,
+  TError = ErrorType<Error>,
+>(
+  kind: string,
+  term: string,
+  params?: TermRhythmParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof termRhythm>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getTermRhythmQueryOptions(kind, term, params, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;
@@ -1486,6 +1947,274 @@ export function useSearch<TData = Awaited<ReturnType<typeof search>>, TError = E
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getSearchQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getTrendRanksUrl = (params?: TrendRanksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/trends/ranks?${stringifiedParams}`
+    : `/api/v1/trends/ranks`;
+};
+
+/**
+ * A scope's top terms over the last 7 days, an hour at a time: a bump chart.
+ * @summary Trend Ranks
+ */
+export const trendRanks = async (
+  params?: TrendRanksParams,
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<RankPoint[]> => {
+  return apiFetch<RankPoint[]>(getTrendRanksUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTrendRanksQueryKey = (params?: TrendRanksParams) => {
+  return [`/api/v1/trends/ranks`, ...(params ? [params] : [])] as const;
+};
+
+export const getTrendRanksQueryOptions = <
+  TData = Awaited<ReturnType<typeof trendRanks>>,
+  TError = ErrorType<Error>,
+>(
+  params?: TrendRanksParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof trendRanks>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTrendRanksQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof trendRanks>>> = ({ signal }) =>
+    trendRanks(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof trendRanks>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type TrendRanksQueryResult = NonNullable<Awaited<ReturnType<typeof trendRanks>>>;
+export type TrendRanksQueryError = ErrorType<Error>;
+
+export function useTrendRanks<
+  TData = Awaited<ReturnType<typeof trendRanks>>,
+  TError = ErrorType<Error>,
+>(
+  params: undefined | TrendRanksParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof trendRanks>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof trendRanks>>,
+          TError,
+          Awaited<ReturnType<typeof trendRanks>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTrendRanks<
+  TData = Awaited<ReturnType<typeof trendRanks>>,
+  TError = ErrorType<Error>,
+>(
+  params?: TrendRanksParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof trendRanks>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof trendRanks>>,
+          TError,
+          Awaited<ReturnType<typeof trendRanks>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useTrendRanks<
+  TData = Awaited<ReturnType<typeof trendRanks>>,
+  TError = ErrorType<Error>,
+>(
+  params?: TrendRanksParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof trendRanks>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Trend Ranks
+ */
+
+export function useTrendRanks<
+  TData = Awaited<ReturnType<typeof trendRanks>>,
+  TError = ErrorType<Error>,
+>(
+  params?: TrendRanksParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof trendRanks>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getTrendRanksQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getSpreadMapUrl = (params?: SpreadMapParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/spread/map?${stringifiedParams}`
+    : `/api/v1/spread/map`;
+};
+
+/**
+ * Where each scope usually is in a story: its median lag behind the first mover.
+ * @summary Spread Map
+ */
+export const spreadMap = async (
+  params?: SpreadMapParams,
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<MapNode[]> => {
+  return apiFetch<MapNode[]>(getSpreadMapUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSpreadMapQueryKey = (params?: SpreadMapParams) => {
+  return [`/api/v1/spread/map`, ...(params ? [params] : [])] as const;
+};
+
+export const getSpreadMapQueryOptions = <
+  TData = Awaited<ReturnType<typeof spreadMap>>,
+  TError = ErrorType<Error>,
+>(
+  params?: SpreadMapParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof spreadMap>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSpreadMapQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof spreadMap>>> = ({ signal }) =>
+    spreadMap(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof spreadMap>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type SpreadMapQueryResult = NonNullable<Awaited<ReturnType<typeof spreadMap>>>;
+export type SpreadMapQueryError = ErrorType<Error>;
+
+export function useSpreadMap<
+  TData = Awaited<ReturnType<typeof spreadMap>>,
+  TError = ErrorType<Error>,
+>(
+  params: undefined | SpreadMapParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof spreadMap>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof spreadMap>>,
+          TError,
+          Awaited<ReturnType<typeof spreadMap>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useSpreadMap<
+  TData = Awaited<ReturnType<typeof spreadMap>>,
+  TError = ErrorType<Error>,
+>(
+  params?: SpreadMapParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof spreadMap>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof spreadMap>>,
+          TError,
+          Awaited<ReturnType<typeof spreadMap>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useSpreadMap<
+  TData = Awaited<ReturnType<typeof spreadMap>>,
+  TError = ErrorType<Error>,
+>(
+  params?: SpreadMapParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof spreadMap>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Spread Map
+ */
+
+export function useSpreadMap<
+  TData = Awaited<ReturnType<typeof spreadMap>>,
+  TError = ErrorType<Error>,
+>(
+  params?: SpreadMapParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof spreadMap>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getSpreadMapQueryOptions(params, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;
