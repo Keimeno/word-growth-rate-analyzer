@@ -6,51 +6,274 @@
 # Undercurrent
 
 **Early signals in online conversation.** What's rising, where it starts, where it spreads
-next, and why people switch products. The look and the voice are in
-[docs/BRAND.md](docs/BRAND.md).
+next, and why people switch products.
 
 Formerly Word Growth Rate Analyzer (WGRA). The repository keeps its name.
 
-It finds the words and phrases that gain or lose share of the conversation in subreddits
-and groups of subreddits, over hours (short term) and months (long term); where a rising
-term starts and which communities pick it up next; and why people mention products:
-switching, looking for alternatives, complaining. The design and the roadmap are in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Know on Monday what the rest of the internet reads about on Thursday. Stories start small:
+a Show HN, a subreddit of a few thousand people, a thread of complaints nobody outside it
+reads. Undercurrent follows the places where things start, notices the hour a word, a
+product or a complaint breaks from its usual share, and learns which communities pick
+things up before others. Then it tells you what will spread, where, roughly when, and how
+sure it is. It reads why, too: who switches from what to what, what they complain about,
+and what they wish existed.
+
+It runs on a laptop, on free and open source software, with no paid APIs and no language
+model. Reddit is the first source; Hacker News, GitHub, Bluesky and app reviews come next,
+on the same core.
+
+[A week with Undercurrent](#a-week-with-undercurrent) ·
+[Try it on the demo database](#try-it-on-the-demo-database) · [Run it](#run-it) ·
+[How it works](#how-it-works) · [Sources](#sources-reddit-today-the-rest-next) ·
+[Architecture](docs/ARCHITECTURE.md)
+
+## A week with Undercurrent
+
+*An illustration: Driftwood, the dates and every number below are made up. Each block is
+what Undercurrent prints today, run through its own formatters. The last part needs the
+sources that are [planned](#sources-reddit-today-the-rest-next).*
+
+Driftwood, an open source notes app that syncs without a server, is posted to Hacker News
+on Monday morning. Nobody you follow has mentioned it.
+
+**Monday 18:15 UTC, your phone.**
+
+> **driftwood · r/selfhosted**
+>
+> New: 87 comments and posts by 61 people in the last 24h, barely mentioned in the 28 days
+> before.
+>
+> Score 11.4 · `Open` · `Trending now` · `Pro mode`
+
+**The same minute, where it goes next.** From the last 180 days, Undercurrent has learned
+that terms rising in r/selfhosted usually reach r/homelab within a day, and sometimes the
+note-taking communities and the rest of reddit after that. It forecasts each, with an 80%
+interval, against a base rate of 9% (r/homelab), 7% (pkm) and 6% (all of reddit) for any
+trending term:
+
+```text
+$ uv run undercurrent forecasts --pending
+forecasts of the last 7 days: 3 pending, 38 resolved, 26 came true (68%)
+
+    created       term        leader   follower         chance     expected          due  outcome  alert
+-----------  ---------  ------------  ---------  -------------  -----------  -----------  -------  -----
+03-08 18:15  driftwood  r/selfhosted  r/homelab  70% (56%–80%)  03-09 13:00  03-15 18:00  pending    off
+03-08 18:15  driftwood  r/selfhosted        pkm  44% (30%–59%)  03-09 22:00  03-15 18:00  pending    off
+03-08 18:15  driftwood  r/selfhosted      r/all  31% (18%–46%)  03-10 17:00  03-15 18:00  pending    off
+```
+
+**Tuesday 11:00**, r/homelab picks it up, two hours before the expected time. **Tuesday
+22:00**, the note-taking group, on the hour. **Wednesday 20:00**, all of reddit, 50 hours
+after your phone buzzed. All three come true this time. Not all do, and the first line
+keeps the record.
+
+**Meanwhile, why.** In the note-taking communities people aren't only talking about
+Driftwood, they're moving to it, and the switches say from what:
+
+```text
+$ uv run undercurrent intents --scope pkm --kind switch --days 2
+Switches in pkm, 2027-03-09 to 2027-03-10 vs the 2 days before: 31 flows, 118 mentions in 61,240 comments and posts
+
+           from → to  mentions  authors  per 10k  before  change  trending  last 48h
+--------------------  --------  -------  -------  ------  ------  --------  --------
+  notion → driftwood        41       39     6.69       0             z 9.8        41
+obsidian → driftwood        23       22     3.76       0             z 7.1        23
+   notion → obsidian        14       14     2.29      12    1.2x                  14
+evernote → driftwood         9        9     1.47       0             z 4.2         9
+   evernote → notion         5        5     0.82       4    1.3x                   5
+```
+
+And the reason is trending too: `need: sync without a server`, asked for by 19 people in two
+days against 3 in the two days before.
+
+Nobody told Undercurrent to look for Driftwood. Every 15 minutes it scores every word and
+phrase in every community it follows against that community's own past; this one broke
+out, and the rest followed from what it had learned by itself. By Wednesday evening, when
+Driftwood reached the rest of reddit, you'd had two days' notice, the odds that it would
+get there and when, the three apps it was taking users from, and what those users had been
+asking for.
+
+**With Hacker News, GitHub and Bluesky connected**, the same story starts nine hours
+earlier, and the spread map tells it as a path, the hours counted from the first platform
+that took it up:
+
+```text
+driftwood: hn 0 h → gh/stars 4 h → r/selfhosted 9 h → r/homelab 26 h → pkm 37 h → r/all 59 h → bsky 66 h
+```
+
+Hacker News becomes a leader with a record of its own, so the first forecast goes out on
+Monday morning, before any subreddit has moved.
+
+## What you get
+
+* **What's rising, with the evidence.** Every 15 minutes, every word, phrase, linked site
+  and intent in every community is compared with its own past. A trend comes with how many
+  times its usual share, how many comments, how many people, in how many channels, and how
+  strong the evidence is, in words ("very strong", the statistic on hover).
+  [Trends and alerts](#trends-and-alerts)
+* **Where it goes next.** Undercurrent learns which communities pick up terms before which
+  others, and how long they take, then forecasts which of today's bursts will spread, where
+  and when, with an interval and the base rate beside it. Every forecast is graded when it
+  resolves. [Early warning](#early-warning)
+* **Why people mention things.** Switches (`notion → obsidian`), switches considered,
+  alternatives sought, complaints, and needs ("is there an app that …"), counted like
+  words, so they trend, emerge and spread like words. [Intents](#intents)
+* **What's changing slowly.** Terms emerging, going mainstream or fading over 13, 26 and 52
+  weeks, with growth per month and a test for a steady trend, so a one-week spike doesn't
+  pass for a movement. [Long-term trends](#long-term-trends)
+* **Who's leaving which product, for what.** The churn radar: per product and its
+  competitors, the flows in and out and the reasons. [Churn radar](#churn-radar)
+* **On your phone and in a dashboard.** Alerts, a daily digest and a weekly report through
+  ntfy. A web dashboard where every term, community, story, leader → follower pair and
+  product has a page of its own, one click from the comments behind it, with Grafana as the
+  pro mode. [Run it](#run-it)
+
+## Why the numbers hold up
+
+* **It says how sure it is.** A trend needs enough mentions, enough different people and
+  twice its usual share, and its score weighs the evidence. Forecasts carry an interval and
+  the base rate they beat. Counts below 10 stay counts ("9 of 14").
+* **It checks itself.** `undercurrent replay` reruns the detector and the forecasts over
+  stored history, using only what was known at the time, and reports precision, recall,
+  warning time and calibration: do 60% forecasts come true 60% of the time. The planned
+  [forecast ledger](docs/FORECAST-LEDGER.md) publishes every forecast the moment it's made,
+  timestamped through OpenTimestamps, so none can be backdated or quietly dropped.
+* **One loud account can't make a trend.** A comment counts once per term however often it
+  repeats it, and the people behind a term are counted beside its mentions.
+* **Small communities count.** Every channel is compared with its own past, and a group's
+  long-term share is the average of its channels', so a big subreddit doesn't drown out the
+  small ones.
+* **It says where it falls short.** Intents put precision before recall, and their measured
+  precision is published below, including where it misses the target.
+* **It keeps little.** Authors are stored only as a keyed hash, raw text is deleted after
+  48 hours, and what's kept are counts.
+
+## Sources: Reddit today, the rest next
+
+Things rarely start where they end up. A model is on Hacker News and GitHub before
+r/LocalLLaMA, on r/LocalLLaMA before r/technology, and on Bluesky and Wikipedia after that.
+Undercurrent's core is built for it: storage, detection, dashboards and alerts count
+**channels**, not subreddits, and every score compares a channel with its own past, so one
+with 12,000 items a day and one with millions are scored the same way. A new platform is a
+module in `src/undercurrent/sources/` (an `Item`, a `Sink`, a `Source`), like
+`sources/reddit/`, and everything after it works unchanged.
+
+| Platform | Channels | What it adds | Status |
+| --- | --- | --- | --- |
+| Reddit | `r/<name>` per tracked subreddit, `r/all` for a sample of the rest | Communities by topic, product subreddits, the reaction to everything | Running |
+| Hacker News | `hn` | Where developer tools, models and launches often surface first; 120 days of history on the first day | Planned, phase 2 |
+| GitHub | `gh/stars` | Every star of the watched repos, and young repos gaining them | Planned, phase 2 |
+| Wikipedia | `wiki` | Daily pageviews: when mainstream interest arrives. Follows, never leads | A check today (`undercurrent wikipedia`), a follower in phase 2 |
+| Bluesky | `bsky`, `bsky/de` | A sample of every post, by language | Planned, phase 4 |
+| App Store | `ios/<app>` | Reviews of the apps on the churn radar's watchlists | Planned, phase 5 |
+
+More than one platform makes three things possible:
+
+* **The spread map.** For every story, the path it took across platforms and the hours
+  between the steps. Per topic, which platform usually moves first, the common paths, and
+  the lag between each pair.
+* **Earlier warning.** A term rising on Hacker News or among GitHub stars becomes a
+  forecast for Reddit and the mainstream before any subreddit has moved. Both come with
+  months of history, so their edges can be learned in the first week.
+* **Fair comparisons.** A big platform crosses sooner just for being big. Before the map
+  says one platform leads another, the bigger one's counts are thinned to the smaller one's
+  volume and the lead is tested again; a lead that disappears is left off.
+
+Every new source is free: the HN API and Algolia, Bluesky's Jetstream, a GitHub token,
+Apple's RSS feed, Wikimedia. The plan, the costs, and each platform's terms for personal and
+commercial use are in [docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md).
+
+## Where it stands
+
+| Part | State |
+| --- | --- |
+| Collection from Reddit, short-term trends and alerts | Collecting locally since 2026-11-01 15:07 UTC, on a fresh database. Alerts after 3 days of history, the full 28-day reference after 4 weeks |
+| [Intents](#intents) | Collecting since 2026-11-01. 50–79% precise per kind on 40 hours of October data against a target of 80%; stricter rules added since, not yet measured |
+| [Early warning](#early-warning) | Built. The first edges between about 2026-11-29 and 2026-12-13 |
+| [Long-term trends](#long-term-trends) | Built. 13-week results from Monday 2027-02-01, 26-week ones from 2027-05-03 |
+| Web dashboard | Built 2026-11-01 ([docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)) |
+| [Churn radar](#churn-radar) | Phases 1 and 2 collecting, the weekly report planned ([docs/CHURN-RADAR.md](docs/CHURN-RADAR.md)) |
+| [More sources](#sources-reddit-today-the-rest-next) | Phase 1, the source-agnostic core, built; Hacker News, GitHub, the spread map, Bluesky and app reviews planned |
+| Public forecast ledger | Planned ([docs/FORECAST-LEDGER.md](docs/FORECAST-LEDGER.md)) |
+
+Long-term trends and the early warning learn from history, so collecting should start as
+early as possible. Until there's enough of it, the
+[demo database](#try-it-on-the-demo-database) shows every page with planted stories.
+
+## How it works
 
 ![Undercurrent architecture](docs/architecture.png)
 
 The diagram is generated from [docs/architecture.html](docs/architecture.html), the command
 to render it is at the top of that file.
 
+1. **Collect.** The ingester polls each platform within its free API budget: the tracked
+   subreddits completely, each as often as its volume needs, and a sample of r/all as the
+   usual vocabulary. Every comment and post becomes terms (words, 2–3 word phrases, linked
+   domains, mentioned subreddits) and intents, counted per hour, channel and term in
+   ClickHouse.
+2. **Detect.** Every 15 minutes the analyzer compares every term's share in every channel
+   and group with its own past and scores the evidence. Once a day it looks for long-term
+   trends over 13, 26 and 52 weeks.
+3. **Learn and forecast.** Every term that trends becomes an event, with the hour each
+   channel and group took it up. From 180 days of events the analyzer learns which channels
+   lead which, and after every run it forecasts where today's trends go next.
+4. **Tell you.** Alerts, digests and weekly reports go to your phone through ntfy. The web
+   dashboard and Grafana show everything, every number one click from the comments behind
+   it.
+
 This is version 2, in Python and ClickHouse. Version 1 (TypeScript, MongoDB and Redis) was
-replaced on 2026-10-31 and is in the git history up to commit `eef466c`.
-
-Reddit is the only source so far. Storage, analysis and dashboards count channels
-(`r/technology`, the r/all sample `r/all`) and don't know Reddit, so more platforms can
-follow: Hacker News, GitHub, Bluesky and app reviews are planned in
-[docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md).
-
-Phases 1, 2 and 4, the lead–lag early warning and intents are built. The ingester collects comments
-and posts from the subreddits in [config.yaml](config.yaml) into ClickHouse. Every 15
-minutes the analyzer scores what is mentioned far more than usual, per subreddit and per
-group, stores it for Grafana and sends the strongest trends and a daily digest to your
-phone through ntfy. Once a day it also looks for long-term trends, terms that grow or fade
-steadily over 13, 26 and 52 weeks, and sends a weekly report. Those need at least 13
-complete weeks of history, so collecting should start as early as possible. And it learns
-which subreddits pick up terms before others, to forecast which of today's bursts will
-reach other subreddits, groups or all of reddit ([Early warning](#early-warning)), which
-needs 4–6 weeks of history.
-
-Beyond what is mentioned, it counts why ([Intents](#intents)): people switching from one
-product to another or thinking about it, looking for alternatives, complaining, and asking
-for tools that don't exist. They can only be extracted while the raw text is kept (48 hours), so they're counted
-from the moment the ingester extracts them.
+replaced on 2026-10-31 and is in the git history up to commit `eef466c`. The design, the
+statistics and the roadmap are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the look and
+the voice in [docs/BRAND.md](docs/BRAND.md).
 
 ## Cost
 
 Everything runs on free, open source software: ClickHouse, Grafana OSS, ntfy, Python.
 Reddit's API is used within its free tier (100 requests per minute, non-commercial use).
 No paid APIs. The only cost is the machine it runs on, locally that's your own computer.
+
+## Try it on the demo database
+
+Live history takes weeks to build; the small demo database takes about a minute and a half,
+and no Reddit account. `bench/demo.py` writes a deterministic history with planted stories
+into a ClickHouse of its own, then runs the real detectors, the lead–lag layer and the alert
+rules over it (nothing is sent). With `--small`, the tech and note-taking groups: a new
+model name spreading from r/LocalLLaMA to r/singularity, a coordinated launch, a Notion
+outage with the complaints, alternatives and switches that follow, an Evernote price hike,
+terms emerging and fading over months, and a gap in collection.
+
+Requires Docker, [uv](https://docs.astral.sh/uv/), Node 26 and pnpm 12. Start a ClickHouse
+for it, never the live one:
+
+```bash
+docker run -d --name undercurrent-dev-bench-clickhouse --cpus 4 --memory 8g \
+    -p 127.0.0.1:3617:8123 -e CLICKHOUSE_USER=undercurrent -e CLICKHOUSE_PASSWORD=bench \
+    -v "$PWD/clickhouse/undercurrent.xml:/etc/clickhouse-server/config.d/undercurrent.xml:ro" \
+    clickhouse/clickhouse-server:26.8
+```
+
+```bash
+export CLICKHOUSE_PORT=3617 CLICKHOUSE_USER=undercurrent CLICKHOUSE_PASSWORD=bench
+```
+
+```bash
+uv run python bench/demo.py seed --database undercurrent_demo --small
+```
+
+Build the page once, then serve it with the clock stopped where the history ends, Sunday
+2026-11-01 12:00 UTC:
+
+```bash
+cd web && pnpm install && pnpm build && cd ..
+```
+
+```bash
+UNDERCURRENT_NOW=2026-11-01T12:00:00Z CLICKHOUSE_DB=undercurrent_demo uv run undercurrent web
+```
+
+Open <http://localhost:3610>. Without `--small`, every group of [config.yaml](config.yaml)
+and four months of hourly history, which takes several minutes more.
 
 ## Run it
 
@@ -172,7 +395,8 @@ What reaches your phone:
   strongest.
 * **A daily digest per group** at 08:00 (Europe/Berlin, set in `notify:`): the 10
   strongest trends of the last 24 hours in the group and its channels.
-* Tapping either opens Grafana.
+* Tapping either opens the web dashboard, or Grafana with `notify.links: grafana`
+  ([Notifications on your phone](#notifications-on-your-phone)).
 
 **The first days.** Without history, the window is compared with the share on all of
 reddit, so on day one Trending now shows what's distinctive for each group (tech: ai,
@@ -326,7 +550,8 @@ first onset? It prints how often the onset was first and a sign test.
 ## Intents
 
 Every comment and post is also searched for why something is mentioned. Five kinds, each
-counted like a word under a term of its own:
+counted like a word under a term of its own. They can only be extracted while the raw text
+is kept (48 hours), so they're counted from the moment the ingester extracts them.
 
 | Kind | Term | From, for example |
 | --- | --- | --- |
