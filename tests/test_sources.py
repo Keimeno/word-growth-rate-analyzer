@@ -21,7 +21,8 @@ from undercurrent.sources.reddit.feeds import FeedScheduler, build_feeds
 from undercurrent.sources.reddit.source import RedditSource, to_item
 from undercurrent.store import migrate
 
-HOUR = datetime(2026, 10, 30, 14, tzinfo=UTC)
+# recent, since items keeps 48 hours: older rows are gone as soon as they're inserted
+HOUR = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 MINUTES = timedelta(minutes=5)
 
 
