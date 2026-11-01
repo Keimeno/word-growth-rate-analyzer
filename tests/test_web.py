@@ -223,12 +223,39 @@ def test_the_old_page_gets_its_shapes(web):
     assert get(web, "/api/trending?scope=tech&kinds=word,phrase")["trending"] == 1
 
 
-def test_the_server_serves_the_page(web):
-    response = web.get("/")
-    assert response.status_code == 200 and b"<title>Undercurrent</title>" in response.content
-    assert web.get("/static/app.js").status_code == 200
-    assert web.get("/static/../app.py").status_code == 404
-    assert web.get("/static/%2e%2e/app.py").status_code == 404
+def test_the_server_serves_today_s_page_without_a_build(stored):
+    with TestClient(create_app(stored, Settings(dist=None))) as web:
+        response = web.get("/")
+        assert response.status_code == 200 and b"<title>Undercurrent</title>" in response.content
+        assert web.get("/classic/").status_code == 200
+        assert web.get("/static/app.js").status_code == 200
+        assert web.get("/static/../app.py").status_code == 404
+        assert web.get("/static/%2e%2e/app.py").status_code == 404
+
+
+def test_the_server_serves_the_built_app(stored, tmp_path):
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<title>Undercurrent</title><div id=root>")
+    (tmp_path / "favicon.svg").write_text("<svg/>")
+    (tmp_path / "assets" / "index-abc.js").write_text("console.log(1)")
+    (tmp_path / "assets" / "index-abc.js.br").write_bytes(b"brotli")
+    with TestClient(create_app(stored, Settings(dist=tmp_path))) as web:
+        # the router handles every path the server doesn't know
+        for path in ["/", "/trending", "/t/word/claude?scope=tech"]:
+            response = web.get(path)
+            assert response.status_code == 200 and b"id=root" in response.content
+            assert response.headers["cache-control"] == "no-cache"
+            assert "default-src 'self'" in response.headers["content-security-policy"]
+        asset = web.get("/assets/index-abc.js", headers={"Accept-Encoding": "br"})
+        assert asset.headers["content-encoding"] == "br"
+        assert "immutable" in asset.headers["cache-control"]
+        assert asset.headers["content-type"].startswith("text/javascript")
+        plain = web.get("/assets/index-abc.js", headers={"Accept-Encoding": "identity"})
+        assert plain.text == "console.log(1)"
+        assert web.get("/favicon.svg").text == "<svg/>"
+        assert web.get("/assets/missing.js").status_code == 404
+        assert web.get("/classic/").status_code == 200
+        assert web.get("/api/v1/nothing").status_code == 404
 
 
 def test_the_server_refuses_bad_requests(web):

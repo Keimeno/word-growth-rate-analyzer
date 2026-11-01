@@ -1,10 +1,10 @@
 /**
- * Undercurrent's ECharts theme, built from the CSS tokens at runtime (docs/brand/tokens.css),
+ * Undercurrent's ECharts theme, built from the CSS tokens at runtime (src/styles/tokens.css),
  * so CSS stays the single source and the theme follows light and dark.
  *
- * A sketch for web/src/charts/theme.ts (WEB-DASHBOARD.md §4.4–4.5). The rules it encodes are
- * in docs/BRAND.md ("Charts"): thin lines, a hairline grid, one y axis, rounded data ends only,
- * tooltips that lead with the value, threshold lines dashed, bands for annotations.
+ * The rules it encodes are in docs/BRAND.md ("Charts") and WEB-DASHBOARD.md §4.4–4.5: thin
+ * lines, a hairline grid, one y axis, rounded data ends only, tooltips that lead with the
+ * value, threshold lines dashed, bands for annotations.
  *
  *   import * as echarts from "echarts/core";
  *   registerUndercurrentTheme(echarts);            // once, and again when data-theme changes
@@ -16,9 +16,12 @@ type Echarts = { registerTheme(name: string, theme: object): void };
 const css = (name: string, el: Element = document.documentElement): string =>
   getComputedStyle(el).getPropertyValue(`--${name}`).trim();
 
+/** Reads a token by name (without the `--`): from the page, or from tokens.css in tests. */
+export type TokenReader = (name: string) => string;
+
 /** The tokens a chart needs, read from the page. */
-export function chartTokens(el?: Element) {
-  const v = (n: string) => css(n, el);
+export function chartTokens(read: TokenReader = (name) => css(name)) {
+  const v = read;
   return {
     series: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v(`series-${i}`)),
     sequential: [100, 200, 300, 400, 500, 600, 700, 800, 900].map((s) => v(`seq-${s}`)),
@@ -49,7 +52,9 @@ export function chartTokens(el?: Element) {
   };
 }
 
-export function buildTheme(t = chartTokens()) {
+export type ChartTokens = ReturnType<typeof chartTokens>;
+
+export function buildTheme(t: ChartTokens = chartTokens()) {
   const label = { color: t.muted, fontFamily: t.sans, fontSize: 12 };
   const axisCommon = {
     axisLine: { show: true, lineStyle: { color: t.axis, width: 1 } },
@@ -155,7 +160,7 @@ export function buildTheme(t = chartTokens()) {
 }
 
 /** A threshold or reference line: dashed, muted, labelled at the end ("2× usual", "z 3"). */
-export function threshold(value: number, label: string, t = chartTokens()) {
+export function threshold(value: number, label: string, t: ChartTokens = chartTokens()) {
   return {
     symbol: "none",
     silent: true,
@@ -202,7 +207,7 @@ export function alertPins(
 }
 
 /** Register (or re-register after a theme switch) and return the theme's name. */
-export function registerUndercurrentTheme(echarts: Echarts): string {
-  echarts.registerTheme("undercurrent", buildTheme());
+export function registerUndercurrentTheme(echarts: Echarts, t?: ChartTokens): string {
+  echarts.registerTheme("undercurrent", buildTheme(t));
   return "undercurrent";
 }

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
-from wgra.web.models import Explore, ExplorePoint, ExploreWhere, Mention
+from wgra.web.models import Bucket, Explore, ExplorePoint, ExploreWhere, Mention
 from wgra.web.queries import (
     DAYS,
     FROM,
@@ -129,7 +129,7 @@ def explore(db: Db, query: ExploreQuery) -> Explore:
     )
     return Explore(
         terms=parameters["terms"],
-        bucket=bucket,  # type: ignore[arg-type]
+        bucket=Bucket(bucket),
         step=seconds if bucket == "hour" else None,
         from_=parameters["from"],
         to=parameters["to"],

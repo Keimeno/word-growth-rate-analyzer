@@ -6,10 +6,11 @@ requests run in parallel."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request
 
+from wgra.web.models import Error
 from wgra.web.queries import Db, utc
 
 
@@ -28,10 +29,18 @@ def database(
     return Db(request.app.state.client, endpoint, utc(now).replace(microsecond=0))
 
 
+# what every route can answer besides its data, all as {"error": "…"}
+ERRORS: dict[int | str, dict[str, Any]] = {
+    400: {"model": Error, "description": "Parameters it can't read"},
+    502: {"model": Error, "description": "ClickHouse failed"},
+    504: {"model": Error, "description": "The query hit its time limit"},
+}
+
+
 def api() -> APIRouter:
     from wgra.web.routes import explore, ingestion, intents, meta, spread, trends
 
-    router = APIRouter(prefix="/api/v1")
+    router = APIRouter(prefix="/api/v1", responses=ERRORS)
     for module in (meta, trends, spread, intents, explore, ingestion):
         router.include_router(module.router)
     return router

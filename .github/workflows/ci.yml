@@ -39,6 +39,7 @@ jobs:
       # the page's copy of the API's schema is up to date
       - run: uv run wgra web openapi > web/src/api/openapi.json && git diff --exit-code
       - run: docker build .
+      - run: docker build --target web .
 
   # The page in web/: types, lint, format, unit tests and the build (docs/WEB-DASHBOARD.md §9.4)
   web:

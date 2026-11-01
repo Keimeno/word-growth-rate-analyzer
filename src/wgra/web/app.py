@@ -17,6 +17,8 @@ from __future__ import annotations
 import base64
 import hmac
 import logging
+import mimetypes
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -36,7 +38,25 @@ from wgra.web.routes import api
 
 log = logging.getLogger(__name__)
 
+ROOT = Path(__file__).resolve().parents[3]
+
+# today's page, at /classic/ until phase 3 deletes it
 STATIC = (Path(__file__).parent / "static").resolve()
+# the built TypeScript app: web/dist when run from the repository, /app/web-dist in the image
+DIST = next(
+    (
+        path.resolve()
+        for path in (Path(os.environ.get("WEB_DIST", "/app/web-dist")), ROOT / "web" / "dist")
+        if (path / "index.html").is_file()
+    ),
+    None,
+)
+# everything is served from here; styles may be inline (charts and popovers set them)
+CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; "
+    "base-uri 'self'; form-action 'self'"
+)
 # ClickHouse's error code when a query hits max_execution_time
 TIMEOUT = re.compile(r"\bCode: 159\b")
 # how long a response may be reused, by what it reads: the analyzer runs every 15 minutes,
@@ -57,6 +77,8 @@ class Settings:
     now: datetime | None = None
     # False serves only the API (`wgra web --dev`)
     page: bool = True
+    # the built app (web/dist); None serves only today's page
+    dist: Path | None = DIST
 
 
 def create_app(client: Client, settings: Settings) -> FastAPI:
@@ -75,6 +97,7 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
 
     app.include_router(api())
     app.include_router(legacy.router())
+    _errors_as_400(app)
 
     @app.exception_handler(RequestValidationError)
     def invalid(_: Request, error: RequestValidationError) -> JSONResponse:
@@ -108,22 +131,79 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
         def static(path: str) -> Response:
             return _file(STATIC, path)
 
-        @app.get("/", include_in_schema=False)
-        def index() -> Response:
+        @app.get("/classic/", include_in_schema=False)
+        def classic() -> Response:
             return _file(STATIC, "index.html")
 
-    app.add_middleware(GZipMiddleware, minimum_size=1024)
+        dist = settings.dist
+
+        @app.get("/{path:path}", include_in_schema=False)
+        def page(path: str, request: Request) -> Response:
+            """The app's files, and its index.html for every other path, so the router
+            handles deep links (/t/word/claude after a reload)."""
+            if dist is None:
+                return _file(STATIC, "index.html") if path == "" else _not_found()
+            if path.startswith("assets/"):
+                # named by their content: cached for a year
+                return _built(dist, path, request, "public, max-age=31536000, immutable")
+            found = _built(dist, path, request, "no-cache") if path else None
+            if found is not None and found.status_code == 200:
+                return found
+            response = _built(dist, "index.html", request, "no-cache")
+            response.headers["Content-Security-Policy"] = CSP
+            return response
+
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
     app.add_middleware(Headers)
     app.add_middleware(BasicAuth, password=settings.password)
     return app
 
 
+def _errors_as_400(app: FastAPI) -> None:
+    """Bad parameters are a 400 with {"error": "…"} (`invalid` below), not FastAPI's 422,
+    and the schema says so, so the page's generated types do too."""
+    generate = app.openapi
+
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema is None:
+            schema = generate()
+            for operations in schema["paths"].values():
+                for operation in operations.values():
+                    operation["responses"].pop("422", None)
+            for name in ("HTTPValidationError", "ValidationError"):
+                schema["components"]["schemas"].pop(name, None)
+        return app.openapi_schema or {}
+
+    app.openapi = openapi  # type: ignore[method-assign]
+
+
+def _not_found() -> Response:
+    return Response("not found", status_code=404, media_type="text/plain")
+
+
 def _file(root: Path, relative: str) -> Response:
     path = (root / relative).resolve()
     if not path.is_relative_to(root) or not path.is_file():
-        return Response("not found", status_code=404, media_type="text/plain")
+        return _not_found()
     # the page is small and changes with the code
     return FileResponse(path, headers={"Cache-Control": "no-cache"})
+
+
+def _built(root: Path, relative: str, request: Request, cache: str) -> Response:
+    """A file of the build, as its .br or .gz twin when the browser takes it (the build
+    writes them, web/vite.config.ts)."""
+    path = (root / relative).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        return _not_found()
+    headers = {"Cache-Control": cache, "Vary": "Accept-Encoding"}
+    accepted = request.headers.get("accept-encoding", "")
+    for encoding, suffix in (("br", ".br"), ("gzip", ".gz")):
+        twin = path.with_name(path.name + suffix)
+        if encoding in accepted and twin.is_file():
+            media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            headers["Content-Encoding"] = encoding
+            return FileResponse(twin, media_type=media_type, headers=headers)
+    return FileResponse(path, headers=headers)
 
 
 class BasicAuth:

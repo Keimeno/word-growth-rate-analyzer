@@ -9,6 +9,7 @@ missing is `None` (null), never 1970-01-01; numbers that can be infinite or NaN 
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
@@ -358,9 +359,15 @@ class ExploreWhere(Model):
     per_1000: Num
 
 
+class Bucket(StrEnum):
+    hour = "hour"
+    day = "day"
+    week = "week"
+
+
 class Explore(Model):
     terms: list[str]
-    bucket: Literal["hour", "day", "week"]
+    bucket: Bucket
     step: int | None = Field(description="seconds per bucket, for hours")
     from_: int = Field(alias="from")
     to: int

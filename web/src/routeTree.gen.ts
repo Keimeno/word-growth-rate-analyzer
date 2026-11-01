@@ -10,33 +10,115 @@
 
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as IndexRouteImport } from "./routes/index"
+import { Route as CollectionRouteImport } from "./routes/collection"
+import { Route as ExploreRouteImport } from "./routes/explore"
+import { Route as IntentsRouteImport } from "./routes/intents"
+import { Route as LongTermRouteImport } from "./routes/long-term"
+import { Route as SpreadRouteImport } from "./routes/spread"
+import { Route as TrendingRouteImport } from "./routes/trending"
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
   path: "/",
   getParentRoute: () => rootRouteImport,
 } as any)
+const CollectionRoute = CollectionRouteImport.update({
+  id: "/collection",
+  path: "/collection",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExploreRoute = ExploreRouteImport.update({
+  id: "/explore",
+  path: "/explore",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntentsRoute = IntentsRouteImport.update({
+  id: "/intents",
+  path: "/intents",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LongTermRoute = LongTermRouteImport.update({
+  id: "/long-term",
+  path: "/long-term",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SpreadRoute = SpreadRouteImport.update({
+  id: "/spread",
+  path: "/spread",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrendingRoute = TrendingRouteImport.update({
+  id: "/trending",
+  path: "/trending",
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
+  "/collection": typeof CollectionRoute
+  "/explore": typeof ExploreRoute
+  "/intents": typeof IntentsRoute
+  "/long-term": typeof LongTermRoute
+  "/spread": typeof SpreadRoute
+  "/trending": typeof TrendingRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
+  "/collection": typeof CollectionRoute
+  "/explore": typeof ExploreRoute
+  "/intents": typeof IntentsRoute
+  "/long-term": typeof LongTermRoute
+  "/spread": typeof SpreadRoute
+  "/trending": typeof TrendingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
+  "/collection": typeof CollectionRoute
+  "/explore": typeof ExploreRoute
+  "/intents": typeof IntentsRoute
+  "/long-term": typeof LongTermRoute
+  "/spread": typeof SpreadRoute
+  "/trending": typeof TrendingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/"
+  fullPaths:
+    | "/"
+    | "/collection"
+    | "/explore"
+    | "/intents"
+    | "/long-term"
+    | "/spread"
+    | "/trending"
   fileRoutesByTo: FileRoutesByTo
-  to: "/"
-  id: "__root__" | "/"
+  to:
+    | "/"
+    | "/collection"
+    | "/explore"
+    | "/intents"
+    | "/long-term"
+    | "/spread"
+    | "/trending"
+  id:
+    | "__root__"
+    | "/"
+    | "/collection"
+    | "/explore"
+    | "/intents"
+    | "/long-term"
+    | "/spread"
+    | "/trending"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CollectionRoute: typeof CollectionRoute
+  ExploreRoute: typeof ExploreRoute
+  IntentsRoute: typeof IntentsRoute
+  LongTermRoute: typeof LongTermRoute
+  SpreadRoute: typeof SpreadRoute
+  TrendingRoute: typeof TrendingRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -48,11 +130,59 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/collection": {
+      id: "/collection"
+      path: "/collection"
+      fullPath: "/collection"
+      preLoaderRoute: typeof CollectionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/explore": {
+      id: "/explore"
+      path: "/explore"
+      fullPath: "/explore"
+      preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/intents": {
+      id: "/intents"
+      path: "/intents"
+      fullPath: "/intents"
+      preLoaderRoute: typeof IntentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/long-term": {
+      id: "/long-term"
+      path: "/long-term"
+      fullPath: "/long-term"
+      preLoaderRoute: typeof LongTermRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/spread": {
+      id: "/spread"
+      path: "/spread"
+      fullPath: "/spread"
+      preLoaderRoute: typeof SpreadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/trending": {
+      id: "/trending"
+      path: "/trending"
+      fullPath: "/trending"
+      preLoaderRoute: typeof TrendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CollectionRoute: CollectionRoute,
+  ExploreRoute: ExploreRoute,
+  IntentsRoute: IntentsRoute,
+  LongTermRoute: LongTermRoute,
+  SpreadRoute: SpreadRoute,
+  TrendingRoute: TrendingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

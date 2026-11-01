@@ -1,7 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { keepPreviousData, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { parseSearch, stringifySearch } from "./lib/url";
 import { routeTree } from "./routeTree.gen";
 import "./index.css";
 
@@ -13,6 +14,8 @@ const queryClient = new QueryClient({
       refetchInterval: 5 * 60_000,
       refetchOnWindowFocus: true,
       retry: 1,
+      // refetching keeps the last data on screen, so nothing jumps
+      placeholderData: keepPreviousData,
     },
   },
 });
@@ -22,6 +25,8 @@ const router = createRouter({
   context: { queryClient },
   defaultPreload: "intent",
   scrollRestoration: true,
+  parseSearch,
+  stringifySearch,
 });
 
 declare module "@tanstack/react-router" {

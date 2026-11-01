@@ -1,0 +1,366 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`heatmap and network > colours cells on the sequential scale 1`] = `
+"<svg width="640" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 640 240">
+<rect width="640" height="240" x="0" y="0" fill="none"></rect>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(21.44 137)" fill="#515d60">0h</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(21.44 51)" fill="#515d60">1h</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" y="6" transform="translate(178.08 188)" fill="#515d60">Mon</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" y="6" transform="translate(475.36 188)" fill="#515d60">Tue</text>
+<path d="M31.2 93.8L325 93.8A2 2 0 0 1 327 95.8L327 178.3A2 2 0 0 1 325 180.3L31.2 180.3A2 2 0 0 1 29.2 178.3L29.2 95.8A2 2 0 0 1 31.2 93.8Z" fill="rgb(144,219,220)" stroke="#fcfefe" stroke-width="2" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr3-cls-12"></path>
+<path d="M328.5 7.8L622.3 7.8A2 2 0 0 1 624.3 9.8L624.3 92.3A2 2 0 0 1 622.3 94.3L328.5 94.3A2 2 0 0 1 326.5 92.3L326.5 9.8A2 2 0 0 1 328.5 7.8Z" fill="rgb(5,79,81)" stroke="#fcfefe" stroke-width="2" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr3-cls-13"></path>
+<path d="M-15 -25l150 0l0 40l-150 0Z" transform="translate(260 225)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#cfd2d7" stroke-width="0" class="zr3-cls-14"></path>
+<g clip-path="url(#zr3-c0)">
+<polygon points="0 0 10 0 10 120 0 120" transform="matrix(0,-1,1,0,260,225)" fill="url(#zr3-g0)" class="zr3-cls-16"></polygon>
+<polygon points="0 0 10 0 10 120 0 120" transform="matrix(0,-1,1,0,260,225)" fill="url(#zr3-g1)" class="zr3-cls-17"></polygon>
+</g>
+<defs >
+<clipPath id="zr3-c0">
+<path d="M3 0L7 0A3 3 0 0 1 10 3L10 117A3 3 0 0 1 7 120L3 120A3 3 0 0 1 0 117L0 3A3 3 0 0 1 3 0Z" transform="matrix(0,-1,1,0,260,225)" fill="#000" class="zr3-cls-15"></path>
+</clipPath>
+<linearGradient gradientUnits="objectBoundingBox" x1="0" y1="0" x2="0" y2="1" id="zr3-g0">
+<stop offset="0%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="1%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="2%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="3%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="4%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="5%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="6%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="7.000000000000001%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="8%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="9%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="10%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="11%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="12%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="13%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="14.000000000000002%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="15%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="16%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="17%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="18%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="19%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="20%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="21%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="22%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="23%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="24%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="25%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="26%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="27%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="28.000000000000004%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="28.999999999999996%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="30%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="31%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="32%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="33%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="34%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="35%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="36%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="37%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="38%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="39%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="40%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="41%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="42%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="43%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="44%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="45%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="46%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="47%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="48%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="49%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="50%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="51%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="52%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="53%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="54%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="55.00000000000001%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="56.00000000000001%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="56.99999999999999%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="57.99999999999999%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="59%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="60%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="61%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="62%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="63%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="64%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="65%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="66%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="67%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="68%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="69%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="70%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="71%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="72%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="73%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="74%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="75%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="76%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="77%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="78%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="79%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="80%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="81%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="82%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="83%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="84%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="85%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="86%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="87%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="88%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="89%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="90%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="91%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="92%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="93%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="94%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="95%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="96%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="97%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="98%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="99%" stop-color="rgb(207,210,215)"></stop>
+<stop offset="100%" stop-color="rgb(207,210,215)"></stop>
+</linearGradient>
+<linearGradient gradientUnits="objectBoundingBox" x1="0" y1="0" x2="0" y2="1" id="zr3-g1">
+<stop offset="0%" stop-color="rgb(213,244,244)"></stop>
+<stop offset="1%" stop-color="rgb(211,243,243)"></stop>
+<stop offset="2%" stop-color="rgb(208,242,242)"></stop>
+<stop offset="3%" stop-color="rgb(206,241,242)"></stop>
+<stop offset="4%" stop-color="rgb(203,241,241)"></stop>
+<stop offset="5%" stop-color="rgb(201,240,240)"></stop>
+<stop offset="6%" stop-color="rgb(198,239,239)"></stop>
+<stop offset="7.000000000000001%" stop-color="rgb(196,238,239)"></stop>
+<stop offset="8%" stop-color="rgb(193,237,238)"></stop>
+<stop offset="9%" stop-color="rgb(191,236,237)"></stop>
+<stop offset="10%" stop-color="rgb(189,236,236)"></stop>
+<stop offset="11%" stop-color="rgb(186,235,236)"></stop>
+<stop offset="12%" stop-color="rgb(184,234,235)"></stop>
+<stop offset="13%" stop-color="rgb(181,233,234)"></stop>
+<stop offset="14.000000000000002%" stop-color="rgb(179,232,233)"></stop>
+<stop offset="15%" stop-color="rgb(176,231,232)"></stop>
+<stop offset="16%" stop-color="rgb(172,230,231)"></stop>
+<stop offset="17%" stop-color="rgb(169,229,230)"></stop>
+<stop offset="18%" stop-color="rgb(166,227,229)"></stop>
+<stop offset="19%" stop-color="rgb(163,226,227)"></stop>
+<stop offset="20%" stop-color="rgb(160,225,226)"></stop>
+<stop offset="21%" stop-color="rgb(156,224,225)"></stop>
+<stop offset="22%" stop-color="rgb(153,222,224)"></stop>
+<stop offset="23%" stop-color="rgb(150,221,223)"></stop>
+<stop offset="24%" stop-color="rgb(147,220,221)"></stop>
+<stop offset="25%" stop-color="rgb(144,219,220)"></stop>
+<stop offset="26%" stop-color="rgb(140,217,219)"></stop>
+<stop offset="27%" stop-color="rgb(137,216,218)"></stop>
+<stop offset="28.000000000000004%" stop-color="rgb(134,215,217)"></stop>
+<stop offset="28.999999999999996%" stop-color="rgb(131,213,215)"></stop>
+<stop offset="30%" stop-color="rgb(127,212,214)"></stop>
+<stop offset="31%" stop-color="rgb(124,210,212)"></stop>
+<stop offset="32%" stop-color="rgb(120,208,211)"></stop>
+<stop offset="33%" stop-color="rgb(117,207,209)"></stop>
+<stop offset="34%" stop-color="rgb(114,205,208)"></stop>
+<stop offset="35%" stop-color="rgb(110,204,207)"></stop>
+<stop offset="36%" stop-color="rgb(107,202,205)"></stop>
+<stop offset="37%" stop-color="rgb(104,200,204)"></stop>
+<stop offset="38%" stop-color="rgb(100,199,202)"></stop>
+<stop offset="39%" stop-color="rgb(97,197,201)"></stop>
+<stop offset="40%" stop-color="rgb(94,196,199)"></stop>
+<stop offset="41%" stop-color="rgb(90,194,198)"></stop>
+<stop offset="42%" stop-color="rgb(87,192,196)"></stop>
+<stop offset="43%" stop-color="rgb(83,191,195)"></stop>
+<stop offset="44%" stop-color="rgb(79,189,193)"></stop>
+<stop offset="45%" stop-color="rgb(75,187,191)"></stop>
+<stop offset="46%" stop-color="rgb(71,184,188)"></stop>
+<stop offset="47%" stop-color="rgb(66,182,186)"></stop>
+<stop offset="48%" stop-color="rgb(62,180,184)"></stop>
+<stop offset="49%" stop-color="rgb(58,178,182)"></stop>
+<stop offset="50%" stop-color="rgb(54,176,180)"></stop>
+<stop offset="51%" stop-color="rgb(49,174,178)"></stop>
+<stop offset="52%" stop-color="rgb(45,172,176)"></stop>
+<stop offset="53%" stop-color="rgb(41,170,174)"></stop>
+<stop offset="54%" stop-color="rgb(36,168,172)"></stop>
+<stop offset="55.00000000000001%" stop-color="rgb(32,166,170)"></stop>
+<stop offset="56.00000000000001%" stop-color="rgb(28,163,167)"></stop>
+<stop offset="56.99999999999999%" stop-color="rgb(24,161,165)"></stop>
+<stop offset="57.99999999999999%" stop-color="rgb(22,159,163)"></stop>
+<stop offset="59%" stop-color="rgb(22,157,161)"></stop>
+<stop offset="60%" stop-color="rgb(21,155,159)"></stop>
+<stop offset="61%" stop-color="rgb(21,152,156)"></stop>
+<stop offset="62%" stop-color="rgb(20,150,154)"></stop>
+<stop offset="63%" stop-color="rgb(19,148,152)"></stop>
+<stop offset="64%" stop-color="rgb(19,146,150)"></stop>
+<stop offset="65%" stop-color="rgb(18,143,147)"></stop>
+<stop offset="66%" stop-color="rgb(17,141,145)"></stop>
+<stop offset="67%" stop-color="rgb(17,139,143)"></stop>
+<stop offset="68%" stop-color="rgb(16,137,141)"></stop>
+<stop offset="69%" stop-color="rgb(16,134,138)"></stop>
+<stop offset="70%" stop-color="rgb(15,132,136)"></stop>
+<stop offset="71%" stop-color="rgb(14,130,134)"></stop>
+<stop offset="72%" stop-color="rgb(14,128,132)"></stop>
+<stop offset="73%" stop-color="rgb(13,126,130)"></stop>
+<stop offset="74%" stop-color="rgb(13,124,128)"></stop>
+<stop offset="75%" stop-color="rgb(13,122,126)"></stop>
+<stop offset="76%" stop-color="rgb(12,120,124)"></stop>
+<stop offset="77%" stop-color="rgb(12,118,122)"></stop>
+<stop offset="78%" stop-color="rgb(12,117,120)"></stop>
+<stop offset="79%" stop-color="rgb(11,115,118)"></stop>
+<stop offset="80%" stop-color="rgb(11,113,116)"></stop>
+<stop offset="81%" stop-color="rgb(11,111,114)"></stop>
+<stop offset="82%" stop-color="rgb(10,109,112)"></stop>
+<stop offset="83%" stop-color="rgb(10,107,110)"></stop>
+<stop offset="84%" stop-color="rgb(10,105,108)"></stop>
+<stop offset="85%" stop-color="rgb(9,103,106)"></stop>
+<stop offset="86%" stop-color="rgb(9,102,105)"></stop>
+<stop offset="87%" stop-color="rgb(9,100,103)"></stop>
+<stop offset="88%" stop-color="rgb(8,98,101)"></stop>
+<stop offset="89%" stop-color="rgb(8,97,99)"></stop>
+<stop offset="90%" stop-color="rgb(8,95,98)"></stop>
+<stop offset="91%" stop-color="rgb(8,93,96)"></stop>
+<stop offset="92%" stop-color="rgb(7,92,94)"></stop>
+<stop offset="93%" stop-color="rgb(7,90,93)"></stop>
+<stop offset="94%" stop-color="rgb(7,89,91)"></stop>
+<stop offset="95%" stop-color="rgb(6,87,89)"></stop>
+<stop offset="96%" stop-color="rgb(6,85,88)"></stop>
+<stop offset="97%" stop-color="rgb(6,84,86)"></stop>
+<stop offset="98%" stop-color="rgb(6,82,84)"></stop>
+<stop offset="99%" stop-color="rgb(5,81,83)"></stop>
+<stop offset="100%" stop-color="rgb(5,79,81)"></stop>
+</linearGradient>
+</defs>
+<style ><![CDATA[
+.zr3-cls-12:hover {
+cursor:pointer;
+fill:rgba(158,240,242,1);
+stroke:#0d191c;
+}
+.zr3-cls-13:hover {
+cursor:pointer;
+fill:rgba(5,86,89,1);
+stroke:#0d191c;
+}
+.zr3-cls-14:hover {
+pointer-events:none;
+}
+.zr3-cls-15:hover {
+cursor:pointer;
+fill:rgba(0,0,0,1);
+}
+.zr3-cls-16:hover {
+cursor:pointer;
+fill:[object Object];
+}
+.zr3-cls-17:hover {
+cursor:pointer;
+fill:[object Object];
+}
+
+]]>
+
+</style>
+</svg>"
+`;
+
+exports[`heatmap and network > draws leaders and followers where they're placed 1`] = `
+"<svg width="640" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 640 240">
+<rect width="640" height="240" x="0" y="0" fill="none"></rect>
+<path d="M0 500Q494.65 351.6 989.3 496.82" transform="matrix(0.448,0,0,96,96,-47880)" fill="none" pointer-events="visible" stroke="#096669" stroke-width="0.7624219319910415" stroke-opacity="0.83" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr4-cls-18"></path>
+<path d="M0 0L4.6667 7L0 5.25L-4.6667 7L0 0Z" transform="matrix(-0.282,205.608,-0.96,-60.363,539.2066,-184.8476)" fill="#096669" fill-opacity="0.83" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr4-cls-19"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.0001" transform="matrix(5,0,0,1071.429,96,120)" fill="#096669" stroke="#fcfefe" stroke-width="0.027325202042558932" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr4-cls-19"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.0001" transform="matrix(5,0,0,1071.429,544,120)" fill="#096669" stroke="#fcfefe" stroke-width="0.027325202042558932" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr4-cls-19"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(106.0683 120)" fill="#3d494c">r/localllama</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(554.0683 120)" fill="#3d494c">tech</text>
+<style ><![CDATA[
+.zr4-cls-18:hover {
+cursor:pointer;
+stroke-width:4.464285714285714;
+}
+.zr4-cls-19:hover {
+cursor:pointer;
+fill:rgba(9,112,115,1);
+}
+
+]]>
+
+</style>
+</svg>"
+`;
+
+exports[`timeSeries > draws one area with the brand's first colour 1`] = `
+"<svg width="640" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 640 240">
+<rect width="640" height="240" x="0" y="0" fill="none"></rect>
+<path d="M22.7 212.5L544 212.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.7 173.5L544 173.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.7 133.5L544 133.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.7 94.5L544 94.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.7 55.5L544 55.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.7 16.5L544 16.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.7 212.5L544 212.5" fill="none" pointer-events="visible" stroke="#b7bfc2" stroke-linecap="round" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.72 212)" fill="#515d60">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.72 172.8)" fill="#515d60">1</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.72 133.6)" fill="#515d60">2</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.72 94.4)" fill="#515d60">3</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.72 55.2)" fill="#515d60">4</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.72 16)" fill="#515d60">5</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="6" transform="translate(80.64 220)" fill="#515d60">01:20</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="6" transform="translate(138.56 220)" fill="#515d60">01:40</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="6" transform="translate(254.4 220)" fill="#515d60">02:20</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="6" transform="translate(312.32 220)" fill="#515d60">02:40</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="6" transform="translate(428.16 220)" fill="#515d60">03:20</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="6" transform="translate(486.08 220)" fill="#515d60">03:40</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="6" transform="translate(22.72 220)" fill="#0d191c">01:00</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="6" transform="translate(196.48 220)" fill="#0d191c">02:00</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="6" transform="translate(370.24 220)" fill="#0d191c">03:00</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="6" transform="translate(544 220)" fill="#0d191c">04:00</text>
+<g clip-path="url(#zr0-c0)">
+<path d="M22.7 172.8L196.5 94.4L370.2 133.6L544 16L544 212L370.2 212L196.5 212L22.7 212Z" fill="#15a0a1" fill-opacity="0.12" class="zr0-cls-2"></path>
+<path d="M22.7 172.8L196.5 94.4L370.2 133.6L544 16" fill="none" pointer-events="visible" stroke="#15a0a1" stroke-width="2" stroke-linejoin="bevel" class="zr0-cls-3"></path>
+</g>
+<text dominant-baseline="central" text-anchor="start" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(552 16)" fill="#3d494c">claude</text>
+<defs >
+<clipPath id="zr0-c0">
+<path d="M21 15l525 0l0 198l-525 0Z" fill="#000" class="zr0-cls-1"></path>
+</clipPath>
+</defs>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+fill:rgba(0,0,0,1);
+}
+.zr0-cls-2:hover {
+cursor:pointer;
+fill:rgba(23,176,177,1);
+}
+.zr0-cls-3:hover {
+cursor:pointer;
+stroke-width:2.5;
+}
+
+]]>
+
+</style>
+</svg>"
+`;

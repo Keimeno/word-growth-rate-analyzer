@@ -62,7 +62,9 @@ services:
   # The web dashboard: the page and its API. Grafana stays as the pro mode. It connects as
   # a ClickHouse user that can only read, and gets no other secrets.
   web:
-    build: .
+    build:
+      context: .
+      target: web
     command: ["wgra", "web", "--host", "0.0.0.0"]
     restart: unless-stopped
     depends_on:
