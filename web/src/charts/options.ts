@@ -6,6 +6,7 @@
  */
 import type { EChartsOption } from "./echarts";
 import type { ChartTokens } from "./theme";
+import { timeTicks } from "./time";
 
 export type Point = [time: number, value: number | null];
 
@@ -114,6 +115,68 @@ function tooltip(spec: TimeSeriesSpec, tokens: ChartTokens) {
   };
 }
 
+/** A time axis with the kit's ticks (time.ts): evenly spaced, every label distinct, a new
+ * day or year in `ink-secondary`. Falls back to ECharts' own for a single instant. */
+function timeAxis(series: Series[], tokens: ChartTokens, daily = false) {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const one of series)
+    for (const [time] of one.points) {
+      min = Math.min(min, time);
+      max = Math.max(max, time);
+    }
+  const ticks = timeTicks(min, max, { daily });
+  if (!ticks) return { type: "time", axisLabel: { hideOverlap: true } };
+  return {
+    type: "time",
+    axisLabel: {
+      hideOverlap: true,
+      customValues: ticks.values,
+      formatter: (value: number) => {
+        const { text, strong } = ticks.label(value);
+        return strong ? `{strong|${text}}` : text;
+      },
+      rich: { strong: { color: tokens.inkSecondary, fontWeight: 600, fontSize: 11 } },
+    },
+    axisTick: { customValues: ticks.values },
+  };
+}
+
+const short = (name: string) => (name.length > 14 ? `${name.slice(0, 13)}…` : name);
+
+/**
+ * End labels that would sit on top of each other (ends within 8% of the largest value, about
+ * a label's height on a panel's chart) become one label on the highest of them, "Errors,
+ * Gaps"; ECharts' own overlap handling doesn't move end labels. Null: no label.
+ */
+export function endLabels(series: Series[]): Array<string | null> {
+  const last = series.map((one) => one.points.findLast((point) => point[1] !== null)?.[1] ?? null);
+  let max = 0;
+  for (const one of series)
+    for (const point of one.points) max = Math.max(max, Math.abs(point[1] ?? 0));
+  const order = last
+    .map((value, index) => ({ value, index }))
+    .filter((end): end is { value: number; index: number } => end.value !== null)
+    .toSorted((a, b) => b.value - a.value);
+  const labels: Array<string | null> = series.map(() => null);
+  let cluster: number[] = [];
+  const close = () => {
+    const [first] = cluster;
+    if (first === undefined) return;
+    const names = cluster.map((index) => short(series[index]?.name ?? ""));
+    const joined = names.join(", ");
+    labels[first] = joined.length > 22 ? `${names[0]} +${names.length - 1}` : joined;
+    cluster = [];
+  };
+  for (const [position, end] of order.entries()) {
+    const previous = order[position - 1];
+    if (previous && previous.value - end.value > 0.08 * max) close();
+    cluster.push(end.index);
+  }
+  close();
+  return labels;
+}
+
 /** Lines (an area for a single series), bars, or stacked bars over time. */
 export function timeSeries(spec: TimeSeriesSpec, tokens: ChartTokens): EChartsOption {
   const form = spec.form ?? (spec.series.length === 1 ? "area" : "line");
@@ -121,6 +184,7 @@ export function timeSeries(spec: TimeSeriesSpec, tokens: ChartTokens): EChartsOp
   const labelled = !bars && spec.series.length <= 4;
   const format = spec.format ?? plain;
   const annotations = annotate(spec, tokens);
+  const ends = labelled ? endLabels(spec.series) : [];
   return {
     animation: !spec.reducedMotion,
     aria: { enabled: true },
@@ -137,8 +201,7 @@ export function timeSeries(spec: TimeSeriesSpec, tokens: ChartTokens): EChartsOp
     },
     tooltip: tooltip(spec, tokens),
     xAxis: {
-      type: "time",
-      axisLabel: { hideOverlap: true },
+      ...timeAxis(spec.series, tokens, spec.daily),
       ...(bars ? { boundaryGap: ["2%", "2%"] } : {}),
     },
     yAxis: { type: "value", axisLabel: { formatter: format }, min: 0 },
@@ -164,14 +227,7 @@ export function timeSeries(spec: TimeSeriesSpec, tokens: ChartTokens): EChartsOp
         ...(form === "bars" ? { barMaxWidth: 16, barGap: "10%" } : {}),
         ...(form === "area" ? { areaStyle: { opacity: 0.12 } } : {}),
         ...(labelled
-          ? {
-              endLabel: {
-                show: true,
-                formatter: ({ seriesName }: { seriesName: string }) =>
-                  seriesName.length > 14 ? `${seriesName.slice(0, 13)}…` : seriesName,
-              },
-              labelLayout: { moveOverlap: "shiftY" },
-            }
+          ? { endLabel: { show: ends[index] !== null, formatter: () => ends[index] ?? "" } }
           : {}),
         connectNulls: false,
         ...(index === 0 ? annotations : {}),
@@ -184,7 +240,7 @@ export function timeSeries(spec: TimeSeriesSpec, tokens: ChartTokens): EChartsOp
  * reads as one stretch, not a row of repeated words. */
 function mergeBands(bands: NonNullable<Annotation["bands"]>) {
   const merged: Array<{ from: number; to: number; label: string }> = [];
-  for (const band of [...bands].sort((x, y) => x.from - y.from)) {
+  for (const band of bands.toSorted((x, y) => x.from - y.from)) {
     const last = merged.findLast((other) => other.label === band.label);
     if (last && band.from <= last.to) last.to = Math.max(last.to, band.to);
     else merged.push({ ...band });
@@ -482,7 +538,7 @@ export function bump(
     legend: { type: "scroll" },
     grid: { left: 8, right: 112, top: 32, bottom: 8, containLabel: true },
     tooltip: { trigger: "axis" },
-    xAxis: { type: "time", axisLabel: { hideOverlap: true } },
+    xAxis: timeAxis(spec.series, tokens),
     yAxis: {
       type: "value",
       inverse: true,

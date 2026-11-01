@@ -370,7 +370,8 @@ Each is drawn in the specimen, in light and dark, with example data.
 * **Page.** A header (an `overline` eyebrow on entity pages, the title, one sentence in
   `ink-muted`, the page's actions on the right), then one filter toolbar (a `surface` panel
   of labelled controls: segmented controls for a few options, popover pickers for many),
-  then the KPI strip (one panel whose cells are divided by hairlines, each a label, a
+  then the KPI strip (one panel whose cells are divided by hairlines, each a label that
+  wraps rather than being cut (two lines on phones, so a row's values stay level), a
   `figure-md` value with its unit, and a line of comparison or a sparkline; it wraps
   without holes), then panels on `bg`, separated by `space-16`. The scope picker sits in
   the filter toolbar, since it scopes the page.
@@ -391,8 +392,11 @@ Each is drawn in the specimen, in light and dark, with example data.
   on Reddit, Pro mode); then the term's KPI strip (comments and posts with a 7-day
   sparkline, people, against usual, strength, stories, first seen).
 * **Chart.** In a panel with a title that names the measure and a subtitle with unit, bucket
-  and window. 2 px lines, no smoothing, one y axis, hairline grid, legend plus end labels,
-  dashed labelled thresholds, `chart-band` windows (touching ones merged, each label once),
+  and window. 2 px lines, no smoothing, one y axis, hairline grid, legend plus end labels
+  (ends that would overlap share one label, "Errors, Gaps"), time ticks the kit chooses
+  (one step for the axis, weeks from Monday, months from the 1st, every label distinct, a
+  new day or year in `ink-secondary`), dashed labelled thresholds, `chart-band` windows
+  (touching ones merged, each label once),
   ink lines for alerts sent and onsets (labelled up to four, on hover past that), a dashed
   crosshair, and a toolbar on hover or focus: the table view and a download menu (CSV, PNG,
   SVG).

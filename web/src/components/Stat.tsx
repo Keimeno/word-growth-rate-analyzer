@@ -16,7 +16,7 @@ interface StatProps {
 export function StatTile({ label, value, unit, hint, help, pressed, onClick }: StatProps) {
   const figure = (
     <>
-      <div className="mt-1.5 flex items-baseline gap-1.5">
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
         <span
           className={cn(
             "tabular-nums text-ink",
@@ -28,7 +28,7 @@ export function StatTile({ label, value, unit, hint, help, pressed, onClick }: S
         >
           {value}
         </span>
-        {unit && <span className="truncate text-xs text-ink-muted">{unit}</span>}
+        {unit && <span className="text-xs text-ink-muted">{unit}</span>}
       </div>
       {hint && <div className="mt-1 text-xs leading-4 text-ink-muted">{hint}</div>}
     </>
@@ -41,9 +41,15 @@ export function StatTile({ label, value, unit, hint, help, pressed, onClick }: S
         pressed && "bg-primary-wash shadow-[inset_0_2px_0_var(--primary)] hover:bg-primary-wash",
       )}
     >
-      <div className="relative z-10 flex h-5 items-center gap-1 text-xs font-medium text-ink-muted">
-        <span className="truncate">{label}</span>
-        {help && <Help>{help}</Help>}
+      {/* labels wrap rather than lose their end; on phones every label keeps two lines, so the
+          values of a row stay level */}
+      <div className="relative z-10 flex items-start gap-1 text-xs leading-4 font-medium text-ink-muted max-sm:min-h-9">
+        <span className="py-0.5 text-pretty">{label}</span>
+        {help && (
+          <span className="-my-0.5 shrink-0">
+            <Help>{help}</Help>
+          </span>
+        )}
       </div>
       {onClick ? (
         <button
