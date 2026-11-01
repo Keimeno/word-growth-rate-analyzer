@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 gap-2 text-ink-muted"
+              className="h-8 gap-2 bg-surface text-ink-secondary dark:bg-surface"
               onClick={openPalette}
               aria-label="Search pages and scopes"
             >

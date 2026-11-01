@@ -67,36 +67,6 @@ export function Palette() {
       />
       <CommandList>
         <CommandEmpty>Nothing matches.</CommandEmpty>
-        {term && (
-          <CommandGroup heading="Term">
-            <CommandItem
-              value={`explore ${term}`}
-              onSelect={() =>
-                go(() => void navigate({ to: "/explore", search: searchOf({ terms: [term] }) }))
-              }
-            >
-              <Compass className="size-4" /> Explore{" "}
-              <span className="term font-medium">{term}</span>
-            </CommandItem>
-            <CommandItem
-              value={`peek ${term}`}
-              onSelect={() =>
-                go(
-                  () =>
-                    void navigate({
-                      to: ".",
-                      search: ((previous: Record<string, unknown>) => ({
-                        ...previous,
-                        peek: `word:${term}`,
-                      })) as never,
-                    }),
-                )
-              }
-            >
-              <Eye className="size-4" /> Peek at <span className="term font-medium">{term}</span>
-            </CommandItem>
-          </CommandGroup>
-        )}
         <CommandGroup heading="Pages">
           {PAGES.map((page) => (
             <CommandItem
@@ -145,6 +115,36 @@ export function Palette() {
             <Copy className="size-4" /> Copy link to this view
           </CommandItem>
         </CommandGroup>
+        {term && (
+          <CommandGroup heading="Term">
+            <CommandItem
+              value={`explore ${term}`}
+              onSelect={() =>
+                go(() => void navigate({ to: "/explore", search: searchOf({ terms: [term] }) }))
+              }
+            >
+              <Compass className="size-4" /> Explore{" "}
+              <span className="term font-medium">{term}</span>
+            </CommandItem>
+            <CommandItem
+              value={`peek ${term}`}
+              onSelect={() =>
+                go(
+                  () =>
+                    void navigate({
+                      to: ".",
+                      search: ((previous: Record<string, unknown>) => ({
+                        ...previous,
+                        peek: `word:${term}`,
+                      })) as never,
+                    }),
+                )
+              }
+            >
+              <Eye className="size-4" /> Peek at <span className="term font-medium">{term}</span>
+            </CommandItem>
+          </CommandGroup>
+        )}
       </CommandList>
     </CommandDialog>
   );

@@ -20,7 +20,7 @@ export function Help({
         <button
           type="button"
           aria-label={label}
-          className="inline-flex size-4 items-center justify-center rounded-full text-ink-muted hover:text-ink"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-ink-muted hover:text-ink"
         >
           <CircleHelp className="size-3.5" strokeWidth={1.75} />
         </button>

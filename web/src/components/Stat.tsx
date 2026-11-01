@@ -14,12 +14,8 @@ interface StatProps {
 
 /** A headline number with its unit and what it's compared with. */
 export function StatTile({ label, value, unit, hint, help, pressed, onClick }: StatProps) {
-  const body = (
+  const figure = (
     <>
-      <div className="flex items-center gap-1.5 text-xs text-ink-muted">
-        <span className="truncate">{label}</span>
-        {help && <Help>{help}</Help>}
-      </div>
       <div className="mt-1 flex items-baseline gap-1.5">
         <span className="text-xl leading-7 font-medium tabular-nums">{value}</span>
         {unit && <span className="text-xs text-ink-muted">{unit}</span>}
@@ -27,21 +23,32 @@ export function StatTile({ label, value, unit, hint, help, pressed, onClick }: S
       {hint && <div className="mt-0.5 text-xs text-ink-muted">{hint}</div>}
     </>
   );
-  const classes = cn(
-    "min-w-0 rounded-md border border-border bg-surface px-4 py-3 text-left",
-    pressed && "border-primary bg-primary-wash",
-  );
-  return onClick ? (
-    <button
-      type="button"
-      className={cn(classes, "hover:bg-surface-hover")}
-      aria-pressed={pressed}
-      onClick={onClick}
+  return (
+    <div
+      className={cn(
+        "relative min-w-0 rounded-md border border-border bg-surface px-4 py-3 text-left",
+        onClick && "hover:bg-surface-hover",
+        pressed && "border-primary bg-primary-wash hover:bg-primary-wash",
+      )}
     >
-      {body}
-    </button>
-  ) : (
-    <div className={classes}>{body}</div>
+      <div className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <span className="truncate">{label}</span>
+        {help && <Help>{help}</Help>}
+      </div>
+      {onClick ? (
+        <button
+          type="button"
+          aria-pressed={pressed}
+          aria-label={`${label}: show its comments`}
+          className="block w-full rounded-sm text-left"
+          onClick={onClick}
+        >
+          {figure}
+        </button>
+      ) : (
+        figure
+      )}
+    </div>
   );
 }
 

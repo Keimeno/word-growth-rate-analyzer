@@ -118,7 +118,7 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
         message = str(error)
         if TIMEOUT.search(message):
             return JSONResponse({"error": "the query took too long"}, status_code=504)
-        log.exception("%s failed", request.url.path)
+        log.error("%s failed: %s", request.url.path, message.splitlines()[0][:300])
         return JSONResponse({"error": message.splitlines()[0][:500]}, status_code=502)
 
     @app.get("/api/{path:path}", include_in_schema=False)

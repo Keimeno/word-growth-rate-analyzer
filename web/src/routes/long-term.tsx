@@ -19,7 +19,7 @@ import {
   scopeOptions,
 } from "@/components/Pickers";
 import { KpiRow, StatTile } from "@/components/Stat";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { assignSlots, colorOf } from "@/lib/colors";
 import {
   ago,
@@ -224,28 +224,32 @@ function LongTermPage() {
                 ))}
               </TabsList>
             </div>
+            <TabsContent value={tab}>
+              <p className="px-4 pt-2 pb-2 text-xs text-ink-muted">{description}</p>
+              <Loaded query={query} height={240}>
+                {() => (
+                  <DataTable
+                    key={tab}
+                    label={`${tab} terms`}
+                    rows={byCategory[tab]}
+                    rowKey={key}
+                    limit={25}
+                    initialSort={
+                      tab === "one-off" ? null : { id: "growth", desc: tab !== "fading" }
+                    }
+                    empty={
+                      <EmptyState title={`No ${tab} terms`}>
+                        {data && data.weeks_of_history < weeks
+                          ? `The ${weeks}-week window hasn't run yet.`
+                          : "Nothing passed the tests in this window and scope."}
+                      </EmptyState>
+                    }
+                    columns={columns(tab, slots)}
+                  />
+                )}
+              </Loaded>
+            </TabsContent>
           </Tabs>
-          <p className="px-4 pt-2 pb-2 text-xs text-ink-muted">{description}</p>
-          <Loaded query={query} height={240}>
-            {() => (
-              <DataTable
-                key={tab}
-                label={`${tab} terms`}
-                rows={byCategory[tab]}
-                rowKey={key}
-                limit={25}
-                initialSort={tab === "one-off" ? null : { id: "growth", desc: tab !== "fading" }}
-                empty={
-                  <EmptyState title={`No ${tab} terms`}>
-                    {data && data.weeks_of_history < weeks
-                      ? `The ${weeks}-week window hasn't run yet.`
-                      : "Nothing passed the tests in this window and scope."}
-                  </EmptyState>
-                }
-                columns={columns(tab, slots)}
-              />
-            )}
-          </Loaded>
         </Panel>
       </div>
     </>

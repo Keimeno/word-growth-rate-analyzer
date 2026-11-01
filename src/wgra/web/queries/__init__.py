@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import re
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -22,6 +23,11 @@ from clickhouse_connect.driver.client import Client
 from pydantic import BaseModel, BeforeValidator, Field
 
 WORD_KINDS = ["word", "phrase", "domain", "subreddit"]
+
+# Queries in flight at once, below the web user's max_concurrent_queries_for_user (6,
+# clickhouse/users.d/web.xml) with one to spare: requests beyond it wait their turn instead
+# of failing with TOO_MANY_SIMULTANEOUS_QUERIES.
+CONCURRENT = threading.BoundedSemaphore(5)
 
 
 @dataclass(frozen=True)
@@ -36,11 +42,12 @@ class Db:
         return int(self.now.timestamp())
 
     def rows(self, sql: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
-        result = self.client.query(
-            sql,
-            parameters={"now": self.timestamp, **parameters},
-            settings={"log_comment": f"web {self.endpoint}", **self.settings},
-        )
+        with CONCURRENT:
+            result = self.client.query(
+                sql,
+                parameters={"now": self.timestamp, **parameters},
+                settings={"log_comment": f"web {self.endpoint}", **self.settings},
+            )
         return [dict(zip(result.column_names, row, strict=True)) for row in result.result_rows]
 
     def one(self, sql: str, parameters: dict[str, Any]) -> dict[str, Any]:

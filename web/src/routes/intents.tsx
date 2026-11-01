@@ -20,7 +20,7 @@ import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, MultiPicker, ScopePicker, Segmented } from "@/components/Pickers";
 import { KpiRow, StatTile } from "@/components/Stat";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { seriesColor } from "@/lib/colors";
 import { count, decimal, formatDate, perThousand, times } from "@/lib/format";
@@ -303,84 +303,88 @@ function IntentsPage() {
                 ))}
               </TabsList>
             </div>
+            <TabsContent value={search.rising}>
+              <p className="px-4 pt-2 pb-2 text-xs text-ink-muted">
+                Rising: the last 7 days (today included) against the 28 days before, the most extra
+                mentions first. Ignores the range above.
+              </p>
+              <Loaded query={rising}>
+                {(data) => (
+                  <DataTable
+                    key={search.rising}
+                    label="Rising intents"
+                    rows={data.entries}
+                    rowKey={(row) => row.term}
+                    limit={15}
+                    empty={
+                      <EmptyState title="Nothing rising here this week">
+                        Try fewer minimum people, or a bigger group.
+                      </EmptyState>
+                    }
+                    columns={[
+                      {
+                        id: "entity",
+                        header: risingLabel,
+                        cell: (row) => (
+                          <TermLink term={row.term} kind={search.rising} label={row.entity} />
+                        ),
+                      },
+                      {
+                        id: "mentions",
+                        header: "This week",
+                        numeric: true,
+                        sort: (row) => row.mentions,
+                        cell: (row) => (
+                          <div>
+                            {count(row.mentions)}
+                            <div className="text-xs text-ink-muted">
+                              {count(row.authors)} people
+                            </div>
+                          </div>
+                        ),
+                      },
+                      {
+                        id: "daily",
+                        header: "Last 35 days",
+                        wide: true,
+                        cell: (row) => (
+                          <Sparkline
+                            values={data.sparklines[row.term]}
+                            width={110}
+                            label={`${row.entity} per day`}
+                          />
+                        ),
+                      },
+                      {
+                        id: "excess",
+                        header: "Extra",
+                        numeric: true,
+                        sort: (row) => row.excess,
+                        help: "Mentions above what its share before would give.",
+                        cell: (row) => `+${decimal(row.excess, (row.excess ?? 0) >= 10 ? 0 : 1)}`,
+                      },
+                      {
+                        id: "ratio",
+                        header: "× usual",
+                        numeric: true,
+                        sort: (row) => row.times_usual,
+                        cell: (row) => times(row.times_usual),
+                      },
+                      {
+                        id: "comments",
+                        header: "",
+                        cell: (row) => (
+                          <Button variant="link" size="xs" onClick={() => showComments(row.term)}>
+                            Comments
+                          </Button>
+                        ),
+                      },
+                    ]}
+                  />
+                )}
+              </Loaded>
+            </TabsContent>
           </Tabs>
-          <p className="px-4 pt-2 pb-2 text-xs text-ink-muted">
-            Rising: the last 7 days (today included) against the 28 days before, the most extra
-            mentions first. Ignores the range above.
-          </p>
-          <Loaded query={rising}>
-            {(data) => (
-              <DataTable
-                key={search.rising}
-                label="Rising intents"
-                rows={data.entries}
-                rowKey={(row) => row.term}
-                limit={15}
-                empty={
-                  <EmptyState title="Nothing rising here this week">
-                    Try fewer minimum people, or a bigger group.
-                  </EmptyState>
-                }
-                columns={[
-                  {
-                    id: "entity",
-                    header: risingLabel,
-                    cell: (row) => (
-                      <TermLink term={row.term} kind={search.rising} label={row.entity} />
-                    ),
-                  },
-                  {
-                    id: "mentions",
-                    header: "This week",
-                    numeric: true,
-                    sort: (row) => row.mentions,
-                    cell: (row) => (
-                      <div>
-                        {count(row.mentions)}
-                        <div className="text-xs text-ink-muted">{count(row.authors)} people</div>
-                      </div>
-                    ),
-                  },
-                  {
-                    id: "daily",
-                    header: "Last 35 days",
-                    wide: true,
-                    cell: (row) => (
-                      <Sparkline
-                        values={data.sparklines[row.term]}
-                        width={110}
-                        label={`${row.entity} per day`}
-                      />
-                    ),
-                  },
-                  {
-                    id: "excess",
-                    header: "Extra",
-                    numeric: true,
-                    sort: (row) => row.excess,
-                    help: "Mentions above what its share before would give.",
-                    cell: (row) => `+${decimal(row.excess, (row.excess ?? 0) >= 10 ? 0 : 1)}`,
-                  },
-                  {
-                    id: "ratio",
-                    header: "× usual",
-                    numeric: true,
-                    sort: (row) => row.times_usual,
-                    cell: (row) => times(row.times_usual),
-                  },
-                  {
-                    id: "comments",
-                    header: "",
-                    cell: (row) => (
-                      <Button variant="link" size="xs" onClick={() => showComments(row.term)}>
-                        Comments
-                      </Button>
-                    ),
-                  },
-                ]}
-              />
-            )}
-          </Loaded>
         </Panel>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -475,7 +479,7 @@ function NeedGroups({ rows }: { rows: Need[] }) {
       {[...groups].map(([group, items]) => (
         <div key={group}>
           <h3 className="mb-1 text-xs font-medium text-ink-muted">{group}</h3>
-          <ol className="flex flex-col gap-0.5 text-sm">
+          <ol className="flex flex-col gap-1.5 text-sm">
             {items.map((item) => (
               <li key={item.term} className="flex items-baseline justify-between gap-2">
                 <TermLink term={item.term} kind="need" label={item.need} />

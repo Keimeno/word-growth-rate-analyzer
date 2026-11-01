@@ -16,7 +16,13 @@ export default defineConfig({
     {
       name: "desktop",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+      testIgnore: ["mobile.spec.ts"],
     },
-    { name: "phone", use: { ...devices["iPhone 15"], viewport: { width: 390, height: 844 } } },
+    {
+      name: "phone",
+      use: { ...devices["iPhone 15"], viewport: { width: 390, height: 844 } },
+      // the main flows on a phone; every page's axe check runs on the desktop
+      testMatch: ["mobile.spec.ts"],
+    },
   ],
 });
