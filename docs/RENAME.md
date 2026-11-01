@@ -1,8 +1,10 @@
 # Rename to Undercurrent: plan
 
-**Status: code renamed 2026-11-01 (§3.2–§3.4); the switch of the running stack (§3.5) is
-next.** The project becomes Undercurrent everywhere except the GitHub repository, which
-keeps its name for now.
+**Status: done 2026-11-01.** The code is renamed (§3.2–§3.4) and the local stack runs as
+`undercurrent` (§3.5), collecting from scratch since 15:07 UTC; the bench container was
+renamed in place. The old volumes and images are the way back until step 6 deletes them,
+from 2026-11-02. The project becomes Undercurrent everywhere except the GitHub repository,
+which keeps its name for now.
 
 "Word Growth Rate Analyzer" describes the first engine: which words gain share of the
 conversation. The project now also says where a term starts and where it goes next (§4.6
