@@ -63,3 +63,58 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
+
+  # The page against the API on the small demo database (bench/demo.py): every page in both
+  # themes with axe, the main flows on a phone; the API's schema and the page's types agree.
+  e2e:
+    needs: [web]
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.8
+        env:
+          CLICKHOUSE_DB: wgra
+          CLICKHOUSE_USER: wgra
+          CLICKHOUSE_PASSWORD: ci-password
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "wget -qO- http://127.0.0.1:8123/ping || exit 1"
+          --health-interval 5s
+          --health-retries 30
+    env:
+      CLICKHOUSE_HOST: localhost
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: wgra
+      CLICKHOUSE_PASSWORD: ci-password
+      CLICKHOUSE_DB: wgra_demo
+      UNDERCURRENT_NOW: "2026-11-01T12:00:00Z"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: cd web && pnpm install --frozen-lockfile
+      # the API and the page's generated types agree
+      - run: |
+          uv run wgra web openapi > web/src/api/openapi.json
+          (cd web && pnpm gen:api)
+          git diff --exit-code
+      - run: uv run python bench/demo.py seed --database wgra_demo --small
+      - run: cd web && pnpm build && pnpm exec playwright install --with-deps chromium webkit
+      - run: |
+          uv run wgra web --port 3610 &
+          for i in $(seq 1 30); do curl -sf localhost:3610/api/v1/meta > /dev/null && break; sleep 1; done
+          cd web && pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report

@@ -5,6 +5,7 @@ requests run in parallel."""
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -23,7 +24,10 @@ def database(
 ) -> Db:
     """The request's database: as of `as_of`, the server's frozen time, or now."""
     route = request.scope.get("route")
-    endpoint = getattr(route, "path", request.url.path).removeprefix("/api/v1")
+    # "/terms/{kind}/{term}", without the path converter, as the schema names it
+    endpoint = re.sub(
+        r":\w+}", "}", getattr(route, "path", request.url.path).removeprefix("/api/v1")
+    )
     settings = request.app.state.settings
     now = as_of or settings.now or datetime.now(UTC)
     return Db(request.app.state.client, endpoint, utc(now).replace(microsecond=0))
