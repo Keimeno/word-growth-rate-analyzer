@@ -426,15 +426,16 @@ Accepted by the user on 2026-11-01, each the recommended option:
 ## 11. What changes elsewhere
 
 Each a small change, made with the web dashboard rebuild
-([WEB-DASHBOARD.md](WEB-DASHBOARD.md) §16):
+([WEB-DASHBOARD.md](WEB-DASHBOARD.md) §16); all done on 2026-11-01 except Grafana's
+colours:
 
 * WEB-DASHBOARD.md §4.5 and §8.1 point at this document for colour and type (the system
   sans becomes IBM Plex Sans), and the token CSS and the ECharts theme moved to `web/src/`
   (done 2026-11-01).
-* `src/…/web/static/index.html` and the new `web/index.html`: `favicon.svg`,
-  `apple-touch-icon.png` and a web app manifest with the 512 px icons.
+* `web/index.html`: `favicon.svg`, `apple-touch-icon.png` and a web app manifest with the
+  512 px icons (today's page, which got the favicon too, is deleted).
 * `notify/messages.py`: an `Icon` header with `notification-icon.png` served by the web
   dashboard, no `tags`, and the ping title in the new name (the rename covers the name).
 * README: the header `<picture>` above, and the descriptor in `pyproject.toml`.
 * Grafana (pro mode): the dashboard builder can set the series colours and fixed colours per
-  field; Grafana's own interface keeps its theme.
+  field; Grafana's own interface keeps its theme. Not done yet.

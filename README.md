@@ -1,4 +1,13 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-header-dark.svg">
+  <img src="docs/brand/readme-header.svg" alt="Undercurrent" width="640">
+</picture>
+
 # Word Growth Rate Analyzer
+
+**Early signals in online conversation.** What's rising, where it starts, where it spreads
+next, and why people switch products. The look and the voice are in
+[docs/BRAND.md](docs/BRAND.md).
 
 Finds out which words and phrases are gaining or losing share of the conversation in
 subreddits and groups of subreddits, over hours (short term) and months (long term).
@@ -51,8 +60,10 @@ Requires Docker. Works the same on a laptop and on a server.
 
    * `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` of a Reddit "script" app. No Reddit
      username or password needed, and only while `platforms.reddit` is enabled.
-   * `AUTHOR_HASH_KEY`, `CLICKHOUSE_PASSWORD` and `GRAFANA_ADMIN_PASSWORD`: generate each
-     with `openssl rand -hex 32`. Never change `AUTHOR_HASH_KEY` afterwards.
+   * `AUTHOR_HASH_KEY`, `CLICKHOUSE_PASSWORD`, `WEB_CLICKHOUSE_PASSWORD` and
+     `GRAFANA_ADMIN_PASSWORD`: generate each with `openssl rand -hex 32`. Never change
+     `AUTHOR_HASH_KEY` afterwards. `WEB_CLICKHOUSE_PASSWORD` is the web dashboard's own
+     ClickHouse user, which can only read (and keep its pins and saved views).
 
 2. Choose subreddits and groups in `config.yaml`. A group lists channels: a subreddit is
    written `r/technology`.
@@ -63,15 +74,30 @@ Requires Docker. Works the same on a laptop and on a server.
    docker compose up -d --build
    ```
 
-4. Open the web dashboard at <http://localhost:3610>. It shows what the Grafana
-   dashboards below show, presented more plainly: one row per trending term with where
-   else it trends, words instead of statistics' names (a q-value is "very strong",
-   "moderate" or "weak", with the number on hover), explanations next to the numbers, and
-   any term opens in a side panel with its chart, where it's discussed and the comments
-   behind it. Its pages are Trending (and a Quick look, Rising), Long-term, Why people
-   switch (Intent radar), Early warning, Explore (Term explorer) and Collection
-   (Ingestion). Every view is a link, and "Pro mode" opens the same view in Grafana. Set
-   `WEB_PASSWORD` in `.env` to ask for a password.
+4. Open the web dashboard at <http://localhost:3610>
+   ([docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)). Its pages are Trending (with a Quick
+   look and what-if gates), Long-term, Why people switch, Early warning (the spread map,
+   arrivals, the forecasts' record), Explore, Alerts, Pinned and Collection. Every term,
+   channel, story, leader → follower pair and product has a page of its own, one click
+   from wherever it appears:
+   * **A term's page**, the page an alert opens: its share over time with the runs where
+     it trended, the alerts sent and the onsets marked; why it's trending (the parts of
+     its score and the gates, recomputed with the detector's own code); where it's
+     discussed and the order its channels took it up; the stories it was part of; the
+     terms mentioned with it; its rhythm by hour of week and over a year; the comments
+     behind it. A plain click on a term opens it in a side panel instead.
+   * **A story's page** replays how it spread, hour by hour; a pair's page says in words
+     how often and how fast the follower picks up the leader's terms.
+   * Words instead of statistics' names (a q-value is "very strong", the number on hover),
+     counts below 10 stay counts, every chart has its table (focus it, press `t`) and
+     CSV, PNG and SVG exports.
+   * `⌘K` or `/` searches pages, scopes and terms, saves the view under a name, and shows
+     the dashboard as of a past date (type `2026-10-30 12:00`). `?` lists the shortcuts.
+   * It updates itself when the analyzer runs, and a new alert shows as a notice. Pinned
+     terms come first on Trending and are the same on every device.
+
+   Every view is a link, and "Pro mode" opens the same view in Grafana. Set `WEB_PASSWORD`
+   in `.env` to ask for a password.
 
    Grafana stays as the pro mode, with every panel and setting: open
    <http://localhost:3608>, log in as `admin` with `GRAFANA_ADMIN_PASSWORD`.
@@ -164,10 +190,13 @@ It prints how many alerts each day and group would get, and lists them.
 ### Notifications on your phone
 
 Install the ntfy app (Android, iOS) and subscribe to the topic `wgra` on your server.
-The phone has to reach ntfy and, for the links, Grafana:
+Tapping an alert opens the term's page in the web dashboard (`WEB_URL`), with a second
+button for Grafana (`GRAFANA_URL`); `notify.links: grafana` in `config.yaml` opens Grafana
+instead. The phone has to reach ntfy and, for the links, the dashboard and Grafana:
 
-* **On a server:** put ntfy (port 3609) and Grafana (3608) behind a reverse proxy with
-  TLS, set `NTFY_BASE_URL` and `GRAFANA_URL` in `.env` to their public urls, and protect
+* **On a server:** put ntfy (port 3609), the web dashboard (3610) and Grafana (3608)
+  behind a reverse proxy with TLS, set `NTFY_BASE_URL`, `WEB_URL` and `GRAFANA_URL` in
+  `.env` to their public urls, and protect
   them (ntfy supports [access control](https://docs.ntfy.sh/config/#access-control),
   pass a token as `NTFY_TOKEN`). On iOS, also set
   `NTFY_UPSTREAM_BASE_URL=https://ntfy.sh` for instant delivery (free, only message ids
@@ -450,11 +479,25 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy
   `Sink`, a `Source`), like `sources/reddit/`.
 * The dashboards are generated: edit `grafana/build_dashboards.py` and run
   `uv run python grafana/build_dashboards.py`. Grafana reloads them within 10 seconds.
-* The web dashboard is `src/wgra/web/`: `queries.py` has the same queries as the Grafana
-  panels, as JSON endpoints, so a change to a panel's numbers usually belongs in both.
-  The page is plain JavaScript modules in `web/static/` with Preact and htm vendored (one
-  file, no build step): edit and reload. `uv run wgra web` serves it on port 3610 from
-  the ClickHouse in `.env`.
+* The web dashboard ([docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)) has two halves:
+  * **The API** in `src/wgra/web/`: FastAPI under `/api/v1/`, the SQL in `queries/`, a
+    Pydantic model per response in `models.py`, the routes in `routes/`, the live stream
+    in `stream.py`. Every query runs as of a time (`as_of`, or `UNDERCURRENT_NOW` for
+    the demo database). A change to a panel's numbers usually belongs in Grafana's builder
+    too. `uv run wgra web --dev --port 3612 --reload` serves only the API.
+  * **The page** in `web/`: React and TypeScript, built by Vite, on Node 26 and pnpm 12
+    ([web/AGENTS.md](web/AGENTS.md) has the conventions). In `web/`: `pnpm install`,
+    `pnpm dev` (port 3611, `/api` proxied to 3610 or `UNDERCURRENT_API`), `pnpm check`
+    (types, lint, format, unit tests), `pnpm e2e` (Playwright and axe against a running
+    API, `E2E_URL`), `pnpm build`.
+  * A change to the API's data is a change to a model, then
+    `uv run wgra web openapi > web/src/api/openapi.json` and `cd web && pnpm gen:api`. CI
+    fails when the two disagree.
+* `bench/demo.py` seeds a deterministic demo database with planted stories into a
+  ClickHouse of its own (`--small` in about a minute and a half, the full one in about 11
+  minutes), the data the end-to-end tests and screenshots run on.
+  `bench/web.py` calls every endpoint against a database and reports each one's queries,
+  time, memory and rows from the query log, against a budget of 1 s and 500 MB.
 * `bench/` measures at production scale: `bench/synthetic.py` writes a year of synthetic
   history into a database of its own, `bench/long_term.py` runs the long-term detector
   over it and reports time and memory per query. `bench/lead_lag.py` writes hourly

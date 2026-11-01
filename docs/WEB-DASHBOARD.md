@@ -1,6 +1,7 @@
 # Web dashboard in TypeScript: plan
 
-**Status: in progress since 2026-11-01** (phases 0–3 done). Written for after the rename to
+**Status: built 2026-11-01** (phases 0–5), on port 3610 next to Grafana as the pro mode;
+what was built differently or not at all is in §17. Written for after the rename to
 Undercurrent ([RENAME.md](RENAME.md)), so it uses the new names: the package
 `undercurrent`, the command `undercurrent web`, Grafana uids `undercurrent-*`. Until the
 rename lands, the code keeps today's names (RENAME.md §2).
@@ -1345,3 +1346,87 @@ edits the same files.
    shortcuts, manifest.
 10. **README and architecture** (half a day): the development section, the architecture
     diagram's web box, this plan's status, and an "As built" section here.
+
+## 17. As built (2026-11-01)
+
+Built in one day on `develop`, a commit per step: the brand (`cd1999c`), phase 0
+(`9ec69df`), 1 (`0697200`), 2 (`eb2fc55`, `170e965`, the demo database `3c84fca`), 3
+(`d3bbdcd`, `633f56b`, `f6d725c`), 4 (`6b60d59`, `e1166f9`) and 5 (`0adb8b2`, `e031a2c`,
+`dc4d251`). Port 3610 serves it; today's page and its `/api/<name>` aliases are deleted.
+Checked by pytest (every endpoint, the web user's grants, the stream), Vitest (formatting,
+url state, colours, charts rendered to SVG), and Playwright with axe (WCAG 2.2 AA) on every
+page in both themes and a phone in WebKit, on the demo database and on the live one.
+
+**Versions** as of 2026-11-01, each at least three days old (`minimumReleaseAge`): Node
+26.13.0, pnpm 12.16.1, TypeScript 7.0.2, Vite 8.3.5, React 19.3.1 with the React Compiler
+through `@rolldown/plugin-babel` and Babel 8, Tailwind 4.3.3, TanStack Router 1.170.46,
+Query 5.105.0, Table 9.3.1, Zod 4.6.7, ECharts 6.1.0, orval 8.45.0 (8.46.0 was too new),
+Oxlint 1.90.0 with oxlint-tsgolint, Biome 2.6.4, Vitest 5.0.5, Playwright 1.64.1, FastAPI
+0.162.0, uvicorn 0.54.0. shadcn's CLI 4.23.0 added a package called `cn` to the
+dependencies (it misread the utils alias); it was removed and the components point at
+`@/lib/utils`.
+
+Where the plan changed against the code:
+
+* **The rename isn't in yet**, so the package is `src/wgra`, the command `wgra web`, the
+  ClickHouse user `wgra_web`, the Grafana uids `wgra-*`. New names that the rename's sed
+  wouldn't touch are already the new ones: `UNDERCURRENT_NOW`, `UNDERCURRENT_API`, the
+  localStorage key `undercurrent.theme`.
+* **The v1 leftovers** (`node_modules/`, `packages/`, `config.json`, `v2/`) are still
+  there, waiting for the user's OK; `tsconfig.json` names its `types`, so they're inert.
+* **Endpoints** follow §5.2 with these differences: `/trends/series`, `/digest`, `/alerts`
+  and `/ranks` under `/trends`; `/edges` carries the layer's status; `/forecasts`,
+  `/forecasts/record` and `/events` apart; Explore keeps `/explore` and
+  `/explore/mentions` (the term page uses them) instead of `/terms/…/series` and
+  `/mentions`; a term's sub-resources are `/annotations`, `/explain`, `/events`,
+  `/related`, `/channels` (small multiples) and `/rhythm` (hour of week and the year in
+  one); a story is `/events/{kind}/{start}/{term}` and on the page `/e/{kind}/{start}/
+  {term}`, the term last because it may contain slashes; an edge is
+  `/edge?leader=&follower=` and `/edge?…` on the page, since channel names contain
+  slashes; `/spread/map` gives each scope's median lag behind a story's first mover;
+  `/pins` and `/views` take PUT and DELETE. `/api/v1/stream` is left out of the schema:
+  orval can't read an event stream, and its clean step had deleted the generated client.
+* **Errors** are `{"error": "…"}` with 400, 403 (another origin), 404, 415 (not JSON),
+  502 and 504; FastAPI's 422 is taken out of the schema, so the generated types say so.
+* **Queries wait their turn:** at most 5 run at once, below the web user's
+  `max_concurrent_queries_for_user` of 6, which Playwright's parallel pages hit within
+  minutes (TOO_MANY_SIMULTANEOUS_QUERIES).
+* **Read only:** the web user's profile lost `readonly` when pins and views came; the
+  grants (SELECT, and INSERT on `web_pins` and `web_views` only) and the reads' own
+  `readonly: 2` keep it read only elsewhere, and a second client without that setting
+  writes. The users file is reloaded by ClickHouse without a restart; ClickHouse was
+  recreated once, keeping its volume, to mount it.
+* **Caching:** `max-age=60` for `/api/v1/`, none for ingestion, pins, views and the
+  stream (a browser-cached pin list hid an unpin); the 15-minute in-process cache only on
+  co-occurring terms.
+* **Migrations 005 and 006 are new files**, not edits of 001: the live database can't be
+  recreated. 005 adds `term_catalog` with its two refreshable views and the bloom filter
+  on `trends.term`; 006 the pins and saved views.
+* **`meta`** has no gates, readiness, run times or history per channel: each page's empty
+  state and notices say why it's empty instead (§8.4), and the what-if gates start from
+  the default gates (10 mentions, 5 people, ×2, z 3), not each scope's.
+* **The demo database** (§10.2) is `bench/demo.py`, by an agent: `--small` keeps 52 days
+  of hourly counts (the detector needs 29 before its first run, edges three weeks of
+  events), not 30; noise is damped so nothing trends by chance; it runs the detectors and
+  the Analyzer directly instead of `wgra replay --store`; small in about 1.5 minutes,
+  full in 11. It removes the tables' TTLs, since its time is frozen in the past.
+* **Not built** from §4, §6–§10: `wgra web record`, MSW fixtures and `pnpm dev:mock`;
+  Vitest component tests in browser mode (Playwright covers the components on the demo
+  database); visual screenshot tests with frozen time (the charts' SVG snapshots are
+  there); sort orders in the url and virtualized tables (tables show 25 rows and "show
+  all"); hover emphasis across charts and `hl=`; breadcrumbs from `from=` (a fixed one);
+  hover cards for scopes and stories (terms have them); arrow keys on charts; decals for
+  forced colours; the keyboard-only walk test; a comparison of each competitor on the
+  product page; forecasts' chances for followers not reached yet in the replay; the
+  dashboard's own cost on the Collection page; the stream's faster poll while the
+  Collection page is open; Renovate or Dependabot.
+* **Grafana:** its tables don't link to the term page yet (§6.8), its builder doesn't set
+  the brand's series colours (BRAND.md §11), and the drift test of §11.3 isn't written.
+* **`bench/web.py`** ran on the small demo database: all 35 endpoints within the budget,
+  the slowest `/rising` at 145 ms. Not yet at production scale: that needs the year of
+  bench history of `bench/synthetic.py` and `bench/lead_lag.py`, hours to generate.
+* **Alerts open the term page** only once the analyzer's image is rebuilt
+  (`docker compose up -d --build analyze`); `config.yaml` leaves `notify.links` at its
+  default, so older images still read the file (adding the key crashed them once).
+* **The Grafana decision** (§11.3) is due after four weeks of using the dashboard, around
+  2026-11-29.

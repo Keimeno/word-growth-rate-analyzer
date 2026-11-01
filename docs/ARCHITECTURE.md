@@ -64,16 +64,19 @@ flowchart LR
     I -->|one row per comment × distinct term| C
     C -->|materialized views| C
     A[analyze<br/>Python · scheduled jobs] <-->|SQL| C
-    G[Grafana<br/>ClickHouse datasource] -->|SQL| C
+    W[web<br/>FastAPI + a React page<br/>its own read-only user] -->|SQL| C
+    G[Grafana, the pro mode<br/>ClickHouse datasource] -->|SQL| C
   end
 
   A -->|alerts and digests| N[ntfy, self-hosted → phone]
   A -.->|optional: explain top trends| L[local LLM via Ollama<br/>or a paid API]
-  U((you)) --> G
-  N --> U
+  U((you)) --> W
+  U --> G
+  N -->|opens the term page| U
 ```
 
-There are three processes and one database, all in one `docker-compose.yml`.
+There are four processes (ingest, analyze, the web dashboard, Grafana) and one database, all
+in one `docker-compose.yml`.
 Everything in the solid boxes is free, open source software (see §3.6).
 
 ### 3.1 `ingest`
@@ -242,16 +245,45 @@ datasource. None of the dashboards need custom front-end code:
    the 28 before (with the short-term detector's score when they trend), the top needs of
    every group, and the comments behind each intent from the last 48 hours.
 
-A custom web UI is only worth building later, if you want to share this
-publicly.
+Grafana stays as the pro mode next to the web dashboard (§3.4.1) until the user picks one
+(docs/WEB-DASHBOARD.md §11.3).
+
+#### 3.4.1 The web dashboard (built 2026-11-01)
+
+The everyday view, on port 3610, planned and recorded as built in
+[WEB-DASHBOARD.md](WEB-DASHBOARD.md); its look is [BRAND.md](BRAND.md). One container
+serves both halves:
+
+* **The API**, Python in `src/wgra/web/`: FastAPI under `/api/v1/`, a Pydantic model per
+  response, the SQL in `queries/`. Every query runs as of a time (`as_of`, time travel),
+  says what's missing as null, carries its endpoint as `log_comment`, and waits its turn
+  below the web user's cap. The explainer recomputes a trend's score with
+  `detect/scoring.py`, co-occurring terms go through the ingester's term extraction, so
+  the page never disagrees with the detectors.
+* **The page**, TypeScript in `web/`: React, TanStack Router and Query, shadcn/ui on
+  Tailwind, charts through a kit on Apache ECharts. Its types are generated from the
+  API's OpenAPI schema; CI fails when they drift. Built into static files by Vite and
+  served by the API with the CSP of §5.4 of the plan.
+* **ClickHouse enforces the limits:** the dashboard connects as `wgra_web`
+  (`clickhouse/users.d/web.xml`), which can read and insert into its pins and saved views
+  only, with a profile of 2 threads, 1 GB, 30 s and a low priority, so it can't starve
+  the analyzer. Migration 005 adds `term_catalog` (the search, kept by two refreshable
+  views) and a bloom filter on `trends.term`; 006 the pins and saved views.
+* **Live:** one watcher polls ClickHouse every 30 seconds whatever the number of tabs and
+  tells them over server-sent events what changed; a new alert shows on an open page.
+* **Tested** against the demo database (`bench/demo.py`, planted stories, the real
+  detectors on top): pytest on every endpoint, Vitest with charts rendered to SVG,
+  Playwright with axe on every page in both themes and on a phone. `bench/web.py`
+  measures every endpoint's queries.
 
 ### 3.5 Notifications
 
 ntfy replaces HookNotifier. It's open source and runs as one more container in
 the compose file, so there are no message limits and no account. The public
 ntfy.sh also works without signup (250 messages/day free). It has an
-iOS/Android app and supports click actions, which can open the Grafana
-explorer for the term.
+iOS/Android app and supports click actions, which open the term's page in the web
+dashboard (`WEB_URL`, `notify.links: web`, the default since 2026-11-01) or Grafana's
+explorer (`notify.links: grafana`).
 
 There are two notification types:
 
@@ -1438,6 +1470,14 @@ sample `r/all`) and document types instead of subreddits and sources, the `chann
 table says what each channel is, and Reddit is a source behind the `Item`/`Sink`/`Source`
 interface in `src/wgra/sources/reddit/`. The same benchmark history gives the same
 trends, onsets and edges as before, apart from the names (CROSS-PLATFORM.md §8.7).
+
+### Web dashboard (built 2026-11-01)
+
+A dashboard in TypeScript on a typed Python API, with a page per term, scope, story, edge
+and product, and what Grafana can't do: the trend explainer, the replay of a story, the
+spread map, switching flows, co-occurring terms, rhythm, what-if gates, live updates, pins
+and time travel. §3.4.1 above; plan, phases and what was built differently in
+[WEB-DASHBOARD.md](WEB-DASHBOARD.md) §17.
 
 ### Public forecast ledger (planned, not started)
 
