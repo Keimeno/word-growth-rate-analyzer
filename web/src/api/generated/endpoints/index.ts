@@ -1,3 +1,4 @@
+export * from "./entities/entities";
 export * from "./explore/explore";
 export * from "./ingestion/ingestion";
 export * from "./intents/intents";

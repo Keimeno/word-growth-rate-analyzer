@@ -22,6 +22,7 @@ def test_migrations_are_applied_once(client):
         "002_trends",
         "003_long_term_trends",
         "004_lead_lag",
+        "005_web",
     ]
     assert migrate(client) == []
 

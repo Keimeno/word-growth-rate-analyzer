@@ -56,6 +56,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -224,6 +234,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -469,6 +489,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -649,6 +679,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -775,6 +815,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -955,6 +1005,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -1118,6 +1178,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -1218,6 +1288,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -1287,6 +1367,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -1425,6 +1515,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -1494,6 +1594,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -1711,6 +1821,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -1912,6 +2032,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -2145,6 +2275,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -2358,6 +2498,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -2515,6 +2665,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -2732,6 +2892,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -2961,6 +3131,16 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -3098,6 +3278,16 @@
           },
           "400": {
             "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
             "content": {
               "application/json": {
                 "schema": {
@@ -3251,6 +3441,1271 @@
               }
             }
           },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/terms/{kind}/{term}/annotations": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Term Annotations",
+        "description": "What to mark on the term's series: runs where it trended, onsets, forecasts.",
+        "operationId": "term_annotations",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Term"
+            }
+          },
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Annotations"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/terms/{kind}/{term}/explain": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Term Explain",
+        "description": "Why it's trending: the parts of its score, the gates, the alert's outcome.",
+        "operationId": "term_explain",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Term"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "horizon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(24h|6h)$",
+              "default": "24h",
+              "title": "Horizon"
+            }
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "the run; the latest one by default",
+              "title": "At"
+            },
+            "description": "the run; the latest one by default"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Explanation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/terms/{kind}/{term}/events": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Term Events",
+        "description": "The stories it was part of, as cascades.",
+        "operationId": "term_events",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Term"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TermEvent"
+                  },
+                  "title": "Response Term Events"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/terms/{kind}/{term}": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Term Summary",
+        "description": "Everything known about a term in a scope, summarized.",
+        "operationId": "term_summary",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Term"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TermSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scopes/{scope}": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Scope Detail",
+        "description": "A scope's members, volume, and the edges where it leads or follows.",
+        "operationId": "scope_detail",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/{kind}/{start}/{term}": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Event Detail",
+        "description": "One story: its onsets, forecasts, and every scope's share over its span.",
+        "operationId": "event_detail",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Term"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/edge": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Edge Detail",
+        "description": "One leader → follower pair, its training events and its forecasts.",
+        "operationId": "edge_detail",
+        "parameters": [
+          {
+            "name": "leader",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Leader"
+            }
+          },
+          {
+            "name": "follower",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Follower"
+            }
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all",
+              "title": "Topic"
+            }
+          },
+          {
+            "name": "without_leader",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Without Leader"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{name}": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Product Detail",
+        "description": "A product as the intents mention it: switches in and out, complaints, alternatives.",
+        "operationId": "product_detail",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "reddit",
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Alerts",
+        "description": "Every alert and forecast alert sent, newest first.",
+        "operationId": "alerts",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SentAlert"
+                  },
+                  "title": "Response Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ClickHouse failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The query hit its time limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Search",
+        "description": "Terms starting with what was typed, for the command palette.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SearchHit"
+                  },
+                  "title": "Response Search"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameters it can't read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term, scope, event or endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "502": {
             "description": "ClickHouse failed",
             "content": {
@@ -3354,6 +4809,47 @@
           "authors"
         ],
         "title": "Alert"
+      },
+      "Annotations": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/Run"
+            },
+            "type": "array",
+            "title": "Runs",
+            "description": "the scored runs where it trended, in the scope or its members"
+          },
+          "onsets": {
+            "items": {
+              "$ref": "#/components/schemas/TermOnset"
+            },
+            "type": "array",
+            "title": "Onsets"
+          },
+          "forecasts": {
+            "items": {
+              "$ref": "#/components/schemas/TermForecast"
+            },
+            "type": "array",
+            "title": "Forecasts"
+          },
+          "long_term": {
+            "items": {
+              "$ref": "#/components/schemas/TermLongTerm"
+            },
+            "type": "array",
+            "title": "Long Term"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runs",
+          "onsets",
+          "forecasts",
+          "long_term"
+        ],
+        "title": "Annotations"
       },
       "Bucket": {
         "type": "string",
@@ -3768,6 +5264,132 @@
         ],
         "title": "Edge"
       },
+      "EdgeDetail": {
+        "properties": {
+          "edge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "lags": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Lags"
+          },
+          "base_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rate"
+          },
+          "training": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingEvent"
+            },
+            "type": "array",
+            "title": "Training"
+          },
+          "forecasts": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeForecast"
+            },
+            "type": "array",
+            "title": "Forecasts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "edge",
+          "topic",
+          "day",
+          "lags",
+          "base_rate",
+          "training",
+          "forecasts"
+        ],
+        "title": "EdgeDetail"
+      },
+      "EdgeForecast": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "lag_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "term",
+          "created_at",
+          "probability",
+          "outcome",
+          "lag_hours"
+        ],
+        "title": "EdgeForecast"
+      },
       "Edges": {
         "properties": {
           "edges_learned": {
@@ -3867,6 +5489,408 @@
           "error"
         ],
         "title": "Error"
+      },
+      "EventDetail": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "closed": {
+            "type": "boolean",
+            "title": "Closed"
+          },
+          "onsets": {
+            "items": {
+              "$ref": "#/components/schemas/FullOnset"
+            },
+            "type": "array",
+            "title": "Onsets"
+          },
+          "forecasts": {
+            "items": {
+              "$ref": "#/components/schemas/EventForecast"
+            },
+            "type": "array",
+            "title": "Forecasts"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/EventSeries"
+            },
+            "type": "array",
+            "title": "Series",
+            "description": "per scope with an onset, share per hour"
+          },
+          "wikipedia_onset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wikipedia Onset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "term",
+          "start",
+          "last_seen",
+          "topic",
+          "closed",
+          "onsets",
+          "forecasts",
+          "series",
+          "wikipedia_onset"
+        ],
+        "title": "EventDetail"
+      },
+      "EventForecast": {
+        "properties": {
+          "leader": {
+            "type": "string",
+            "title": "Leader"
+          },
+          "follower": {
+            "type": "string",
+            "title": "Follower"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "expected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expected At"
+          },
+          "follower_onset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follower Onset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "leader",
+          "follower",
+          "created_at",
+          "probability",
+          "outcome",
+          "expected_at",
+          "follower_onset"
+        ],
+        "title": "EventForecast"
+      },
+      "EventSeries": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "per_1000": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per 1000"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "time",
+          "mentions",
+          "per_1000"
+        ],
+        "title": "EventSeries"
+      },
+      "Explanation": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "detected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Detected At"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "reference_mentions": {
+            "type": "integer",
+            "title": "Reference Mentions"
+          },
+          "reference_total": {
+            "type": "integer",
+            "title": "Reference Total"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "reference_days": {
+            "type": "integer",
+            "title": "Reference Days"
+          },
+          "share_now": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Now",
+            "description": "mentions / total in the window"
+          },
+          "share_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Before",
+            "description": "the same in the reference period"
+          },
+          "share_now_with_prior": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Now With Prior"
+          },
+          "share_before_with_prior": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Before With Prior"
+          },
+          "platform_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform Share",
+            "description": "the term's share in the platform's background"
+          },
+          "prior": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior",
+            "description": "α: pseudo-mentions the window got from the prior"
+          },
+          "log_odds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Odds"
+          },
+          "sigma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigma"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "is_new": {
+            "type": "boolean",
+            "title": "Is New"
+          },
+          "recomputed_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recomputed Score",
+            "description": "z from detect/scoring.py with today's settings"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/Gate"
+            },
+            "type": "array",
+            "title": "Gates"
+          },
+          "alert": {
+            "type": "string",
+            "title": "Alert"
+          },
+          "subsumed_by": {
+            "type": "string",
+            "title": "Subsumed By"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberScore"
+            },
+            "type": "array",
+            "title": "Members"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "scope_type",
+          "horizon",
+          "detected_at",
+          "mentions",
+          "total",
+          "reference_mentions",
+          "reference_total",
+          "authors",
+          "reference_days",
+          "share_now",
+          "share_before",
+          "share_now_with_prior",
+          "share_before_with_prior",
+          "platform_share",
+          "prior",
+          "log_odds",
+          "sigma",
+          "score",
+          "ratio",
+          "is_new",
+          "recomputed_score",
+          "gates",
+          "alert",
+          "subsumed_by",
+          "members"
+        ],
+        "title": "Explanation",
+        "description": "What a trend's score is made of, recomputed with the detector's own code."
       },
       "Explore": {
         "properties": {
@@ -4401,6 +6425,106 @@
         ],
         "title": "ForecastRecord"
       },
+      "FullOnset": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "without": {
+            "type": "string",
+            "title": "Without"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "without",
+          "at",
+          "mentions",
+          "ratio",
+          "score"
+        ],
+        "title": "FullOnset"
+      },
+      "Gate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "value",
+          "threshold",
+          "passed"
+        ],
+        "title": "Gate"
+      },
       "Ingestion": {
         "properties": {
           "documents_24h": {
@@ -4790,6 +6914,48 @@
         ],
         "title": "LongTermTrend"
       },
+      "MemberScore": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "score",
+          "ratio",
+          "mentions"
+        ],
+        "title": "MemberScore"
+      },
       "Mention": {
         "properties": {
           "time": {
@@ -4955,6 +7121,110 @@
           "at"
         ],
         "title": "Onset"
+      },
+      "ProductDay": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "kind",
+          "mentions"
+        ],
+        "title": "ProductDay"
+      },
+      "ProductDetail": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "flows_in": {
+            "items": {
+              "$ref": "#/components/schemas/ProductFlow"
+            },
+            "type": "array",
+            "title": "Flows In",
+            "description": "switches to it, from where"
+          },
+          "flows_out": {
+            "items": {
+              "$ref": "#/components/schemas/ProductFlow"
+            },
+            "type": "array",
+            "title": "Flows Out",
+            "description": "switches away from it, to where"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts",
+            "description": "mentions per intent kind about it"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/ProductDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Terms",
+            "description": "its intent terms, for the comments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "flows_in",
+          "flows_out",
+          "counts",
+          "daily",
+          "terms"
+        ],
+        "title": "ProductDetail"
+      },
+      "ProductFlow": {
+        "properties": {
+          "product": {
+            "type": "string",
+            "title": "Product"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product",
+          "mentions",
+          "authors"
+        ],
+        "title": "ProductFlow"
       },
       "RequestRate": {
         "properties": {
@@ -5293,6 +7563,59 @@
         ],
         "title": "RisingIntents"
       },
+      "Run": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "alert": {
+            "type": "string",
+            "title": "Alert"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "horizon",
+          "scope",
+          "score",
+          "ratio",
+          "alert"
+        ],
+        "title": "Run"
+      },
       "Scope": {
         "properties": {
           "name": {
@@ -5315,6 +7638,299 @@
           "type"
         ],
         "title": "Scope"
+      },
+      "ScopeDetail": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeMember"
+            },
+            "type": "array",
+            "title": "Members"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Groups",
+            "description": "the groups it's in"
+          },
+          "volume": {
+            "items": {
+              "$ref": "#/components/schemas/VolumePoint"
+            },
+            "type": "array",
+            "title": "Volume"
+          },
+          "leads": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeEdge"
+            },
+            "type": "array",
+            "title": "Leads",
+            "description": "edges where it or its channels lead"
+          },
+          "follows": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeEdge"
+            },
+            "type": "array",
+            "title": "Follows",
+            "description": "edges where it or its channels follow"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "platform",
+          "members",
+          "groups",
+          "volume",
+          "leads",
+          "follows"
+        ],
+        "title": "ScopeDetail"
+      },
+      "ScopeEdge": {
+        "properties": {
+          "leader": {
+            "type": "string",
+            "title": "Leader"
+          },
+          "follower": {
+            "type": "string",
+            "title": "Follower"
+          },
+          "without_leader": {
+            "type": "boolean",
+            "title": "Without Leader"
+          },
+          "lift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lift"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "lag_median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Median"
+          },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "hits": {
+            "type": "integer",
+            "title": "Hits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "leader",
+          "follower",
+          "without_leader",
+          "lift",
+          "probability",
+          "lag_median",
+          "events",
+          "hits"
+        ],
+        "title": "ScopeEdge"
+      },
+      "ScopeMember": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "documents",
+          "authors",
+          "share"
+        ],
+        "title": "ScopeMember"
+      },
+      "SearchHit": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "term",
+          "mentions",
+          "last_seen"
+        ],
+        "title": "SearchHit"
+      },
+      "SentAlert": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "term_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Kind"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "kind",
+          "scope",
+          "term",
+          "title",
+          "message",
+          "ok",
+          "term_kind",
+          "horizon",
+          "score"
+        ],
+        "title": "SentAlert"
       },
       "SharePoint": {
         "properties": {
@@ -5369,6 +7985,447 @@
           "bytes"
         ],
         "title": "TableSize"
+      },
+      "TermEvent": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "closed": {
+            "type": "boolean",
+            "title": "Closed"
+          },
+          "cascade": {
+            "items": {
+              "$ref": "#/components/schemas/Onset"
+            },
+            "type": "array",
+            "title": "Cascade"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "term",
+          "start",
+          "topic",
+          "closed",
+          "cascade"
+        ],
+        "title": "TermEvent"
+      },
+      "TermForecast": {
+        "properties": {
+          "leader": {
+            "type": "string",
+            "title": "Leader"
+          },
+          "follower": {
+            "type": "string",
+            "title": "Follower"
+          },
+          "without_leader": {
+            "type": "boolean",
+            "title": "Without Leader"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "leader_onset": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Leader Onset"
+          },
+          "expected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expected At"
+          },
+          "due_by": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due By"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "follower_onset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follower Onset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "leader",
+          "follower",
+          "without_leader",
+          "created_at",
+          "leader_onset",
+          "expected_at",
+          "due_by",
+          "probability",
+          "outcome",
+          "follower_onset"
+        ],
+        "title": "TermForecast"
+      },
+      "TermLongTerm": {
+        "properties": {
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "growth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Growth"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "window_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Window Start"
+          },
+          "week": {
+            "type": "string",
+            "format": "date",
+            "title": "Week"
+          }
+        },
+        "type": "object",
+        "required": [
+          "horizon",
+          "scope",
+          "category",
+          "growth",
+          "change",
+          "q",
+          "window_start",
+          "week"
+        ],
+        "title": "TermLongTerm"
+      },
+      "TermOnset": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "event_start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Event Start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "at",
+          "event_start"
+        ],
+        "title": "TermOnset"
+      },
+      "TermSummary": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "trending": {
+            "items": {
+              "$ref": "#/components/schemas/TermTrend"
+            },
+            "type": "array",
+            "title": "Trending",
+            "description": "the latest run of each horizon, strongest first"
+          },
+          "long_term": {
+            "items": {
+              "$ref": "#/components/schemas/TermLongTerm"
+            },
+            "type": "array",
+            "title": "Long Term"
+          },
+          "mentions_7d": {
+            "type": "integer",
+            "title": "Mentions 7D"
+          },
+          "authors_7d": {
+            "type": "integer",
+            "title": "Authors 7D"
+          },
+          "first_seen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen"
+          },
+          "sparkline": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Sparkline",
+            "description": "mentions per hour in the scope, the last 7 days"
+          },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "pending_forecasts": {
+            "type": "integer",
+            "title": "Pending Forecasts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "term",
+          "scope",
+          "trending",
+          "long_term",
+          "mentions_7d",
+          "authors_7d",
+          "first_seen",
+          "sparkline",
+          "events",
+          "pending_forecasts"
+        ],
+        "title": "TermSummary"
+      },
+      "TermTrend": {
+        "properties": {
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type"
+          },
+          "detected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Detected At"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "is_new": {
+            "type": "boolean",
+            "title": "Is New"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "breadth": {
+            "type": "integer",
+            "title": "Breadth"
+          },
+          "members": {
+            "type": "integer",
+            "title": "Members"
+          },
+          "alert": {
+            "type": "string",
+            "title": "Alert"
+          },
+          "subsumed_by": {
+            "type": "string",
+            "title": "Subsumed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "horizon",
+          "scope",
+          "scope_type",
+          "detected_at",
+          "score",
+          "ratio",
+          "is_new",
+          "mentions",
+          "authors",
+          "breadth",
+          "members",
+          "alert",
+          "subsumed_by"
+        ],
+        "title": "TermTrend",
+        "description": "A term in the latest run of a horizon, in one scope."
+      },
+      "TrainingEvent": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "leader_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Leader At"
+          },
+          "follower_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follower At"
+          },
+          "lag_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "term",
+          "start",
+          "leader_at",
+          "follower_at",
+          "lag_hours"
+        ],
+        "title": "TrainingEvent"
       },
       "Trend": {
         "properties": {
@@ -5526,6 +8583,30 @@
           "sparklines"
         ],
         "title": "Trends"
+      },
+      "VolumePoint": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "documents",
+          "authors"
+        ],
+        "title": "VolumePoint"
       },
       "WikipediaRecord": {
         "properties": {

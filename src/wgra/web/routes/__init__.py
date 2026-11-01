@@ -32,15 +32,16 @@ def database(
 # what every route can answer besides its data, all as {"error": "…"}
 ERRORS: dict[int | str, dict[str, Any]] = {
     400: {"model": Error, "description": "Parameters it can't read"},
+    404: {"model": Error, "description": "No such term, scope, event or endpoint"},
     502: {"model": Error, "description": "ClickHouse failed"},
     504: {"model": Error, "description": "The query hit its time limit"},
 }
 
 
 def api() -> APIRouter:
-    from wgra.web.routes import explore, ingestion, intents, meta, spread, trends
+    from wgra.web.routes import entities, explore, ingestion, intents, meta, spread, trends
 
     router = APIRouter(prefix="/api/v1", responses=ERRORS)
-    for module in (meta, trends, spread, intents, explore, ingestion):
+    for module in (meta, trends, spread, intents, explore, ingestion, entities):
         router.include_router(module.router)
     return router

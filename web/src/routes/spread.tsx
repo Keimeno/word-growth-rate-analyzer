@@ -1,4 +1,4 @@
-import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useEdges, useEvents, useForecastRecord, useForecasts } from "@/api/generated/endpoints";
 import type { Edge } from "@/api/generated/model";
@@ -8,7 +8,7 @@ import { Meter } from "@/charts/micro";
 import { network, timeSeries } from "@/charts/options";
 import { Filters, PageHeader } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
-import { StatusBadge, StrengthWord, TermLink } from "@/components/Entity";
+import { EventLink, StatusBadge, StrengthWord, TermLink } from "@/components/Entity";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, MultiPicker, Segmented } from "@/components/Pickers";
 import { KpiRow, StatTile } from "@/components/Stat";
@@ -32,7 +32,7 @@ import {
   inFuture,
   percent,
 } from "@/lib/format";
-import { useSetSearch } from "@/lib/navigation";
+import { searchOf, useSetSearch } from "@/lib/navigation";
 import { spreadDefaults, spreadSearch } from "@/lib/search";
 
 export const Route = createFileRoute("/spread")({
@@ -315,7 +315,9 @@ function SpreadPage() {
                       header: "Term",
                       cell: (row) => (
                         <div>
-                          <TermLink term={row.term} kind={row.kind} />
+                          <EventLink kind={row.kind} term={row.term} start={row.start}>
+                            <span className="term font-medium">{row.term}</span>
+                          </EventLink>
                           <div className="text-xs text-ink-muted">
                             {row.topic || "no topic"}
                             {row.closed ? " · closed" : ""}
@@ -371,7 +373,20 @@ function SpreadPage() {
                     id: "leader",
                     header: "Leader",
                     sort: (row) => row.leader,
-                    cell: (row) => <span className="font-medium">{row.leader}</span>,
+                    cell: (row) => (
+                      <Link
+                        to="/edge"
+                        search={searchOf({
+                          leader: row.leader,
+                          follower: row.follower,
+                          topic: search.topic,
+                          without_leader: row.without_leader,
+                        })}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {row.leader}
+                      </Link>
+                    ),
                   },
                   {
                     id: "follower",

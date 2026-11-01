@@ -18,6 +18,7 @@ from helpers import make_config, make_doc, make_trend
 from pydantic import BaseModel
 
 from wgra.config import Env
+from wgra.detect.scoring import Counts, Prior
 from wgra.detect.short_term import write_trends
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
 from wgra.ingest.run import write_channels
@@ -138,9 +139,24 @@ def get(web: TestClient, path: str) -> Any:
 V1 = sorted(path for path in openapi()["paths"] if path.startswith("/api/v1/"))
 
 
+# what the paths' parameters are filled with; an event that doesn't exist is a 404
+PATH_PARAMETERS = {
+    "{kind}": "word",
+    "{term}": "rust",
+    "{scope}": "tech",
+    "{name}": "notion",
+    "{start}": "2026-10-31T12:00:00Z",
+}
+
+
 @pytest.mark.parametrize("path", V1)
 def test_every_endpoint_runs_on_the_schema(web, path):
-    get(web, f"{path}?scope=tech&terms=rust&kind=complaint")
+    for placeholder, value in PATH_PARAMETERS.items():
+        path = path.replace(placeholder, value)
+    response = web.get(f"{path}?scope=tech&terms=rust&kind=complaint&q=ru&leader=r/a&follower=tech")
+    assert response.status_code == (404 if path.startswith("/api/v1/events/") else 200), (
+        response.text
+    )
 
 
 @pytest.mark.parametrize("name", sorted(legacy.ALIASES))
@@ -347,3 +363,72 @@ def test_the_dashboard_s_user_can_read_but_not_write(readonly):
     ]:
         with pytest.raises(DatabaseError):
             readonly.command(statement)
+
+
+def test_the_term_page_summarizes_the_term(web):
+    data = get(web, "/api/v1/terms/word/rust?scope=tech")
+    assert [(trend["scope"], trend["horizon"]) for trend in data["trending"]] == [("tech", "24h")]
+    assert (data["mentions_7d"], data["authors_7d"]) == (3, 3)
+    assert sum(data["sparkline"]) == 3 and len(data["sparkline"]) == 7 * 24
+    annotations = get(web, "/api/v1/terms/word/rust/annotations?scope=tech&range=2d")
+    assert [run["scope"] for run in annotations["runs"]] == ["tech"]
+    assert web.get("/api/v1/terms/word/rust/explain?scope=r/de").status_code == 404
+
+
+def test_a_term_with_a_slash_is_the_rest_of_the_path(web):
+    data = get(web, "/api/v1/terms/repo/ollama/ollama?scope=tech")
+    assert (data["kind"], data["term"]) == ("repo", "ollama/ollama")
+    assert get(web, "/api/v1/terms/repo/ollama/ollama/events") == []
+
+
+def test_the_explainer_recomputes_the_detector_s_score(stored, web):
+    # a trend scored like the detector does: no background share, so α is the floor
+    counts = Counts(mentions=40, total=2_000, reference_mentions=6, reference_total=50_000)
+    score = counts.score(Prior(total=1, weight=0.05, floor=1.0))
+    write_trends(
+        stored,
+        [
+            make_trend(
+                "rust", kind="word", scope="r/de", horizon="6h", detected_at=HOUR,
+                mentions=40, total=2_000, reference_mentions=6, reference_total=50_000,
+                authors=30, prior=score.alpha, log_odds=score.log_odds, ratio=score.ratio,
+                z=score.z, reference_days=2,
+            )
+        ],
+    )  # fmt: skip
+    app = create_app(stored, Settings(config=make_config()))
+    with TestClient(app) as client:
+        data = get(client, "/api/v1/terms/word/rust/explain?scope=r/de&horizon=6h")
+    assert data["recomputed_score"] == pytest.approx(score.z)
+    assert data["share_now"] == pytest.approx(0.02)
+    assert data["platform_share"] == pytest.approx(0)
+    gates = {gate["name"]: gate["passed"] for gate in data["gates"]}
+    assert gates["mentions"] and gates["authors"] and not gates["history"]
+
+
+def test_scope_product_alerts_and_search(stored, web):
+    tech = get(web, "/api/v1/scopes/tech")
+    assert (tech["type"], tech["platform"]) == ("group", "reddit")
+    assert {member["channel"] for member in tech["members"]} == {"r/technology", "r/programming"}
+    assert web.get("/api/v1/scopes/nothing").status_code == 404
+    assert get(web, "/api/v1/scopes/r/technology")["groups"] == ["reddit", "tech"]
+
+    notion = get(web, "/api/v1/products/Notion?scope=tech")
+    assert [flow["product"] for flow in notion["flows_out"]] == ["obsidian"]
+    assert notion["counts"] == {"switch": 1}
+
+    stored.insert(
+        "notifications",
+        [[HOUR, "alert", "tech", "rust", "rust · tech", "×12", True, ""]],
+        column_names=["sent_at", "kind", "scope", "term", "title", "message", "ok", "error"],
+    )
+    [alert] = get(web, "/api/v1/alerts")
+    assert (alert["term"], alert["scope"], alert["term_kind"]) == ("rust", "tech", None)
+
+    stored.insert(
+        "term_catalog",
+        [["word", "rustacean", 5, HOUR], ["word", "rust", 50, HOUR]],
+        column_names=["kind", "term", "mentions", "last_seen"],
+    )
+    assert [hit["term"] for hit in get(web, "/api/v1/search?q=Rus")][:2] == ["rust", "rustacean"]
+    assert get(web, "/api/v1/edge?leader=r/a&follower=tech")["edge"] is None

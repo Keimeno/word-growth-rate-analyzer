@@ -15,7 +15,7 @@ import { timeSeries } from "@/charts/options";
 import { Filters, PageHeader } from "@/components/AppShell";
 import { Comments } from "@/components/Comments";
 import { DataTable } from "@/components/DataTable";
-import { TermLink } from "@/components/Entity";
+import { ProductLink, TermLink } from "@/components/Entity";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, MultiPicker, ScopePicker, Segmented } from "@/components/Pickers";
 import { KpiRow, StatTile } from "@/components/Stat";
@@ -222,7 +222,12 @@ function IntentsPage() {
                     id: "flow",
                     header: "Switch",
                     cell: (row) => (
-                      <TermLink term={row.term} kind="switch" label={`${row.from} → ${row.to}`} />
+                      <span className="inline-flex flex-wrap items-center gap-1">
+                        <TermLink term={row.term} kind="switch" label={`${row.from} → ${row.to}`} />
+                        <span className="text-xs text-ink-muted">
+                          (<ProductLink product={row.from} />, <ProductLink product={row.to} />)
+                        </span>
+                      </span>
                     ),
                   },
                   {

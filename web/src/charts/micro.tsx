@@ -146,3 +146,88 @@ export function BarList({
     </ul>
   );
 }
+
+/** Before → now on one scale, with a reference dot (the platform's share): the explainer's
+ * shares, the dumbbell of WEB-DASHBOARD.md §4.4 for a single row. */
+export function Dumbbell({
+  before,
+  now,
+  reference,
+  format,
+  labels = ["before", "now", "platform"],
+}: {
+  before: number;
+  now: number;
+  reference?: number | null | undefined;
+  format: (value: number) => string;
+  labels?: [string, string, string];
+}) {
+  const width = 320;
+  const max = Math.max(before, now, reference ?? 0) * 1.1 || 1;
+  const x = (value: number) => 12 + (value / max) * (width - 24);
+  // labels near an edge grow inwards
+  const anchor = (value: number) =>
+    x(value) < 60 ? "start" : x(value) > width - 60 ? "end" : "middle";
+  return (
+    <svg
+      viewBox={`0 0 ${width} 56`}
+      className="w-full max-w-md"
+      role="img"
+      aria-label={`${labels[0]} ${format(before)}, ${labels[1]} ${format(now)}${
+        reference == null ? "" : `, ${labels[2]} ${format(reference)}`
+      }`}
+    >
+      <line x1={12} x2={width - 12} y1={28} y2={28} stroke="var(--chart-grid)" />
+      <line x1={x(before)} x2={x(now)} y1={28} y2={28} stroke="var(--series-1)" strokeWidth={3} />
+      {reference != null && (
+        <g>
+          <circle
+            cx={x(reference)}
+            cy={28}
+            r={4}
+            fill="var(--surface)"
+            stroke="var(--ink-muted)"
+            strokeWidth={1.5}
+          />
+          <text
+            x={x(reference)}
+            y={52}
+            textAnchor={anchor(reference)}
+            fontSize={11}
+            fill="var(--ink-muted)"
+          >
+            {labels[2]} {format(reference)}
+          </text>
+        </g>
+      )}
+      <circle
+        cx={x(before)}
+        cy={28}
+        r={5}
+        fill="var(--surface)"
+        stroke="var(--series-1)"
+        strokeWidth={2}
+      />
+      <text
+        x={x(before)}
+        y={14}
+        textAnchor={anchor(before)}
+        fontSize={11}
+        fill="var(--ink-secondary)"
+      >
+        {labels[0]} {format(before)}
+      </text>
+      <circle cx={x(now)} cy={28} r={5} fill="var(--series-1)" />
+      <text
+        x={x(now)}
+        y={14}
+        textAnchor={anchor(now)}
+        fontSize={11}
+        fontWeight={500}
+        fill="var(--ink)"
+      >
+        {labels[1]} {format(now)}
+      </text>
+    </svg>
+  );
+}

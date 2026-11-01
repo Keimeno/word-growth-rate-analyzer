@@ -33,7 +33,9 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from wgra.config import Config
 from wgra.web import legacy
+from wgra.web.queries.entities import NotFound
 from wgra.web.routes import api
 
 log = logging.getLogger(__name__)
@@ -79,6 +81,8 @@ class Settings:
     page: bool = True
     # the built app (web/dist); None serves only today's page
     dist: Path | None = DIST
+    # config.yaml: the gates the explainer shows; without it, the explainer has none
+    config: Config | None = None
 
 
 def create_app(client: Client, settings: Settings) -> FastAPI:
@@ -108,6 +112,10 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
             for problem in error.errors()
         ]
         return JSONResponse({"error": "; ".join(problems)}, status_code=400)
+
+    @app.exception_handler(NotFound)
+    def not_found(_: Request, error: NotFound) -> JSONResponse:
+        return JSONResponse({"error": str(error).strip("'")}, status_code=404)
 
     @app.exception_handler(ValueError)
     def bad_value(_: Request, error: ValueError) -> JSONResponse:

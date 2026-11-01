@@ -447,3 +447,284 @@ class IngestionSeries(Model):
 
 class Error(Model):
     error: str
+
+
+# --- entities: terms, scopes, events, edges, products, alerts -----------------------------
+
+
+class TermTrend(Model):
+    """A term in the latest run of a horizon, in one scope."""
+
+    horizon: str
+    scope: str
+    scope_type: str
+    detected_at: Time
+    score: Num
+    ratio: Num
+    is_new: bool
+    mentions: int
+    authors: int
+    breadth: int
+    members: int
+    alert: str
+    subsumed_by: str
+
+
+class TermLongTerm(Model):
+    horizon: str
+    scope: str
+    category: str
+    growth: Num
+    change: Num
+    q: Num
+    window_start: date
+    week: date
+
+
+class TermSummary(Model):
+    kind: str
+    term: str
+    scope: str
+    trending: list[TermTrend] = Field(description="the latest run of each horizon, strongest first")
+    long_term: list[TermLongTerm]
+    mentions_7d: int
+    authors_7d: int
+    first_seen: date | None
+    sparkline: list[int] = Field(description="mentions per hour in the scope, the last 7 days")
+    events: int
+    pending_forecasts: int
+
+
+class Run(Model):
+    time: Time
+    horizon: str
+    scope: str
+    score: Num
+    ratio: Num
+    alert: str
+
+
+class TermOnset(Model):
+    scope: str
+    at: Time
+    event_start: Time
+
+
+class TermForecast(Model):
+    leader: str
+    follower: str
+    without_leader: bool
+    created_at: Time
+    leader_onset: Time
+    expected_at: Time
+    due_by: Time
+    probability: Num
+    outcome: str
+    follower_onset: Time | None
+
+
+class Annotations(Model):
+    runs: list[Run] = Field(
+        description="the scored runs where it trended, in the scope or its members"
+    )
+    onsets: list[TermOnset]
+    forecasts: list[TermForecast]
+    long_term: list[TermLongTerm]
+
+
+class Gate(Model):
+    name: str
+    label: str
+    value: Num
+    threshold: Num
+    passed: bool
+
+
+class MemberScore(Model):
+    scope: str
+    score: Num
+    ratio: Num
+    mentions: int
+
+
+class Explanation(Model):
+    """What a trend's score is made of, recomputed with the detector's own code."""
+
+    scope: str
+    scope_type: str
+    horizon: str
+    detected_at: Time
+    mentions: int
+    total: int
+    reference_mentions: int
+    reference_total: int
+    authors: int
+    reference_days: int
+    share_now: Num = Field(description="mentions / total in the window")
+    share_before: Num = Field(description="the same in the reference period")
+    share_now_with_prior: Num
+    share_before_with_prior: Num
+    platform_share: Num = Field(description="the term's share in the platform's background")
+    prior: Num = Field(description="α: pseudo-mentions the window got from the prior")
+    log_odds: Num
+    sigma: Num
+    score: Num
+    ratio: Num
+    is_new: bool
+    recomputed_score: Num = Field(description="z from detect/scoring.py with today's settings")
+    gates: list[Gate]
+    alert: str
+    subsumed_by: str
+    members: list[MemberScore]
+
+
+class ScopeMember(Model):
+    channel: str
+    documents: int
+    authors: int
+    share: Num
+
+
+class VolumePoint(Model):
+    time: Time
+    documents: int
+    authors: int
+
+
+class ScopeEdge(Model):
+    leader: str
+    follower: str
+    without_leader: bool
+    lift: Num
+    probability: Num
+    lag_median: Num
+    events: int
+    hits: int
+
+
+class ScopeDetail(Model):
+    name: str
+    type: str
+    platform: str | None
+    members: list[ScopeMember]
+    groups: list[str] = Field(description="the groups it's in")
+    volume: list[VolumePoint]
+    leads: list[ScopeEdge] = Field(description="edges where it or its channels lead")
+    follows: list[ScopeEdge] = Field(description="edges where it or its channels follow")
+
+
+class FullOnset(Model):
+    scope: str
+    without: str
+    at: Time
+    mentions: int
+    ratio: Num
+    score: Num
+
+
+class EventSeries(Model):
+    scope: str
+    time: Time
+    mentions: int
+    per_1000: Num
+
+
+class EventForecast(Model):
+    leader: str
+    follower: str
+    created_at: Time
+    probability: Num
+    outcome: str
+    expected_at: Time
+    follower_onset: Time | None
+
+
+class EventDetail(Model):
+    kind: str
+    term: str
+    start: Time
+    last_seen: Time
+    topic: str
+    closed: bool
+    onsets: list[FullOnset]
+    forecasts: list[EventForecast]
+    series: list[EventSeries] = Field(description="per scope with an onset, share per hour")
+    wikipedia_onset: date | None
+
+
+class TermEvent(Model):
+    kind: str
+    term: str
+    start: Time
+    topic: str
+    closed: bool
+    cascade: list[Onset]
+
+
+class TrainingEvent(Model):
+    kind: str
+    term: str
+    start: Time
+    leader_at: Time
+    follower_at: Time | None
+    lag_hours: Num
+
+
+class EdgeForecast(Model):
+    kind: str
+    term: str
+    created_at: Time
+    probability: Num
+    outcome: str
+    lag_hours: Num
+
+
+class EdgeDetail(Model):
+    edge: Edge | None
+    topic: str
+    day: date | None
+    lags: list[float]
+    base_rate: Num
+    training: list[TrainingEvent]
+    forecasts: list[EdgeForecast]
+
+
+class ProductFlow(Model):
+    product: str
+    mentions: int
+    authors: int
+
+
+class ProductDay(Model):
+    time: Time
+    kind: str
+    mentions: int
+
+
+class ProductDetail(Model):
+    name: str
+    flows_in: list[ProductFlow] = Field(description="switches to it, from where")
+    flows_out: list[ProductFlow] = Field(description="switches away from it, to where")
+    counts: dict[str, int] = Field(description="mentions per intent kind about it")
+    daily: list[ProductDay]
+    terms: list[str] = Field(description="its intent terms, for the comments")
+
+
+class SentAlert(Model):
+    time: Time
+    kind: str
+    scope: str
+    term: str
+    title: str
+    message: str
+    ok: bool
+    term_kind: str | None
+    horizon: str | None
+    score: Num
+
+
+class SearchHit(Model):
+    kind: str
+    term: str
+    mentions: int
+    last_seen: Time | None

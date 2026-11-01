@@ -335,3 +335,46 @@ export function network(
     ],
   };
 }
+
+/** Dots with jitter along one axis, the median as a line: an edge's lags. */
+export function strip(
+  spec: {
+    values: number[];
+    format: (value: number) => string;
+    label: string;
+    reducedMotion?: boolean;
+  },
+  tokens: ChartTokens,
+): EChartsOption {
+  const sorted = [...spec.values].sort((a, b) => a - b);
+  const median = sorted.length ? (sorted[Math.floor((sorted.length - 1) / 2)] ?? 0) : 0;
+  // a fixed jitter per index, so the chart is the same every render
+  const jitter = (index: number) => ((index * 0.618_034) % 1) - 0.5;
+  return {
+    animation: !spec.reducedMotion,
+    aria: { enabled: true },
+    grid: { left: 8, right: 16, top: 8, bottom: 8, containLabel: true },
+    tooltip: {
+      trigger: "item",
+      formatter: ({ value }: { value: [number, number] }) => spec.format(value[0]),
+    },
+    xAxis: { type: "value", min: 0, axisLabel: { formatter: spec.format } },
+    yAxis: { type: "value", min: -1, max: 1, show: false },
+    series: [
+      {
+        type: "scatter",
+        name: spec.label,
+        data: spec.values.map((value, index) => [value, jitter(index)]),
+        symbolSize: 7,
+        itemStyle: { color: tokens.series[0], opacity: 0.8 },
+        markLine: {
+          symbol: "none",
+          silent: true,
+          lineStyle: { color: tokens.ink, width: 1.5 },
+          label: { formatter: `median ${spec.format(median)}`, color: tokens.ink, fontSize: 11 },
+          data: [{ xAxis: median }],
+        },
+      },
+    ],
+  };
+}

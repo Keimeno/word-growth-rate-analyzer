@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowUpRight, Compass } from "lucide-react";
+import { ArrowUpRight, Compass, Maximize2 } from "lucide-react";
 import { useMemo } from "react";
 import { useExplore, useExploreMentions } from "@/api/generated/endpoints";
 import { useAsOf, useMetaData } from "@/api/hooks";
@@ -93,6 +93,11 @@ function PeekBody({ kind, term, scope }: { kind: string; term: string; scope: st
           {explore.data ? `${count(total)} comments and posts in the last 7 days` : "Loading…"}
         </SheetDescription>
         <div className="mt-2 flex flex-wrap gap-2">
+          <Button size="sm" asChild>
+            <Link to="/t/$kind/$" params={{ kind, _splat: term }} search={searchOf({ scope })}>
+              <Maximize2 className="size-3.5" /> Open term page
+            </Link>
+          </Button>
           <Button size="sm" variant="outline" asChild>
             <Link to="/explore" search={searchOf({ terms: [term], range: "7d" })}>
               <Compass className="size-3.5" /> Explore

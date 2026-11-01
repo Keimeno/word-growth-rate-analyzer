@@ -122,3 +122,36 @@ export function parsePeek(peek: string | undefined): { kind: string; term: strin
   if (at <= 0) return null;
   return { kind: peek.slice(0, at), term: peek.slice(at + 1) };
 }
+
+const RANGES = ["24h", "2d", "7d", "30d", "90d", "26w", "52w"] as const;
+
+export const termSearch = z.object({
+  range: choice(RANGES, "7d"),
+  from: optionalNumber,
+  to: optionalNumber,
+});
+export const termDefaults = termSearch.parse({});
+
+export const scopePageSearch = z.object({
+  range: choice(["30d", "90d"], "30d"),
+});
+export const scopePageDefaults = scopePageSearch.parse({});
+
+export const edgeSearch = z.object({
+  leader: text(""),
+  follower: text(""),
+  topic: text("all"),
+  without_leader: flag,
+});
+export const edgeDefaults = edgeSearch.parse({});
+
+export const productSearch = z.object({
+  range: choice(["30d", "90d", "26w", "52w"], "90d"),
+  term: text(""),
+});
+export const productDefaults = productSearch.parse({});
+
+export const alertsSearch = z.object({
+  range: choice(["7d", "30d", "90d"], "30d"),
+});
+export const alertsDefaults = alertsSearch.parse({});

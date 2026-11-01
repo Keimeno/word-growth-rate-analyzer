@@ -577,6 +577,8 @@ def cmd_web(args: argparse.Namespace) -> None:
         return
     if args.dev:
         os.environ["WEB_API_ONLY"] = "1"
+    # read by the app's factory, which uvicorn imports
+    os.environ["WGRA_CONFIG"] = str(args.config)
     server.serve(args.host, args.port, reload=args.reload)
 
 

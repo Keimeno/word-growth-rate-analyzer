@@ -1,3 +1,4 @@
+export * from "./entities/entities.zod";
 export * from "./explore/explore.zod";
 export * from "./ingestion/ingestion.zod";
 export * from "./intents/intents.zod";

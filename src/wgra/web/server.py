@@ -6,13 +6,14 @@ import json
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import uvicorn
 from clickhouse_connect.driver.client import Client
 from fastapi import FastAPI
 
-from wgra.config import Env
+from wgra.config import Env, load_config
 from wgra.store import connect
 from wgra.web.app import Settings, create_app
 
@@ -21,7 +22,9 @@ log = logging.getLogger(__name__)
 
 def settings_from_environ(env: Env) -> Settings:
     now = os.environ.get("UNDERCURRENT_NOW")
+    path = Path(os.environ.get("WGRA_CONFIG", "config.yaml"))
     return Settings(
+        config=load_config(path) if path.is_file() else None,
         grafana_url=env.grafana_url,
         password=os.environ.get("WEB_PASSWORD", ""),
         now=datetime.fromisoformat(now) if now else None,

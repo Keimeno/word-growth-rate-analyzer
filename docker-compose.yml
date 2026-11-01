@@ -79,6 +79,9 @@ services:
       # where its "Pro mode" links go
       GRAFANA_URL: ${GRAFANA_URL:-http://localhost:3608}
       WEB_PASSWORD: ${WEB_PASSWORD:-}
+    volumes:
+      # the gates the explainer shows
+      - ./config.yaml:/app/config.yaml:ro
     ports:
       - 127.0.0.1:3610:3610
 

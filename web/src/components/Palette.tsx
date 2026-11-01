@@ -1,7 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Compass, Copy, Eye, Layers, Moon } from "lucide-react";
+import { Compass, Copy, Eye, Hash, Layers, Moon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useMetaData } from "@/api/hooks";
+import { useSearch as useTermSearch } from "@/api/generated/endpoints";
+import { useAsOf, useMetaData } from "@/api/hooks";
 import {
   CommandDialog,
   CommandEmpty,
@@ -52,6 +53,11 @@ export function Palette() {
     action();
   };
   const term = typed.trim().toLowerCase().replace(/\s+/g, " ");
+  const asOf = useAsOf();
+  const hits = useTermSearch(
+    { ...asOf, q: term },
+    { query: { enabled: term.length >= 2, staleTime: 60_000 } },
+  );
 
   return (
     <CommandDialog
@@ -67,6 +73,28 @@ export function Palette() {
       />
       <CommandList>
         <CommandEmpty>Nothing matches.</CommandEmpty>
+        {term.length >= 2 && (hits.data ?? []).length > 0 && (
+          <CommandGroup heading="Terms">
+            {(hits.data ?? []).map((hit) => (
+              <CommandItem
+                key={`${hit.kind}:${hit.term}`}
+                value={`term ${hit.term} ${hit.kind}`}
+                onSelect={() =>
+                  go(
+                    () =>
+                      void navigate({
+                        to: "/t/$kind/$",
+                        params: { kind: hit.kind, _splat: hit.term },
+                      }),
+                  )
+                }
+              >
+                <Hash className="size-4" /> <span className="term">{hit.term}</span>
+                <CommandShortcut>{hit.kind}</CommandShortcut>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
         <CommandGroup heading="Pages">
           {PAGES.map((page) => (
             <CommandItem

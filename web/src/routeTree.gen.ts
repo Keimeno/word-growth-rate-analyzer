@@ -10,21 +10,37 @@
 
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as IndexRouteImport } from "./routes/index"
+import { Route as AlertsRouteImport } from "./routes/alerts"
 import { Route as CollectionRouteImport } from "./routes/collection"
+import { Route as EdgeRouteImport } from "./routes/edge"
 import { Route as ExploreRouteImport } from "./routes/explore"
 import { Route as IntentsRouteImport } from "./routes/intents"
 import { Route as LongTermRouteImport } from "./routes/long-term"
 import { Route as SpreadRouteImport } from "./routes/spread"
 import { Route as TrendingRouteImport } from "./routes/trending"
+import { Route as PSplatRouteImport } from "./routes/p.$"
+import { Route as SSplatRouteImport } from "./routes/s.$"
+import { Route as TKindSplatRouteImport } from "./routes/t.$kind.$"
+import { Route as EKindStartSplatRouteImport } from "./routes/e.$kind.$start.$"
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
   path: "/",
   getParentRoute: () => rootRouteImport,
 } as any)
+const AlertsRoute = AlertsRouteImport.update({
+  id: "/alerts",
+  path: "/alerts",
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CollectionRoute = CollectionRouteImport.update({
   id: "/collection",
   path: "/collection",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EdgeRoute = EdgeRouteImport.update({
+  id: "/edge",
+  path: "/edge",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExploreRoute = ExploreRouteImport.update({
@@ -52,73 +68,135 @@ const TrendingRoute = TrendingRouteImport.update({
   path: "/trending",
   getParentRoute: () => rootRouteImport,
 } as any)
+const PSplatRoute = PSplatRouteImport.update({
+  id: "/p/$",
+  path: "/p/$",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SSplatRoute = SSplatRouteImport.update({
+  id: "/s/$",
+  path: "/s/$",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TKindSplatRoute = TKindSplatRouteImport.update({
+  id: "/t/$kind/$",
+  path: "/t/$kind/$",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EKindStartSplatRoute = EKindStartSplatRouteImport.update({
+  id: "/e/$kind/$start/$",
+  path: "/e/$kind/$start/$",
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
+  "/alerts": typeof AlertsRoute
   "/collection": typeof CollectionRoute
+  "/edge": typeof EdgeRoute
   "/explore": typeof ExploreRoute
   "/intents": typeof IntentsRoute
   "/long-term": typeof LongTermRoute
   "/spread": typeof SpreadRoute
   "/trending": typeof TrendingRoute
+  "/p/$": typeof PSplatRoute
+  "/s/$": typeof SSplatRoute
+  "/t/$kind/$": typeof TKindSplatRoute
+  "/e/$kind/$start/$": typeof EKindStartSplatRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
+  "/alerts": typeof AlertsRoute
   "/collection": typeof CollectionRoute
+  "/edge": typeof EdgeRoute
   "/explore": typeof ExploreRoute
   "/intents": typeof IntentsRoute
   "/long-term": typeof LongTermRoute
   "/spread": typeof SpreadRoute
   "/trending": typeof TrendingRoute
+  "/p/$": typeof PSplatRoute
+  "/s/$": typeof SSplatRoute
+  "/t/$kind/$": typeof TKindSplatRoute
+  "/e/$kind/$start/$": typeof EKindStartSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
+  "/alerts": typeof AlertsRoute
   "/collection": typeof CollectionRoute
+  "/edge": typeof EdgeRoute
   "/explore": typeof ExploreRoute
   "/intents": typeof IntentsRoute
   "/long-term": typeof LongTermRoute
   "/spread": typeof SpreadRoute
   "/trending": typeof TrendingRoute
+  "/p/$": typeof PSplatRoute
+  "/s/$": typeof SSplatRoute
+  "/t/$kind/$": typeof TKindSplatRoute
+  "/e/$kind/$start/$": typeof EKindStartSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | "/"
+    | "/alerts"
     | "/collection"
+    | "/edge"
     | "/explore"
     | "/intents"
     | "/long-term"
     | "/spread"
     | "/trending"
+    | "/p/$"
+    | "/s/$"
+    | "/t/$kind/$"
+    | "/e/$kind/$start/$"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
+    | "/alerts"
     | "/collection"
+    | "/edge"
     | "/explore"
     | "/intents"
     | "/long-term"
     | "/spread"
     | "/trending"
+    | "/p/$"
+    | "/s/$"
+    | "/t/$kind/$"
+    | "/e/$kind/$start/$"
   id:
     | "__root__"
     | "/"
+    | "/alerts"
     | "/collection"
+    | "/edge"
     | "/explore"
     | "/intents"
     | "/long-term"
     | "/spread"
     | "/trending"
+    | "/p/$"
+    | "/s/$"
+    | "/t/$kind/$"
+    | "/e/$kind/$start/$"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AlertsRoute: typeof AlertsRoute
   CollectionRoute: typeof CollectionRoute
+  EdgeRoute: typeof EdgeRoute
   ExploreRoute: typeof ExploreRoute
   IntentsRoute: typeof IntentsRoute
   LongTermRoute: typeof LongTermRoute
   SpreadRoute: typeof SpreadRoute
   TrendingRoute: typeof TrendingRoute
+  PSplatRoute: typeof PSplatRoute
+  SSplatRoute: typeof SSplatRoute
+  TKindSplatRoute: typeof TKindSplatRoute
+  EKindStartSplatRoute: typeof EKindStartSplatRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -130,11 +208,25 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/alerts": {
+      id: "/alerts"
+      path: "/alerts"
+      fullPath: "/alerts"
+      preLoaderRoute: typeof AlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     "/collection": {
       id: "/collection"
       path: "/collection"
       fullPath: "/collection"
       preLoaderRoute: typeof CollectionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/edge": {
+      id: "/edge"
+      path: "/edge"
+      fullPath: "/edge"
+      preLoaderRoute: typeof EdgeRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/explore": {
@@ -172,17 +264,51 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof TrendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/p/$": {
+      id: "/p/$"
+      path: "/p/$"
+      fullPath: "/p/$"
+      preLoaderRoute: typeof PSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/s/$": {
+      id: "/s/$"
+      path: "/s/$"
+      fullPath: "/s/$"
+      preLoaderRoute: typeof SSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/t/$kind/$": {
+      id: "/t/$kind/$"
+      path: "/t/$kind/$"
+      fullPath: "/t/$kind/$"
+      preLoaderRoute: typeof TKindSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/e/$kind/$start/$": {
+      id: "/e/$kind/$start/$"
+      path: "/e/$kind/$start/$"
+      fullPath: "/e/$kind/$start/$"
+      preLoaderRoute: typeof EKindStartSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AlertsRoute: AlertsRoute,
   CollectionRoute: CollectionRoute,
+  EdgeRoute: EdgeRoute,
   ExploreRoute: ExploreRoute,
   IntentsRoute: IntentsRoute,
   LongTermRoute: LongTermRoute,
   SpreadRoute: SpreadRoute,
   TrendingRoute: TrendingRoute,
+  PSplatRoute: PSplatRoute,
+  SSplatRoute: SSplatRoute,
+  TKindSplatRoute: TKindSplatRoute,
+  EKindStartSplatRoute: EKindStartSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

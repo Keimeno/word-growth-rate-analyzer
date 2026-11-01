@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
   ArrowUpRight,
+  Bell,
   Compass,
   Moon,
   Network,
@@ -32,6 +33,7 @@ export const PAGES = [
   },
   { to: "/spread", label: "Early warning", short: "Spread", icon: Network, grafana: "spread" },
   { to: "/explore", label: "Explore", short: "Explore", icon: Compass, grafana: "explore" },
+  { to: "/alerts", label: "Alerts", short: "Alerts", icon: Bell, grafana: "trending" },
   {
     to: "/collection",
     label: "Collection",
