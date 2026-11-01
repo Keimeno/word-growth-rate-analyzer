@@ -29,6 +29,7 @@ from wgra.web.queries import WindowQuery, daily_series, hourly_series
 from wgra.web.queries.explore import ExploreQuery
 from wgra.web.queries.trends import TrendQuery
 from wgra.web.server import openapi, web_client
+from wgra.web.stream import State, changes, read_alerts, read_state
 
 HOUR = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
@@ -135,7 +136,10 @@ def get(web: TestClient, path: str) -> Any:
     return response.json()
 
 
-V1 = sorted(path for path in openapi()["paths"] if path.startswith("/api/v1/"))
+# the JSON endpoints; the stream has a test of its own
+V1 = sorted(
+    path for path in openapi()["paths"] if path.startswith("/api/v1/") and path != "/api/v1/stream"
+)
 
 
 # what the paths' parameters are filled with; an event that doesn't exist is a 404
@@ -463,3 +467,30 @@ def test_a_story_s_page(stored, web):
     assert [onset["scope"] for onset in event["cascade"]] == ["r/technology", "r/programming"]
     nodes = {node["scope"]: node["median_lag"] for node in get(web, "/api/v1/spread/map")}
     assert nodes == {"r/technology": 0, "r/programming": 1}
+
+
+def test_the_stream_says_what_changed():
+    run = datetime(2026, 11, 1, 12, tzinfo=UTC)
+    before = State(day_run=run, polled=run)
+    assert changes(before, before) == []
+    later = State(day_run=run + timedelta(minutes=15), polled=run, notified=run)
+    assert changes(before, later) == ["run", "alert"]
+
+
+def test_the_stream_starts_with_hello_and_polls_once_for_every_tab(stored):
+    app = create_app(web_client(Env.from_environ(), stored.database), Settings(stream_seconds=0.5))
+    with TestClient(app) as web, web.stream("GET", "/api/v1/stream") as response:
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert "content-encoding" not in response.headers
+        lines = response.iter_lines()
+        assert next(lines) == "event: hello"
+    state = read_state(stored)
+    assert state.day_run is not None and state.day_run.replace(tzinfo=UTC) == HOUR
+    assert read_alerts(stored, None) == []
+    stored.insert(
+        "notifications",
+        [[HOUR + timedelta(minutes=5), "forecast", "r/de", "rust", "rust: a → b?", "", True, ""]],
+        column_names=["sent_at", "kind", "scope", "term", "title", "message", "ok", "error"],
+    )
+    sent = read_alerts(stored, HOUR + timedelta(minutes=1))
+    assert [(alert["kind"], alert["scope"]) for alert in sent] == [("forecast", "r/de")]

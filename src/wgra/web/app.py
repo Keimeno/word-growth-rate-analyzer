@@ -14,12 +14,14 @@ and the client asks for readonly as well.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hmac
 import logging
 import mimetypes
 import os
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -30,12 +32,14 @@ from clickhouse_connect.driver.exceptions import ClickHouseError
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from wgra.config import Config
 from wgra.web.queries.entities import NotFound
 from wgra.web.routes import api
+from wgra.web.stream import Watcher
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +65,7 @@ TIMEOUT = re.compile(r"\bCode: 159\b")
 # how long a response may be reused, by what it reads: the analyzer runs every 15 minutes,
 # collection every minute
 CACHE = [
+    ("/api/v1/stream", "no-cache"),
     ("/api/v1/ingestion", "no-cache"),
     ("/api/v1/meta", "max-age=60"),
     ("/api/v1/", "max-age=60"),
@@ -80,6 +85,8 @@ class Settings:
     dist: Path | None = DIST
     # config.yaml: the gates the explainer shows; without it, the explainer has none
     config: Config | None = None
+    # how long a live stream stays open before the browser reconnects
+    stream_seconds: float = 1800
 
 
 def create_app(client: Client, settings: Settings) -> FastAPI:
@@ -97,6 +104,26 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
     app.state.settings = settings
 
     app.include_router(api())
+    watcher = Watcher(client) if client is not None else None
+
+    @app.get("/api/v1/stream", response_class=EventSourceResponse, tags=["live"])
+    async def stream(request: Request) -> AsyncIterator[ServerSentEvent]:
+        """Server-sent events: run, long_term, edges, alert (with its term), ingest. A
+        stream ends after `stream_seconds`; the browser reconnects on its own."""
+        if watcher is None:
+            return
+        yield ServerSentEvent(event="hello", data={}, retry=10_000)
+        ends = asyncio.get_running_loop().time() + settings.stream_seconds
+        async with watcher.listen() as queue:
+            while not await request.is_disconnected():
+                left = ends - asyncio.get_running_loop().time()
+                if left <= 0:
+                    return
+                try:
+                    yield await asyncio.wait_for(queue.get(), timeout=min(left, 15))
+                except TimeoutError:
+                    continue
+
     _errors_as_400(app)
 
     @app.exception_handler(RequestValidationError)

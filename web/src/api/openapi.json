@@ -5331,6 +5331,43 @@
           }
         }
       }
+    },
+    "/api/v1/stream": {
+      "get": {
+        "tags": [
+          "live"
+        ],
+        "summary": "Stream",
+        "description": "Server-sent events: run, long_term, edges, alert (with its term), ingest. A\nstream ends after `stream_seconds`; the browser reconnects on its own.",
+        "operationId": "stream",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

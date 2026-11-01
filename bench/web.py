@@ -87,7 +87,11 @@ def main() -> None:
     settings = Settings(now=now, config=load_config(args.config) if args.config.is_file() else None)
     app = create_app(web_client(env, args.database), settings)
     query = f"scope={args.scope}&terms={values['{term}']}&range=7d&q={values['{term}'][:3]}"
-    paths = sorted(path for path in openapi()["paths"] if path.startswith("/api/v1/"))
+    paths = sorted(
+        path
+        for path in openapi()["paths"]
+        if path.startswith("/api/v1/") and path != "/api/v1/stream"
+    )
     started = datetime.now(UTC).replace(microsecond=0)
     timings: dict[str, list[float]] = {}
     statuses: dict[str, int] = {}
