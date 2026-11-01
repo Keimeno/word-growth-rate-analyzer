@@ -106,7 +106,9 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
     app.include_router(api())
     watcher = Watcher(client) if client is not None else None
 
-    @app.get("/api/v1/stream", response_class=EventSourceResponse, tags=["live"])
+    # not in the schema: an event stream isn't a JSON resource, and the page reads it with
+    # EventSource (web/src/api/stream.ts), not the generated client
+    @app.get("/api/v1/stream", response_class=EventSourceResponse, include_in_schema=False)
     async def stream(request: Request) -> AsyncIterator[ServerSentEvent]:
         """Server-sent events: run, long_term, edges, alert (with its term), ingest. A
         stream ends after `stream_seconds`; the browser reconnects on its own."""
