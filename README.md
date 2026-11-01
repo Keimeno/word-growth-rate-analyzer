@@ -274,6 +274,10 @@ uv run wgra replay --forecast --events stored --min-events 8 --max-q 0.01
 uv run wgra replay --forecast --step 6 --horizon 24h    # re-running the detector
 ```
 
+**Publishing them** is planned in [docs/FORECAST-LEDGER.md](docs/FORECAST-LEDGER.md): every
+forecast in a public ledger the moment it's made, timestamped through OpenTimestamps so it
+can't be backdated, and graded when it resolves.
+
 **Which subreddits to add?** `wgra suggest-subreddits` looks at the r/all sample's comments
 and posts of the last 48 hours: their urls name the untracked subreddit they come
 from. It lists those that mentioned the terms rising now early (before they trended) or

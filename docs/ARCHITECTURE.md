@@ -1439,6 +1439,14 @@ table says what each channel is, and Reddit is a source behind the `Item`/`Sink`
 interface in `src/wgra/sources/reddit/`. The same benchmark history gives the same
 trends, onsets and edges as before, apart from the names (CROSS-PLATFORM.md §8.7).
 
+### Public forecast ledger (planned, not started)
+
+The forecasts of §4.6 published the moment they're made: one call per story and follower,
+in an append-only hash chain timestamped through OpenTimestamps, graded when it resolves,
+on a public page with the record and calibration, and optionally on Bluesky. It runs
+privately first and goes public only if the record passes its gate. The plan, its phases
+and gates are in [FORECAST-LEDGER.md](FORECAST-LEDGER.md).
+
 ### Phase 5: hardening and cutover
 
 * Done 2026-10-31: v2 moved to the repository root, v1's code and its deployment
