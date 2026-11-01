@@ -1,7 +1,12 @@
 import pytest
 from helpers import make_config, make_item, no_sample
 
-from undercurrent.sources.reddit.feeds import FeedScheduler, build_feeds, observed_rate
+from undercurrent.sources.reddit.feeds import (
+    MAX_SAMPLE_POLLS_IN_FLIGHT,
+    FeedScheduler,
+    build_feeds,
+    observed_rate,
+)
 
 
 def listing(newest_id: int, count: int, seconds_apart: float, newest_time: int = 1_700_000_000):
@@ -20,16 +25,24 @@ def test_subreddits_are_packed_into_comment_and_post_feeds():
         ("posts-1", ("de", "programming")),
         ("comments-2", ("technology",)),
         ("posts-2", ("technology",)),
+        ("posts-all", ("all",)),
         ("sample-all", ("all",)),
     ]
     assert feeds[0].path == "/r/de+programming/comments"
     assert feeds[1].path == "/r/de+programming/new"
+    assert feeds[-2].path == "/r/all/new"
+    assert feeds[-2].complete
     assert feeds[-1].sample
 
 
 def test_the_sample_feed_can_be_disabled():
     feeds = build_feeds(make_config(platforms=no_sample()))
-    assert not any(feed.sample for feed in feeds)
+    assert not any("all" in feed.subreddits for feed in feeds)
+
+
+def test_r_alls_posts_can_be_left_out():
+    feeds = build_feeds(make_config(platforms={"reddit": {"sample": {"posts": False}}}))
+    assert [feed.name for feed in feeds if "all" in feed.subreddits] == ["sample-all"]
 
 
 def test_observed_rate_uses_the_listing_time_span():
@@ -135,13 +148,100 @@ def test_failures_back_off_exponentially_and_honor_retry_after():
     assert feed.failures == 0
 
 
-def test_next_feed_is_the_one_due_first():
+def test_feeds_are_due_when_their_time_has_come():
     config = make_config()
     feeds = build_feeds(config)
     scheduler = FeedScheduler(feeds, config)
     for index, feed in enumerate(feeds):
         feed.next_poll_at = 10 - index
-    assert scheduler.next_feed() is feeds[-1]
+    assert scheduler.next_due_at() == 10 - (len(feeds) - 1)
+    assert scheduler.due(9) == feeds[1:]
+
+
+def test_polls_overlap_up_to_a_limit():
+    config = make_config(
+        platforms={
+            "reddit": {
+                "max_subreddits_per_feed": 100,
+                "sample": {"requests_per_minute": 60, "posts": False},
+            }
+        }
+    )
+    feeds = build_feeds(config)
+    scheduler = FeedScheduler(feeds, config)
+    comments, posts, sample = feeds
+
+    assert scheduler.due(0) == feeds
+    for feed in feeds:
+        scheduler.start(feed, now=0)
+    # each next poll is due an interval later, answered or not: the sample's a second
+    assert scheduler.due(1) == [sample]
+    for now in range(1, MAX_SAMPLE_POLLS_IN_FLIGHT):
+        scheduler.start(sample, now)
+    assert sample.next_poll_at == MAX_SAMPLE_POLLS_IN_FLIGHT
+    # as many unanswered as it may: the sample waits for an answer
+    assert scheduler.due(1000) == [comments, posts]
+    # a complete feed's poll overlaps one slow answer, not two
+    assert scheduler.due(300) == [comments]
+    scheduler.start(comments, now=300)
+    assert scheduler.due(1000) == [posts]
+
+    # an answer reschedules from the last poll started, which may not be its own
+    scheduler.record_success(comments, listing(1000, 100, seconds_apart=1), now=0)
+    scheduler.finish(comments)
+    assert comments.next_poll_at == 300 + 50
+    scheduler.record_success(sample, listing(1000, 20, seconds_apart=0), now=0)
+    scheduler.finish(sample)
+    assert sample.next_poll_at == MAX_SAMPLE_POLLS_IN_FLIGHT
+
+
+def test_the_sample_gets_what_the_tracked_feeds_leave():
+    config = make_config(
+        platforms={
+            "reddit": {
+                "requests_per_minute": 10,
+                "max_subreddits_per_feed": 100,
+                "sample": {"requests_per_minute": 10, "min_requests_per_minute": 2, "posts": False},
+            }
+        }
+    )
+    feeds = build_feeds(config)
+    scheduler = FeedScheduler(feeds, config)
+    comments, posts, sample = feeds
+    quiet = 60 / config.platforms.reddit.max_post_poll_interval
+
+    # before the first answers: comments every 300s, posts every 900s
+    assert scheduler.sample_requests_per_minute() == pytest.approx(10 - 60 / 300 - quiet)
+    # one comment a second: a poll every 50s
+    scheduler.record_success(comments, listing(1000, 100, seconds_apart=1), now=0)
+    assert scheduler.sample_requests_per_minute() == pytest.approx(10 - 60 / 50 - quiet)
+    # more than the budget: the tracked feeds get all but the sample's minimum
+    scheduler.record_success(comments, listing(10_000, 100, seconds_apart=0.02), now=1)
+    assert scheduler.sample_requests_per_minute() == 2
+    assert scheduler.interval(sample) == 30
+    assert 60 / scheduler.interval(comments) + 60 / scheduler.interval(posts) == pytest.approx(8)
+
+
+def test_r_alls_posts_are_polled_completely_before_the_sample():
+    config = make_config(
+        platforms={"reddit": {"requests_per_minute": 40, "sample": {"requests_per_minute": 40}}}
+    )
+    feeds = build_feeds(config)
+    scheduler = FeedScheduler(feeds, config)
+    all_posts = next(feed for feed in feeds if feed.path == "/r/all/new")
+
+    # eight posts a second: a poll every 6.25s sees half a listing of new ones
+    scheduler.record_success(all_posts, listing(10_000, 97, seconds_apart=0.125), now=0)
+    assert all_posts.interval == pytest.approx(6.25)
+    # its 9.6 requests a minute come off the budget before the sample's
+    quiet = 60 / 300 + 60 / 900
+    assert scheduler.sample_requests_per_minute() == pytest.approx(40 - quiet - 9.6)
+
+
+def test_the_sample_takes_at_most_its_requests_per_minute():
+    config = make_config(platforms={"reddit": {"sample": {"requests_per_minute": 30}}})
+    scheduler = FeedScheduler(build_feeds(config), config)
+    assert scheduler.sample_requests_per_minute() == 30
 
 
 def radar_config(**reddit: object):

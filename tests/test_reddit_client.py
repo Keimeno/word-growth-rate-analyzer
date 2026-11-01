@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 import pytest
 
@@ -124,6 +126,64 @@ async def test_requests_are_spaced_by_the_budget():
             await client.listing("/r/x/comments")
 
     assert time.slept == [pytest.approx(2.0), pytest.approx(2.0)]
+
+
+class SlowReddit:
+    """Answers api requests only once `count` of them have been sent, with `status`."""
+
+    def __init__(self, time: FakeTime, count: int, status: int = 200):
+        self.time = time
+        self.count = count
+        self.status = status
+        self.sent: list[tuple[float, str]] = []
+        self.token_requests = 0
+        self._all_sent = asyncio.Event()
+
+    async def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/access_token":
+            self.token_requests += 1
+            return httpx.Response(
+                200, json={"access_token": f"token-{self.token_requests}", "expires_in": 86400}
+            )
+        self.sent.append((self.time.now, request.headers["authorization"]))
+        if len(self.sent) <= self.count:
+            if len(self.sent) == self.count:
+                self._all_sent.set()
+            await asyncio.wait_for(self._all_sent.wait(), 1)
+            if self.status != 200:
+                return httpx.Response(self.status, json={})
+        return ok(comment_listing("t1_a"))
+
+    def client(self, requests_per_minute: float) -> RedditClient:
+        return RedditClient(
+            "id",
+            "secret",
+            "ua",
+            requests_per_minute,
+            transport=httpx.MockTransport(self.handler),
+            clock=self.time.clock,
+            sleep=self.time.sleep,
+        )
+
+
+async def test_requests_overlap_one_spacing_apart():
+    time = FakeTime()
+    fake = SlowReddit(time, count=3)
+    async with fake.client(requests_per_minute=30) as client:
+        await asyncio.gather(*(client.listing("/r/all/comments") for _ in range(3)))
+
+    # each sent while the ones before wait for their answer (r/all takes seconds)
+    assert [at for at, _ in fake.sent] == [1000.0, 1002.0, 1004.0]
+
+
+async def test_overlapping_requests_with_an_expired_token_get_a_new_one_once():
+    time = FakeTime()
+    fake = SlowReddit(time, count=2, status=401)
+    async with fake.client(requests_per_minute=600) as client:
+        await asyncio.gather(*(client.listing("/r/x/comments") for _ in range(2)))
+
+    assert fake.token_requests == 2
+    assert [token for _, token in fake.sent] == ["bearer token-1"] * 2 + ["bearer token-2"] * 2
 
 
 async def test_requests_slow_down_when_reddit_reports_few_remaining():

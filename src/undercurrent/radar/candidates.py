@@ -5,8 +5,10 @@ Where from:
 
 * ``watchlist``: the channels of the watchlist's group, tracked completely
 * ``reddit``: every other tracked subreddit
-* ``r/all``: the r/all sample, a few percent of the rest of reddit
-* ``r/_search``: posts naming a product anywhere, and the comment trees under some of them
+* ``r/all``: the rest of reddit as r/all shows it, a sample of the comments and every post
+  but those naming a product
+* ``r/_search``: posts naming a product anywhere (found by the search or among r/all's), and
+  the comment trees under some of them
 """
 
 from __future__ import annotations

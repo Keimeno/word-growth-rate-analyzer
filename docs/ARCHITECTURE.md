@@ -121,6 +121,50 @@ enabled platform, `--source` one of them. Reddit is the only source so far, in
   `r/technology+programming+news/comments` returned 100 comments spanning
   380s, so polling it every 4–5 minutes captures **everything**. Per-community
   tracking is cheap; only the firehose is out of reach.
+* **Overlapping requests (since 2026-11-01).** Sent one at a time, r/all's
+  answers (3–4s, against about 1s for a multireddit) held the whole ingester
+  to about 14 requests a minute of the 100, and the sample to about 330
+  comments a minute. Now requests start one spacing apart (60s ÷
+  `requests_per_minute`) without waiting for each other's answers, and the
+  sample's polls overlap, at most 8 at once. The sample gets what the tracked
+  feeds and the searches leave of the budget, between
+  `sample.min_requests_per_minute` and `sample.requests_per_minute`: the
+  tracked feeds always come first. The more r/all is polled the more it
+  shows, but about 60% of its answers come back empty (on Reddit's side, the
+  empty ones are the fast ones), so even the whole budget doesn't see every
+  comment. Measured over the first 6 minutes: 78 sample polls a minute
+  (68% empty), about 1,490 new comments a minute against 330 before (4.5×,
+  roughly a third of the about 4,700 a minute on all of Reddit), 82 requests
+  a minute in all, and no gaps or errors in the tracked feeds.
+* **r/all's posts (since 2026-11-01).** Unlike its comments, r/all's newest
+  100 posts reach back 12–14 seconds (measured: 8 polls 8 seconds apart, every
+  one full and overlapping the one before, about 7.7 posts a second). So
+  `posts-all` (`r/all/new`) is a feed like a tracked one: polled for half a
+  listing of new posts, about every 6 seconds, with gap detection, and its
+  requests come off the budget before the sample's. Its posts count in
+  `r/all` like the sample's comments (in a tracked subreddit's channel when
+  they're from one), except those naming a watched product: they count in
+  `r/_search`, as when the churn radar's search finds them (it finds most of
+  them later). The sample's cap went down to 70 a minute, so the tracked
+  feeds' polls don't wait behind the sample's for their turn.
+* **A slow answer doesn't make a gap.** r/all/new usually answers in 2s, but
+  sometimes takes 15s, longer than its listing reaches back. In its first
+  test that left one gap in 60 polls. So a complete feed may have two polls
+  out: the next one starts on time, and each skips only what was counted
+  when it started (another may answer first, the recent ids tell what's new
+  beyond that). r/all's posts aren't restored into the recent ids after a
+  restart (a million a day would push out the search's), `posts-all`'s
+  newest id guards them. Measured over the next 10 minutes: `posts-all` 11
+  polls a minute and about 550 new posts a minute, no gap although two
+  answers took over 8s (the longest 11s); the sample at 70 polls a minute
+  about 1,250 comments a minute (Reddit varies: 1,490 at 78 an hour before);
+  83 requests a minute in all, no gaps or errors in the tracked feeds.
+  `r/all` now mixes a complete stream of posts with a sample of comments
+  whose size follows the budget: should the sample shrink a lot (the tracked
+  feeds needing tens of requests a minute more), terms more common in titles
+  than in comments would gain share in `r/all` without anything happening.
+  At today's few requests a minute for the tracked feeds it doesn't, and
+  `sample.posts: false` keeps `r/all` to comments.
 * **Gap detection and coverage.** Reddit IDs are base-36 and increase over
   time. If the oldest item in a batch is newer than the newest item from the
   previous poll, there may be a gap. That gets logged to a `coverage` table
@@ -142,7 +186,8 @@ enabled platform, `--source` one of them. Reddit is the only source so far, in
   considered, from patterns over the same tokens, as terms of their own kinds (`notion →
   obsidian`, `complaint: reddit`, `considering: notion`). They can only be extracted here, before the text is deleted.
 * **The sample is pooled.** Items from untracked subreddits only arrive through
-  the r/all sample, a few percent of each. Per subreddit that's far too thin
+  r/all: every post it lists, and a sample of the comments (a few percent of
+  each until 2026-11-01, about a third since). Per subreddit that's far too thin
   to mean anything. Kept separate, thousands of tiny subreddits would add about
   27 rows per comment, almost all of them counted once (measured: 1,716 sample
   comments came from 1,268 subreddits). So their counts go into one channel,
@@ -196,8 +241,9 @@ can't be linked back to Reddit accounts.
   once parts merge.
 * Rows also merge as vocabulary repeats within an hour or a day.
 
-With 37 subreddits (about 130k items/day) plus the sample (about 400k/day),
-that points to tens of MB per day for each of `term_hourly` (capped by its
+With 37 subreddits (about 130k items/day) plus the sample (about 400k/day,
+about 2.7M/day since requests overlap and r/all's posts came in), that
+points to tens of MB per day for each of `term_hourly` (capped by its
 180-day TTL) and `term_daily` (kept forever), so roughly 10–20 GB per year.
 Raw text stays around a few hundred MB because of the 48h TTL.
 
@@ -497,7 +543,7 @@ a day after 00:30 UTC in `undercurrent analyze`, or with
 # config.yaml, as built (cross-platform phase 1)
 platforms:
   reddit:
-    sample: {requests_per_minute: 20, max_ngram: 2}   # the channel r/all: the prior
+    sample: {requests_per_minute: 80, min_requests_per_minute: 10, max_ngram: 2}   # r/all: the prior
 groups:
   tech:      [r/technology, r/programming, r/hardware, r/gadgets, r/LocalLLaMA, r/webdev]
   finance:   [r/investing, r/stocks, r/wallstreetbets, r/personalfinance]
@@ -1087,7 +1133,7 @@ Measured in the first hour (Saturday evening, European time):
   interval.
 * An r/all request takes about 3.3s, against about 1.1s for a multireddit.
   So the r/all sample is limited by latency, not budget, to roughly 15–18
-  requests/min.
+  requests/min (until requests overlapped on 2026-11-01, §3.1).
 * Total usage is about 20 requests/min of the 100 allowed. There's room for
   many more subreddits.
 

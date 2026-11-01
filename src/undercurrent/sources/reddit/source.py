@@ -1,16 +1,17 @@
-"""Reddit as a source: polls the tracked subreddits, the r/all sample and the churn radar's
-searches forever, and hands what it finds to the shared pipeline.
+"""Reddit as a source: polls the tracked subreddits, r/all (its posts, a sample of its
+comments) and the churn radar's searches forever, and hands what it finds to the shared
+pipeline.
 
 The source decides where an item's counts go: a tracked subreddit's own channel, r/all
-for everything the sample finds elsewhere, r/_search for search results and the comment
-trees under them. It also decides which items the pipeline skips: bots, moderators' and
-stickied comments, and deleted ones.
+for everything r/all shows from elsewhere, r/_search for search results, every other
+untracked post naming a watched product and the comment trees under them. It also
+decides which items the pipeline skips: bots, moderators' and stickied comments, and
+deleted ones.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import os
 import time
@@ -25,7 +26,7 @@ from undercurrent.sources.reddit.channels import PLATFORM, SAMPLE, SEARCH, chann
 from undercurrent.sources.reddit.client import RedditClient, RedditError
 from undercurrent.sources.reddit.feeds import Feed, FeedScheduler, build_feeds
 from undercurrent.sources.reddit.models import RedditItem
-from undercurrent.sources.reddit.search import due_trees, stored_ids
+from undercurrent.sources.reddit.search import due_trees, names_any, stored_ids
 
 log = logging.getLogger(__name__)
 
@@ -97,11 +98,15 @@ def seed_state(client: Client, feeds: list[Feed], seen: RecentKeys) -> None:
         if ids and feed.complete:
             feed.newest_id = max(ids)
 
+    # not r/all's posts: a million a day would push the others out of `seen`, and
+    # posts-all's newest id guards them. (Its posts that reddit's search finds but
+    # names_any doesn't may count again in r/_search after a restart, a handful.)
     recent = client.query(
         "SELECT id FROM items WHERE platform = {platform:String} AND ("
-        "doc_type = 'post' AND created_at > now() - INTERVAL 40 HOUR "
+        "doc_type = 'post' AND channel != {sample:String} "
+        "AND created_at > now() - INTERVAL 40 HOUR "
         "OR doc_type = 'comment' AND ingested_at > now() - INTERVAL 30 MINUTE)",
-        parameters={"platform": PLATFORM},
+        parameters={"platform": PLATFORM, "sample": SAMPLE},
     ).result_rows
     for (fullname,) in recent:
         seen.add(fullname)
@@ -137,6 +142,10 @@ class RedditSource:
         # posts whose comment tree was fetched; after a restart a tree may be fetched again,
         # its comments stored before are recognized then
         self._trees_done: set[str] = set()
+        # an untracked post naming a watched product counts in r/_search, whichever feed
+        # finds it: r/all's posts find most of the search's results first
+        aliases = [alias for names in config.radar.searches.values() for alias in names]
+        self._products = names_any(aliases) if aliases else None
         self.scheduler: FeedScheduler | None = None
 
     @classmethod
@@ -164,16 +173,37 @@ class RedditSource:
             if self._config.radar.searches:
                 tasks.append(asyncio.create_task(self._trees_forever(sink)))
             try:
-                while not stop.is_set():
-                    feed = self.scheduler.next_feed()
-                    if (delay := feed.next_poll_at - time.monotonic()) > 0:
-                        with contextlib.suppress(TimeoutError):
-                            await asyncio.wait_for(stop.wait(), delay)
-                        continue
-                    await self.poll(feed, sink)
+                await self._poll_forever(sink, stop)
             finally:
                 for task in tasks:
                     task.cancel()
+
+    async def _poll_forever(self, sink: Sink, stop: asyncio.Event) -> None:
+        """Starts each feed's polls when they're due, without waiting for other feeds' answers
+        (the client paces the requests)."""
+        assert self.scheduler is not None
+        polls: dict[asyncio.Task[object], Feed] = {}
+        stopped: asyncio.Task[object] = asyncio.create_task(stop.wait())
+        try:
+            while not stop.is_set():
+                now = time.monotonic()
+                for feed in self.scheduler.due(now):
+                    self.scheduler.start(feed, now)
+                    polls[asyncio.create_task(self.poll(feed, sink))] = feed
+                due_at = self.scheduler.next_due_at()
+                done, _ = await asyncio.wait(
+                    {stopped, *polls},
+                    timeout=None if due_at is None else max(due_at - time.monotonic(), 0.0),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in done - {stopped}:
+                    self.scheduler.finish(polls.pop(task))
+                    # an unexpected error stops the source, as when polls ran one at a time
+                    task.result()
+        finally:
+            # an unanswered poll hands nothing to the sink, a restart polls its feed again
+            for task in (stopped, *polls):
+                task.cancel()
 
     async def poll(self, feed: Feed, sink: Sink) -> None:
         assert self.scheduler is not None
@@ -181,6 +211,9 @@ class RedditSource:
         # the next poll is scheduled from the start of this one, a slow response (r/all
         # takes seconds) shouldn't stretch the interval
         started = time.monotonic()
+        # what this feed's polls had found when this one started is counted; another poll
+        # may answer first, the ids seen recently tell what's new beyond it
+        counted_up_to = feed.newest_id
         try:
             items = await self._reddit.listing(feed.path, feed.params)
         except RedditError as error:
@@ -191,14 +224,16 @@ class RedditSource:
 
         new_items = 0
         for item in items:
-            if feed.search is None:
-                if feed.newest_id is not None and item.id36 <= feed.newest_id:
+            # the sample's polls overlap too, and its listing shows only a second or two:
+            # the ids seen recently tell what's new there
+            if feed.complete:
+                if counted_up_to is not None and item.id36 <= counted_up_to:
                     continue
             # search results aren't strictly newest first (posts are indexed with a delay),
             # and those in tracked subreddits are in their feeds already
-            elif item.subreddit in self._tracked:
+            elif feed.search is not None and item.subreddit in self._tracked:
                 continue
-            new_items += self.ingest(item, sink, SEARCH if feed.search else None)
+            new_items += self.ingest(item, sink, self.channel_of(item, feed))
 
         outcome = self.scheduler.record_success(feed, items, started)
         if outcome.gap:
@@ -206,6 +241,20 @@ class RedditSource:
         sink.add_poll(
             self._poll(feed, polled_at, 200, len(items), new_items, outcome.gap, outcome.id_span)
         )
+
+    def channel_of(self, item: RedditItem, feed: Feed) -> str | None:
+        """r/_search for the search's results and every other untracked post naming a
+        watched product, otherwise None: to_item decides."""
+        if feed.search is not None:
+            return SEARCH
+        if (
+            self._products is not None
+            and item.doc_type == "post"
+            and item.subreddit not in self._tracked
+            and self._products.search(item.text)
+        ):
+            return SEARCH
+        return None
 
     def ingest(self, item: RedditItem, sink: Sink, channel: str | None = None) -> bool:
         """Hands an item to the sink unless it's too old or seen before. Whether it was new

@@ -160,7 +160,7 @@ module in `src/undercurrent/sources/` (an `Item`, a `Sink`, a `Source`), like
 
 | Platform | Channels | What it adds | Status |
 | --- | --- | --- | --- |
-| Reddit | `r/<name>` per tracked subreddit, `r/all` for a sample of the rest | Communities by topic, product subreddits, the reaction to everything | Running |
+| Reddit | `r/<name>` per tracked subreddit, `r/all` for the rest: every post r/all lists, a sample of the comments | Communities by topic, product subreddits, the reaction to everything | Running |
 | Hacker News | `hn` | Where developer tools, models and launches often surface first; 120 days of history on the first day | Planned, phase 2 |
 | GitHub | `gh/stars` | Every star of the watched repos, and young repos gaining them | Planned, phase 2 |
 | Wikipedia | `wiki` | Daily pageviews: when mainstream interest arrives. Follows, never leads | A check today (`undercurrent wikipedia`), a follower in phase 2 |
@@ -208,8 +208,8 @@ The diagram is generated from [docs/architecture.html](docs/architecture.html), 
 to render it is at the top of that file.
 
 1. **Collect.** The ingester polls each platform within its free API budget: the tracked
-   subreddits completely, each as often as its volume needs, and a sample of r/all as the
-   usual vocabulary. Every comment and post becomes terms (words, 2–3 word phrases, linked
+   subreddits completely, each as often as its volume needs, and r/all (every post, a
+   sample of the comments) as the usual vocabulary. Every comment and post becomes terms (words, 2–3 word phrases, linked
    domains, mentioned subreddits) and intents, counted per hour, channel and term in
    ClickHouse.
 2. **Detect.** Every 15 minutes the analyzer compares every term's share in every channel
@@ -348,7 +348,7 @@ Requires Docker. Works the same on a laptop and on a server.
    * **Ingestion**: is the ingester healthy and complete, per platform.
 
    Every dashboard picks a group or a single channel: `reddit` is every tracked subreddit,
-   `r/all` the sample of the rest of reddit.
+   `r/all` the rest of reddit (every post r/all lists, a sample of the comments).
 
 5. Subscribe to the alerts: open <http://localhost:3609/undercurrent> in a browser, or see
    [Notifications on your phone](#notifications-on-your-phone). Check that they arrive:
@@ -654,7 +654,8 @@ uv run undercurrent notify-test
 ```
 
 A scope is a group from `config.yaml`, a channel (`r/technology`), `reddit` (every tracked
-subreddit) or `r/all` (the r/all sample of everything else). `undercurrent status` lists
+subreddit) or `r/all` (everything else: every post r/all lists, a sample of the
+comments). `undercurrent status` lists
 every channel with its platform and what it collected in the last 24 hours.
 
 To run the ingester outside of Docker, stop the container first (both would share one
@@ -686,9 +687,13 @@ one of it with notifications on, or alerts go out twice.
 * Authors are only stored as a keyed hash, never as usernames. Raw text is deleted after
   48 hours, as Reddit asks of API users.
 * Tracked subreddits are polled completely as multireddits (`r/a+b+c`), each feed as often
-  as its volume needs. A sample of r/all serves as the "normal" vocabulary. Reddit only
-  returns its last second or two, so it's a sample of a few percent. What it finds outside
-  the tracked subreddits is pooled into one channel, `r/all`. What the churn radar's
+  as its volume needs. r/all serves as the "normal" vocabulary. Its newest posts reach
+  back about 12 seconds, so it's polled like a tracked feed and every post it lists is
+  collected (about 550 a minute on 2026-11-01). Of its comments Reddit only returns
+  the last second or two, so they're a sample, polled with overlapping requests on
+  whatever budget the tracked feeds leave: about a third of Reddit's comments
+  (1,250 to 1,500 a minute). What it finds outside the tracked subreddits is pooled
+  into one channel, `r/all`. What the churn radar's
   search finds is pooled into `r/_search` the same way.
 * Authors are hashed together with their platform, so the same name on two platforms
   counts as two people.

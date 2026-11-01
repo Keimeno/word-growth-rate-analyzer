@@ -1,5 +1,6 @@
 # Where documents come from. Reddit is the only platform so far: the tracked subreddits,
-# every comment and post, and a sample of r/all. See docs/CROSS-PLATFORM.md.
+# every comment and post, and r/all, every post and a sample of the comments. See
+# docs/CROSS-PLATFORM.md.
 platforms:
   reddit:
     enabled: true
@@ -7,10 +8,16 @@ platforms:
     requests_per_minute: 90
     max_subreddits_per_feed: 25
     # A sample of all of reddit, the channel r/all: the "normal" vocabulary trends are
-    # compared against. Reddit only returns the last second or two of r/all, so this is
-    # always a sample.
+    # compared against. Reddit only returns the last second or two of r/all's comments,
+    # so they're always a sample, the bigger the more often they're polled (2026-11-01:
+    # about 440 a minute at 13 requests a minute, 1,330 at 60, of about 4,700 on all of
+    # reddit). The sample gets what the tracked feeds and searches leave of the budget.
+    # r/all's posts are no sample: its newest 100 reach back about 12 seconds, so they're
+    # polled completely like a tracked subreddit's (about 460 a minute, 10 requests).
     sample:
-      requests_per_minute: 20
+      requests_per_minute: 70      # at most, so tracked polls don't queue behind it
+      min_requests_per_minute: 10  # at least, when the tracked feeds need the rest
+      posts: true                  # every post r/all lists, in r/all too
       max_ngram: 2           # words and two-word phrases, the sample is only the background
 
 ingest:

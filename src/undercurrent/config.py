@@ -57,10 +57,17 @@ class IntentsConfig:
 @dataclass(frozen=True)
 class RedditSampleConfig:
     """A sample of all of reddit, the channel r/all: the "normal" vocabulary to compare
-    against."""
+    against. It gets what the tracked feeds and searches leave of the budget, the more the
+    bigger the sample, between these two."""
 
-    # 0 disables the sample
-    requests_per_minute: float = 20
+    # at most, below what's left: the tracked feeds' polls shouldn't wait behind the
+    # sample's for their turn. 0 disables the sample (and r/all's posts).
+    requests_per_minute: float = 70
+    # at least, when the tracked feeds need the rest
+    min_requests_per_minute: float = 10
+    # also every post r/all lists, polled completely like a tracked subreddit's (about 8 a
+    # second, 10 requests a minute that come before the sample's)
+    posts: bool = True
     # the sample is only the "normal" vocabulary to compare against, trigrams of thousands
     # of unrelated subreddits would mostly be stored once and never looked at again
     max_ngram: int = 2

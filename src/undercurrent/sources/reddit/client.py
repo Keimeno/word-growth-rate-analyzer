@@ -1,9 +1,11 @@
 """A small client for the two things we need from reddit: listings and subreddit info.
 
 Authentication uses reddit's app-only OAuth flow (client id + secret, no user account),
-which is enough to read public listings. Requests are sent one at a time and paced so
-that we never exceed our budget, using reddit's x-ratelimit-* headers as the source of
-truth (they also account for other programs using the same client id).
+which is enough to read public listings. Requests start one at a time, paced so that we
+never exceed our budget, using reddit's x-ratelimit-* headers as the source of truth (they
+also account for other programs using the same client id). They don't wait for each
+other's answers: r/all takes seconds to answer, one request at a time used a sixth of the
+budget.
 """
 
 from __future__ import annotations
@@ -68,13 +70,14 @@ class RedditClient:
         self._clock = clock
         self._sleep = sleep
         self._lock = asyncio.Lock()
-        self._next_request_at = 0.0
+        self._last_request_at = float("-inf")
         self._token: str | None = None
         self._token_refresh_at = 0.0
         self._auth_blocked_until = 0.0
         self.ratelimit = RateLimit()
         self.requests = 0
-        # seconds the last request took, without waiting for the rate limit
+        # seconds the last answered request took, without waiting for its turn; read right
+        # after a request returns, before awaiting anything else, it's that request's
         self.last_latency = 0.0
 
     async def __aenter__(self) -> Self:
@@ -114,38 +117,45 @@ class RedditClient:
         return None
 
     async def _get(self, path: str, params: dict[str, Any]) -> httpx.Response:
-        async with self._lock:
-            await self._pace()
-            for attempt in range(2):
-                token = await self._access_token()
-                started = self._clock()
-                try:
-                    response = await self._http.get(
-                        f"{API_URL}{path}",
-                        params=params,
-                        headers={"Authorization": f"bearer {token}"},
-                    )
-                except httpx.HTTPError as error:
-                    self._next_request_at = self._clock() + self._current_spacing()
-                    raise RedditError(0, repr(error)) from error
-                finally:
-                    self.requests += 1
-                    self.last_latency = self._clock() - started
+        for attempt in range(2):
+            token = await self._start_request()
+            started = self._clock()
+            try:
+                response = await self._http.get(
+                    f"{API_URL}{path}",
+                    params=params,
+                    headers={"Authorization": f"bearer {token}"},
+                )
+            except httpx.HTTPError as error:
+                raise RedditError(0, repr(error)) from error
+            finally:
+                self.requests += 1
+                self.last_latency = self._clock() - started
 
-                # pace the next request with the rate limit reddit just reported
-                self._update_ratelimit(response)
-                self._next_request_at = self._clock() + self._current_spacing()
-                # the token may have expired early, get a new one and retry once
-                if response.status_code == 401 and attempt == 0:
+            # paces the next requests with the rate limit reddit just reported
+            self._update_ratelimit(response)
+            # the token may have expired early, get a new one (unless an overlapping
+            # request did already) and retry once
+            if response.status_code == 401 and attempt == 0:
+                if self._token == token:
                     self._token = None
-                    continue
-                break
+                continue
+            break
 
         if response.status_code == 429:
             raise RedditError(429, "rate limited", retry_after=self._seconds_until_reset())
         if response.status_code >= 300:
             raise RedditError(response.status_code, response.text[:200])
         return response
+
+    async def _start_request(self) -> str:
+        """Waits for this request's turn and returns the token to send. The next request's
+        turn comes one spacing after this one starts, not after its answer."""
+        async with self._lock:
+            await self._pace()
+            token = await self._access_token()
+            self._last_request_at = self._clock()
+            return token
 
     def _current_spacing(self) -> float:
         """Seconds between requests: our own budget, or more if reddit says we're low."""
@@ -161,7 +171,7 @@ class RedditClient:
         return max(self.ratelimit.reset_at - self._clock(), 0.0)
 
     async def _pace(self) -> None:
-        wait = self._next_request_at - self._clock()
+        wait = self._last_request_at + self._current_spacing() - self._clock()
         reset_in = self._seconds_until_reset()
         if self.ratelimit.remaining is not None and self.ratelimit.remaining < 1 and reset_in:
             log.warning("reddit rate limit exhausted, waiting %.0fs", reset_in)

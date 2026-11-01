@@ -122,8 +122,10 @@ Three sources, in order of cost (all of it within reddit's free API tier):
    up to 500 comments in one request, without those behind "load more". The answers under
    "Alternatives to Notion?" are where the reasons are.
 
-Search hits from tracked subreddits are skipped, since the stream already has them. A
-tree's comments that are already stored (the r/all sample caught them, or the tree was
+Search hits from tracked subreddits are skipped, since the stream already has them. Since
+2026-11-01 the ingester also reads every post r/all lists, and those naming a watched
+product count in `r/_search` too: most search hits arrive that way, minutes before the
+search finds them (and skips them, already stored). A tree's comments that are already stored (the r/all sample caught them, or the tree was
 fetched before a restart) are skipped too. The rest are stored and extracted like any item,
 in a channel of their own, `r/_search`, like the sample's `r/all`. Its counts aren't shares
 of anything (search isn't a complete stream), so it's in no group and not `analyzed` in the

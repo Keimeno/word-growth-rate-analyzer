@@ -7,13 +7,18 @@ estimates its own item rate from the timestamps in the listing and is polled so 
 poll sees about half a listing of new items. That keeps busy feeds complete and quiet
 feeds cheap.
 
-The sample feed (a sample of r/all) is different: reddit only returns the last
-second or two of r/all, so it can never be complete. It gets a fixed share of the
-request budget and is treated as a random sample.
+r/all's posts are a feed like these: its newest 100 reach back about 12 seconds, so a
+poll every 6 or so sees every post r/all lists.
+
+The sample feed (a sample of r/all's comments) is different: reddit only returns the last
+second or two of them, so it can never be complete, and the more often it's polled the
+more it sees. It gets what the tracked feeds and searches leave of the request budget,
+and its polls overlap: r/all takes seconds to answer, more than the interval between two
+polls. It's treated as a random sample.
 
 The churn radar's searches (posts naming a watched product, docs/CHURN-RADAR.md §2.2)
-aren't complete either: each is polled at a fixed interval, and its budget comes off the
-tracked feeds' like the sample's.
+aren't complete either: each is polled at a fixed interval, and its budget comes off
+first, before the tracked feeds' and the sample's.
 """
 
 from __future__ import annotations
@@ -37,6 +42,11 @@ TARGET_NEW_ITEMS = LISTING_LIMIT / 2
 GAP_THRESHOLD = int(LISTING_LIMIT * 0.9)
 RATE_SMOOTHING = 0.5
 MAX_BACKOFF = 300.0
+# polls of the sample waiting for their answer at most, should reddit slow down
+MAX_SAMPLE_POLLS_IN_FLIGHT = 8
+# a complete feed's: one slow answer (r/all's posts sometimes take 15s) shouldn't hold up
+# the next poll past what the listing reaches back
+MAX_COMPLETE_POLLS_IN_FLIGHT = 2
 
 
 @dataclass
@@ -62,6 +72,9 @@ class Feed:
     next_poll_at: float = 0.0
     failures: int = 0
     newest_id: int | None = None
+    # polls sent and not answered yet, and when the last one started
+    in_flight: int = 0
+    last_started: float = 0.0
     stats: FeedStats = field(default_factory=FeedStats)
 
     @property
@@ -80,6 +93,14 @@ class Feed:
         """Whether polling it often enough sees every item: tracked subreddits do, the r/all
         sample and searches don't, they get fixed intervals instead."""
         return not self.sample and self.search is None
+
+    @property
+    def max_in_flight(self) -> int:
+        """The sample's polls overlap, a complete feed's when an answer is slow. A search's
+        wait, 15 minutes apart."""
+        if self.sample:
+            return MAX_SAMPLE_POLLS_IN_FLIGHT
+        return MAX_COMPLETE_POLLS_IN_FLIGHT if self.complete else 1
 
 
 @dataclass(frozen=True)
@@ -100,7 +121,16 @@ def build_feeds(config: Config, subreddits: Sequence[str] | None = None) -> list
         for kind in ("comments", "posts"):
             feeds.append(Feed(name=f"{kind}-{index + 1}", kind=kind, subreddits=chunk))
 
-    if config.platforms.reddit.sample.requests_per_minute > 0:
+    sample = config.platforms.reddit.sample
+    if sample.requests_per_minute > 0:
+        if sample.posts:
+            feeds.append(
+                Feed(
+                    name=f"posts-{subreddit_of(SAMPLE)}",
+                    kind="posts",
+                    subreddits=(subreddit_of(SAMPLE),),
+                )
+            )
         feeds.append(
             Feed(
                 name=f"sample-{subreddit_of(SAMPLE)}",
@@ -136,20 +166,45 @@ class FeedScheduler:
     def __init__(self, feeds: list[Feed], config: Config):
         self.feeds = feeds
         self._reddit = config.platforms.reddit
-        sample_budget = self._reddit.sample.requests_per_minute if self._sample else 0
-        self._sample_interval = 60.0 / sample_budget if sample_budget else 0.0
+        sample = self._reddit.sample
+        self._sample_max = sample.requests_per_minute if self._sample else 0.0
+        self._sample_min = min(sample.min_requests_per_minute, self._sample_max)
         self._search_interval = config.radar.search_interval_minutes * 60
-        search_budget = sum(60.0 / self._search_interval for feed in feeds if feed.search)
+        self._search_budget = sum(60.0 / self._search_interval for feed in feeds if feed.search)
+        # the tracked feeds come before the sample, which keeps its minimum
         self._tracked_budget = max(
-            self._reddit.requests_per_minute - sample_budget - search_budget, 1.0
+            self._reddit.requests_per_minute - self._sample_min - self._search_budget, 1.0
         )
 
     @property
     def _sample(self) -> list[Feed]:
         return [feed for feed in self.feeds if feed.sample]
 
-    def next_feed(self) -> Feed:
-        return min(self.feeds, key=lambda feed: feed.next_poll_at)
+    def due(self, now: float) -> list[Feed]:
+        """The feeds to poll now: due, and not waiting for as many answers as they may."""
+        return [
+            feed
+            for feed in self.feeds
+            if feed.next_poll_at <= now and feed.in_flight < feed.max_in_flight
+        ]
+
+    def next_due_at(self) -> float | None:
+        """When the next feed is due, None while every feed waits for answers."""
+        return min(
+            (feed.next_poll_at for feed in self.feeds if feed.in_flight < feed.max_in_flight),
+            default=None,
+        )
+
+    def start(self, feed: Feed, now: float) -> None:
+        """The next poll is due an interval later, answered or not; an answer reschedules it
+        with what it found."""
+        feed.in_flight += 1
+        feed.last_started = now
+        feed.interval = self.interval(feed)
+        feed.next_poll_at = now + feed.interval
+
+    def finish(self, feed: Feed) -> None:
+        feed.in_flight -= 1
 
     def record_success(self, feed: Feed, items: Sequence[RedditItem], now: float) -> PollOutcome:
         ids = [item.id36 for item in items]
@@ -178,7 +233,8 @@ class FeedScheduler:
         feed.stats.items += len(items)
         feed.stats.gaps += gap
         feed.interval = self.interval(feed)
-        feed.next_poll_at = now + feed.interval
+        # from the last poll started, which may not be this one
+        feed.next_poll_at = max(now, feed.last_started) + feed.interval
         return PollOutcome(gap=gap, id_span=max(id_span, 0))
 
     def record_failure(self, feed: Feed, now: float, retry_after: float | None = None) -> None:
@@ -189,7 +245,7 @@ class FeedScheduler:
 
     def interval(self, feed: Feed) -> float:
         if feed.sample:
-            return self._sample_interval
+            return 60.0 / max(self.sample_requests_per_minute(), 1.0)
         if feed.search is not None:
             return self._search_interval
         return self._desired_interval(feed) * self._budget_scale()
@@ -204,7 +260,17 @@ class FeedScheduler:
             return maximum
         return min(max(TARGET_NEW_ITEMS / feed.rate, self._reddit.min_poll_interval), maximum)
 
+    def sample_requests_per_minute(self) -> float:
+        """What the tracked feeds and searches leave of the budget, at most the sample's
+        requests_per_minute, at least its min_requests_per_minute."""
+        tracked = min(self._tracked_demand(), self._tracked_budget)
+        left = self._reddit.requests_per_minute - self._search_budget - tracked
+        return min(max(left, self._sample_min), self._sample_max)
+
+    def _tracked_demand(self) -> float:
+        """Requests per minute the tracked feeds need to see every item."""
+        return sum(60.0 / self._desired_interval(feed) for feed in self.feeds if feed.complete)
+
     def _budget_scale(self) -> float:
         """Stretch all tracked intervals when they'd need more than the budget."""
-        demand = sum(60.0 / self._desired_interval(feed) for feed in self.feeds if feed.complete)
-        return max(demand / self._tracked_budget, 1.0)
+        return max(self._tracked_demand() / self._tracked_budget, 1.0)

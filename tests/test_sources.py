@@ -17,7 +17,12 @@ from helpers import make_config, make_item
 from undercurrent.ingest.run import Pipeline, run_sources, write_channels
 from undercurrent.sources.base import Item, Poll, Sink
 from undercurrent.sources.reddit.client import RedditClient
-from undercurrent.sources.reddit.feeds import FeedScheduler, build_feeds
+from undercurrent.sources.reddit.feeds import (
+    MAX_SAMPLE_POLLS_IN_FLIGHT,
+    FeedScheduler,
+    build_feeds,
+)
+from undercurrent.sources.reddit.models import RedditItem
 from undercurrent.sources.reddit.source import RedditSource, to_item
 from undercurrent.store import migrate
 
@@ -227,3 +232,120 @@ async def test_the_reddit_sample_counts_untracked_subreddits_in_r_all():
         2,
     )
     assert poll.ts > datetime.now(UTC) - timedelta(minutes=1)
+
+
+async def test_the_samples_polls_answered_out_of_order_lose_nothing():
+    config = make_config()
+    now = int(time.time())
+    newer = listing(("t1_d", "AskReddit", now), ("t1_c", "AskReddit", now))
+    older = listing(("t1_c", "AskReddit", now), ("t1_b", "AskReddit", now - 1))
+    source = RedditSource(
+        config, reddit(httpx.Response(200, json=newer), httpx.Response(200, json=older))
+    )
+    feeds = build_feeds(config)
+    source.scheduler = FeedScheduler(feeds, config)
+    sink = RecordingSink()
+    sample = next(feed for feed in feeds if feed.sample)
+    # the later poll's answer came first, the earlier one still has t1_b
+    await source.poll(sample, sink)
+    await source.poll(sample, sink)
+    assert [item.id for item in sink.items] == ["t1_d", "t1_c", "t1_b"]
+    assert [poll.new_items for poll in sink.polls] == [2, 1]
+
+
+async def test_the_reddit_source_overlaps_the_samples_polls():
+    config = make_config(
+        platforms={"reddit": {"requests_per_minute": 6000, "sample": {"requests_per_minute": 600}}}
+    )
+    paths: list[str] = []
+    in_flight = most = 0
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal in_flight, most
+        if request.url.path == "/api/v1/access_token":
+            return httpx.Response(200, json={"access_token": "token", "expires_in": 86400})
+        paths.append(request.url.path)
+        in_flight += 1
+        most = max(most, in_flight)
+        # r/all takes seconds to answer, here a third of one
+        await asyncio.sleep(0.3 if request.url.path == "/r/all/comments" else 0)
+        in_flight -= 1
+        return httpx.Response(200, json=listing())
+
+    client = RedditClient("id", "secret", "test", 6000, transport=httpx.MockTransport(handle))
+    source = RedditSource(config, client)
+    source.scheduler = FeedScheduler(build_feeds(config), config)
+    stop = asyncio.Event()
+    asyncio.get_running_loop().call_later(0.6, stop.set)
+    async with client:
+        await source._poll_forever(RecordingSink(), stop)
+
+    # a poll of r/all every 0.1s, each answered after 0.3s
+    assert 3 <= most <= MAX_SAMPLE_POLLS_IN_FLIGHT
+    assert paths.count("/r/all/comments") >= 4
+    # the tracked feeds and r/all's posts once, their next polls are minutes away
+    tracked = [path for path in paths if path != "/r/all/comments"]
+    assert sorted(tracked) == [
+        "/r/all/new",
+        "/r/de+programming+technology/comments",
+        "/r/de+programming+technology/new",
+    ]
+
+
+async def test_a_complete_feeds_polls_answered_out_of_order_lose_nothing():
+    config = make_config()
+    now = int(time.time())
+    pages = [
+        listing(("t1_c", "technology", now - 1), ("t1_b", "technology", now - 2)),
+        listing(("t1_d", "technology", now), ("t1_c", "technology", now - 1)),
+    ]
+    first_sent, first_answered = asyncio.Event(), asyncio.Event()
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/access_token":
+            return httpx.Response(200, json={"access_token": "token", "expires_in": 86400})
+        page = pages.pop(0)
+        if not first_sent.is_set():
+            first_sent.set()
+            await first_answered.wait()
+        return httpx.Response(200, json=page)
+
+    client = RedditClient("id", "secret", "test", 6000, transport=httpx.MockTransport(handle))
+    source = RedditSource(config, client)
+    feeds = build_feeds(config)
+    source.scheduler = FeedScheduler(feeds, config)
+    comments = feeds[0]
+    comments.newest_id = int("a", 36)
+    sink = RecordingSink()
+    async with client:
+        slow = asyncio.create_task(source.poll(comments, sink))
+        await first_sent.wait()
+        # the later poll is answered first, the earlier one still has t1_b
+        await source.poll(comments, sink)
+        first_answered.set()
+        await slow
+    assert [item.id for item in sink.items] == ["t1_d", "t1_c", "t1_b"]
+
+
+def test_untracked_posts_naming_a_watched_product_count_in_the_search():
+    config = make_config(
+        radar={
+            "enabled": True,
+            "watchlists": {"pkm": {"group": "tech", "products": {"notion": ["Notion AI"]}}},
+        }
+    )
+    source = RedditSource(config, reddit())
+    all_posts = next(feed for feed in build_feeds(config) if feed.path == "/r/all/new")
+
+    def post(subreddit: str, text: str) -> RedditItem:
+        return make_item(1, doc_type="post", subreddit=subreddit, text=text)
+
+    assert source.channel_of(post("productivity", "Leaving Notion AI for good"), all_posts) == (
+        "r/_search"
+    )
+    # anything else from elsewhere counts in r/all, a tracked subreddit's in its own channel
+    assert source.channel_of(post("productivity", "My notebook setup"), all_posts) is None
+    assert source.channel_of(post("technology", "Notion raises prices"), all_posts) is None
+    # the search is for posts, comments naming it stay in the sample
+    comment = make_item(2, subreddit="askreddit", text="I use notion")
+    assert source.channel_of(comment, all_posts) is None
