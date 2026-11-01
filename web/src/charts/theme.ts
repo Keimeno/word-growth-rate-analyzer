@@ -22,7 +22,15 @@ export function chartTokens(el?: Element) {
   return {
     series: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v(`series-${i}`)),
     sequential: [100, 200, 300, 400, 500, 600, 700, 800, 900].map((s) => v(`seq-${s}`)),
-    diverging: ["div-neg-3", "div-neg-2", "div-neg-1", "div-mid", "div-pos-1", "div-pos-2", "div-pos-3"].map(v),
+    diverging: [
+      "div-neg-3",
+      "div-neg-2",
+      "div-neg-1",
+      "div-mid",
+      "div-pos-1",
+      "div-pos-2",
+      "div-pos-3",
+    ].map(v),
     surface: v("surface"),
     raised: v("surface-raised"),
     ink: v("ink"),
@@ -63,7 +71,12 @@ export function buildTheme(t = chartTokens()) {
     grid: { left: 8, right: 16, top: 24, bottom: 8, containLabel: true },
     legend: {
       // a legend for 2+ series; direct labels as well for up to 4 (the kit adds endLabel)
-      top: 0, left: 0, icon: "roundRect", itemWidth: 12, itemHeight: 3, itemGap: 16,
+      top: 0,
+      left: 0,
+      icon: "roundRect",
+      itemWidth: 12,
+      itemHeight: 3,
+      itemGap: 16,
       textStyle: { color: t.inkSecondary, fontFamily: t.sans, fontSize: 12 },
       inactiveColor: t.axis,
     },
@@ -74,17 +87,23 @@ export function buildTheme(t = chartTokens()) {
       borderWidth: 1,
       padding: [8, 10],
       textStyle: { color: t.ink, fontFamily: t.sans, fontSize: 12 },
-      extraCssText: "box-shadow: var(--elevation-popover); border-radius: 6px; font-variant-numeric: tabular-nums;",
+      extraCssText:
+        "box-shadow: var(--elevation-popover); border-radius: 6px; font-variant-numeric: tabular-nums;",
       axisPointer: { type: "line", lineStyle: { color: t.crosshair, width: 1, type: "solid" } },
     },
-    axisPointer: { lineStyle: { color: t.crosshair, width: 1 }, label: { backgroundColor: t.ink, color: t.surface, fontFamily: t.sans } },
+    axisPointer: {
+      lineStyle: { color: t.crosshair, width: 1 },
+      label: { backgroundColor: t.ink, color: t.surface, fontFamily: t.sans },
+    },
     categoryAxis: { ...axisCommon, splitLine: { show: false } },
     valueAxis: { ...axisCommon, axisLine: { show: false } }, // horizontal gridlines carry the scale
     timeAxis: { ...axisCommon, splitLine: { show: false } },
     logAxis: { ...axisCommon, axisLine: { show: false } },
     line: {
       lineStyle: { width: 2 },
-      symbol: "circle", symbolSize: 8, showSymbol: false, // markers only on hover and at the end
+      symbol: "circle",
+      symbolSize: 8,
+      showSymbol: false, // markers only on hover and at the end
       smooth: false, // shares are measured per bucket: never interpolate a curve between them
       emphasis: { focus: "series", lineStyle: { width: 2.5 } },
       blur: { lineStyle: { opacity: 0.25 } },
@@ -101,7 +120,8 @@ export function buildTheme(t = chartTokens()) {
     visualMap: {
       inRange: { color: t.sequential }, // sequential: one hue; switch to t.diverging for signed values
       textStyle: { color: t.muted, fontFamily: t.sans, fontSize: 12 },
-      itemWidth: 10, itemHeight: 120,
+      itemWidth: 10,
+      itemHeight: 120,
     },
     graph: {
       lineStyle: { color: t.axis, width: 1, curveness: 0.15 },
@@ -113,12 +133,16 @@ export function buildTheme(t = chartTokens()) {
       lineStyle: { color: "gradient", opacity: 0.35, curveness: 0.5 },
       itemStyle: { borderWidth: 0 },
       label: { color: t.inkSecondary, fontFamily: t.sans, fontSize: 12 },
-      nodeGap: 8, nodeWidth: 10,
+      nodeGap: 8,
+      nodeWidth: 10,
     },
     dataZoom: {
-      backgroundColor: "transparent", borderColor: t.border,
-      fillerColor: t.band, handleStyle: { color: t.surface, borderColor: t.primary },
-      moveHandleStyle: { color: t.axis }, textStyle: { color: t.muted, fontFamily: t.sans },
+      backgroundColor: "transparent",
+      borderColor: t.border,
+      fillerColor: t.band,
+      handleStyle: { color: t.surface, borderColor: t.primary },
+      moveHandleStyle: { color: t.axis },
+      textStyle: { color: t.muted, fontFamily: t.sans },
       dataBackground: { lineStyle: { color: t.axis }, areaStyle: { color: t.grid } },
     },
     brush: { brushStyle: { color: t.band, borderColor: t.primary, borderWidth: 1 } },
@@ -136,7 +160,13 @@ export function threshold(value: number, label: string, t = chartTokens()) {
     symbol: "none",
     silent: true,
     lineStyle: { color: t.threshold, width: 1, type: [4, 3] },
-    label: { formatter: label, position: "insideEndTop", color: t.muted, fontFamily: t.sans, fontSize: 11 },
+    label: {
+      formatter: label,
+      position: "insideEndTop",
+      color: t.muted,
+      fontFamily: t.sans,
+      fontSize: 11,
+    },
     data: [{ yAxis: value }],
   };
 }
@@ -146,15 +176,25 @@ export function band(from: string | number, to: string | number, label: string, 
   return {
     silent: true,
     itemStyle: { color: t.band },
-    label: { formatter: label, position: "insideTop", color: t.muted, fontFamily: t.sans, fontSize: 11 },
+    label: {
+      formatter: label,
+      position: "insideTop",
+      color: t.muted,
+      fontFamily: t.sans,
+      fontSize: 11,
+    },
     data: [[{ xAxis: from }, { xAxis: to }]],
   };
 }
 
 /** Alerts sent, as small ink pins on the series (not status colours: an alert is an event). */
-export function alertPins(points: Array<{ x: string | number; y: number; label: string }>, t = chartTokens()) {
+export function alertPins(
+  points: Array<{ x: string | number; y: number; label: string }>,
+  t = chartTokens(),
+) {
   return {
-    symbol: "pin", symbolSize: 22,
+    symbol: "pin",
+    symbolSize: 22,
     itemStyle: { color: t.ink },
     label: { color: t.surface, fontSize: 10, fontFamily: t.sans, formatter: "!" },
     data: points.map((p) => ({ coord: [p.x, p.y], name: p.label })),

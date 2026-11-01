@@ -11,3 +11,12 @@ clickhouse
 .github
 docs
 bench
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+# leftovers of v1, untracked
+node_modules
+packages
+v2
+config.json

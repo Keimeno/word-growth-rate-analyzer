@@ -314,9 +314,9 @@ Weights are 400 and 600, with 500 for labels and figures. Raw terms get the slas
 
 | File | What |
 | --- | --- |
-| [brand/tokens.css](brand/tokens.css) | The app's CSS: primitives, semantic tokens for light and dark, spacing, radius, sizes, type, density, motion; shadcn/ui's variables mapped onto them; Tailwind v4 `@theme inline` and the `dark` variant; `.type-*` classes |
+| [web/src/styles/tokens.css](../web/src/styles/tokens.css) | The app's CSS: primitives, semantic tokens for light and dark, spacing, radius, sizes, type, density, motion; shadcn/ui's variables mapped onto them; Tailwind v4 `@theme inline` and the `dark` variant; `.type-*` classes |
 | [brand/tokens.json](brand/tokens.json) | The same values with a usage note each, in the design-system format the specimen reads |
-| [brand/echarts-theme.ts](brand/echarts-theme.ts) | The ECharts theme, built from the CSS variables at runtime, plus helpers for thresholds, bands and alert pins |
+| [web/src/charts/theme.ts](../web/src/charts/theme.ts) | The ECharts theme, built from the CSS variables at runtime, plus helpers for thresholds, bands and alert pins |
 
 `tokens.css` and `tokens.json` were generated together; change a value in both (or
 regenerate) and re-run the palette checks for any `series-*`, `seq-*` or `div-*` change.
@@ -429,7 +429,8 @@ Each a small change, made with the web dashboard rebuild
 ([WEB-DASHBOARD.md](WEB-DASHBOARD.md) §16):
 
 * WEB-DASHBOARD.md §4.5 and §8.1 point at this document for colour and type (the system
-  sans becomes IBM Plex Sans) and the token files move to `web/src/` when phase 2 starts.
+  sans becomes IBM Plex Sans), and the token CSS and the ECharts theme moved to `web/src/`
+  (done 2026-11-01).
 * `src/…/web/static/index.html` and the new `web/index.html`: `favicon.svg`,
   `apple-touch-icon.png` and a web app manifest with the 512 px icons.
 * `notify/messages.py`: an `Icon` header with `notification-icon.png` served by the web

@@ -1,0 +1,11 @@
+# Settings for pnpm, which reads them from here. web/ is a project of its own, not a
+# workspace of several.
+#
+# A version is only installed three days after it's published: compromised packages have
+# so far been caught within that window.
+minimumReleaseAge: 4320
+# exact versions in package.json, updated on purpose
+savePrefix: ""
+# dependencies' install scripts don't run, except these
+allowBuilds:
+  esbuild: true

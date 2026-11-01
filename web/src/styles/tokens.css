@@ -55,7 +55,8 @@
 }
 
 /* Semantic tokens, light */
-:root, [data-theme="light"] {
+:root,
+[data-theme="light"] {
   color-scheme: light;
   --bg: #f7fafa;
   --surface: #fcfefe;
@@ -117,8 +118,8 @@
   --chart-crosshair: #6d787b;
   --chart-threshold: #6d787b;
   --chart-band: #ebfafb;
-  --elevation-popover: 0 1px 2px rgba(13,25,28,0.06), 0 6px 16px -4px rgba(13,25,28,0.14);
-  --elevation-dialog: 0 2px 6px rgba(13,25,28,0.08), 0 24px 56px -12px rgba(13,25,28,0.28);
+  --elevation-popover: 0 1px 2px rgba(13, 25, 28, 0.06), 0 6px 16px -4px rgba(13, 25, 28, 0.14);
+  --elevation-dialog: 0 2px 6px rgba(13, 25, 28, 0.08), 0 24px 56px -12px rgba(13, 25, 28, 0.28);
 }
 
 /* Semantic tokens, dark: selected steps, not an inversion */
@@ -185,8 +186,8 @@
     --chart-crosshair: #6d787b;
     --chart-threshold: #6d787b;
     --chart-band: #0e2627;
-    --elevation-popover: 0 1px 2px rgba(0,0,0,0.45), 0 8px 24px -4px rgba(0,0,0,0.65);
-    --elevation-dialog: 0 2px 6px rgba(0,0,0,0.5), 0 24px 56px -12px rgba(0,0,0,0.8);
+    --elevation-popover: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 24px -4px rgba(0, 0, 0, 0.65);
+    --elevation-dialog: 0 2px 6px rgba(0, 0, 0, 0.5), 0 24px 56px -12px rgba(0, 0, 0, 0.8);
   }
 }
 [data-theme="dark"] {
@@ -251,8 +252,8 @@
   --chart-crosshair: #6d787b;
   --chart-threshold: #6d787b;
   --chart-band: #0e2627;
-  --elevation-popover: 0 1px 2px rgba(0,0,0,0.45), 0 8px 24px -4px rgba(0,0,0,0.65);
-  --elevation-dialog: 0 2px 6px rgba(0,0,0,0.5), 0 24px 56px -12px rgba(0,0,0,0.8);
+  --elevation-popover: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 24px -4px rgba(0, 0, 0, 0.65);
+  --elevation-dialog: 0 2px 6px rgba(0, 0, 0, 0.5), 0 24px 56px -12px rgba(0, 0, 0, 0.8);
 }
 
 /* Spacing, radius, sizes, type, motion */
@@ -288,7 +289,9 @@
   --icon-lg: 20px;
   --border-hairline: 1px;
   --focus-width: 2px;
-  --typeface-sans: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --typeface-sans:
+    "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
   --typeface-serif: "Source Serif 4 Variable", "Source Serif 4", ui-serif, Georgia, serif;
   --typeface-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   /* density: compact by default, data views are working tools */
@@ -298,10 +301,10 @@
   --control-h: var(--control);
   /* motion: short, functional, never decorative */
   --duration-instant: 0ms;
-  --duration-fast: 100ms;   /* hover, press, toggles */
-  --duration-base: 160ms;   /* popovers, tooltips, tabs */
-  --duration-slow: 240ms;   /* sheets, dialogs */
-  --duration-chart: 300ms;  /* chart transitions, at most once per data change */
+  --duration-fast: 100ms; /* hover, press, toggles */
+  --duration-base: 160ms; /* popovers, tooltips, tabs */
+  --duration-slow: 240ms; /* sheets, dialogs */
+  --duration-chart: 300ms; /* chart transitions, at most once per data change */
   --motion-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-enter: cubic-bezier(0, 0, 0.2, 1);
   --motion-exit: cubic-bezier(0.4, 0, 1, 1);
@@ -312,10 +315,17 @@
   --control-h: 36px;
 }
 @media (pointer: coarse) {
-  :root { --control-h: var(--touch-target); }
+  :root {
+    --control-h: var(--touch-target);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  :root { --duration-fast: 0ms; --duration-base: 0ms; --duration-slow: 0ms; --duration-chart: 0ms; }
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --duration-chart: 0ms;
+  }
 }
 
 /* shadcn/ui's theme variables, mapped onto ours (shadcn reads these names) */
@@ -488,13 +498,20 @@
   --font-sans: var(--typeface-sans);
   --font-serif: var(--typeface-serif);
   --font-mono: var(--typeface-mono);
-  --text-xs: 12px;   --text-xs--line-height: 16px;
-  --text-sm: 13px;   --text-sm--line-height: 18px;
-  --text-base: 14px; --text-base--line-height: 20px;
-  --text-md: 16px;   --text-md--line-height: 22px;
-  --text-lg: 20px;   --text-lg--line-height: 26px;
-  --text-xl: 28px;   --text-xl--line-height: 34px;
-  --text-2xl: 32px;  --text-2xl--line-height: 36px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 14px;
+  --text-base--line-height: 20px;
+  --text-md: 16px;
+  --text-md--line-height: 22px;
+  --text-lg: 20px;
+  --text-lg--line-height: 26px;
+  --text-xl: 28px;
+  --text-xl--line-height: 34px;
+  --text-2xl: 32px;
+  --text-2xl--line-height: 36px;
   --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -508,22 +525,125 @@
 
 /* Type roles beyond Tailwind's size scale */
 @layer components {
-  .type-figure-lg { font-family: var(--typeface-sans); font-size: 32px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em; }
-  .type-title-xl { font-family: var(--typeface-sans); font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.015em; }
-  .type-title-lg { font-family: var(--typeface-sans); font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; }
-  .type-title-md { font-family: var(--typeface-sans); font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: -0.005em; }
-  .type-title-sm { font-family: var(--typeface-sans); font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0em; }
-  .type-body { font-family: var(--typeface-sans); font-size: 14px; line-height: 20px; font-weight: 400; letter-spacing: 0em; }
-  .type-body-dense { font-family: var(--typeface-sans); font-size: 13px; line-height: 18px; font-weight: 400; letter-spacing: 0em; }
-  .type-label { font-family: var(--typeface-sans); font-size: 13px; line-height: 16px; font-weight: 500; letter-spacing: 0em; }
-  .type-caption { font-family: var(--typeface-sans); font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0em; }
-  .type-overline { font-family: var(--typeface-sans); font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-  .type-headline-xl { font-family: var(--typeface-serif); font-size: 44px; line-height: 50px; font-weight: 600; letter-spacing: -0.015em; font-optical-sizing: auto; }
-  .type-headline-lg { font-family: var(--typeface-serif); font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; font-optical-sizing: auto; }
-  .type-headline-md { font-family: var(--typeface-serif); font-size: 21px; line-height: 28px; font-weight: 600; letter-spacing: -0.005em; }
-  .type-reading { font-family: var(--typeface-serif); font-size: 16px; line-height: 26px; font-weight: 400; letter-spacing: 0em; }
-  .type-code { font-family: var(--typeface-mono); font-size: 13px; line-height: 20px; font-weight: 400; letter-spacing: 0em; }
-  .type-code-sm { font-family: var(--typeface-mono); font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0em; }
-  .tabular { font-variant-numeric: tabular-nums; }
-  .term { font-feature-settings: "zero" 1; } /* slashed zero in raw terms, so 0 and O never meet */
+  .type-figure-lg {
+    font-family: var(--typeface-sans);
+    font-size: 32px;
+    line-height: 36px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .type-title-xl {
+    font-family: var(--typeface-sans);
+    font-size: 28px;
+    line-height: 34px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .type-title-lg {
+    font-family: var(--typeface-sans);
+    font-size: 20px;
+    line-height: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .type-title-md {
+    font-family: var(--typeface-sans);
+    font-size: 16px;
+    line-height: 22px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  .type-title-sm {
+    font-family: var(--typeface-sans);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    letter-spacing: 0em;
+  }
+  .type-body {
+    font-family: var(--typeface-sans);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 400;
+    letter-spacing: 0em;
+  }
+  .type-body-dense {
+    font-family: var(--typeface-sans);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+    letter-spacing: 0em;
+  }
+  .type-label {
+    font-family: var(--typeface-sans);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0em;
+  }
+  .type-caption {
+    font-family: var(--typeface-sans);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+    letter-spacing: 0em;
+  }
+  .type-overline {
+    font-family: var(--typeface-sans);
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .type-headline-xl {
+    font-family: var(--typeface-serif);
+    font-size: 44px;
+    line-height: 50px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-optical-sizing: auto;
+  }
+  .type-headline-lg {
+    font-family: var(--typeface-serif);
+    font-size: 30px;
+    line-height: 36px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-optical-sizing: auto;
+  }
+  .type-headline-md {
+    font-family: var(--typeface-serif);
+    font-size: 21px;
+    line-height: 28px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  .type-reading {
+    font-family: var(--typeface-serif);
+    font-size: 16px;
+    line-height: 26px;
+    font-weight: 400;
+    letter-spacing: 0em;
+  }
+  .type-code {
+    font-family: var(--typeface-mono);
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 400;
+    letter-spacing: 0em;
+  }
+  .type-code-sm {
+    font-family: var(--typeface-mono);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+    letter-spacing: 0em;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .term {
+    font-feature-settings: "zero" 1;
+  } /* slashed zero in raw terms, so 0 and O never meet */
 }

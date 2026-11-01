@@ -1,8 +1,9 @@
 # Web dashboard in TypeScript: plan
 
-**Status: planned, not started.** Written after the rename to Undercurrent
-([RENAME.md](RENAME.md)), so it uses the new names: the package `undercurrent`, the command
-`undercurrent web`, Grafana uids `undercurrent-*`.
+**Status: in progress since 2026-11-01** (phase 0 done). Written for after the rename to
+Undercurrent ([RENAME.md](RENAME.md)), so it uses the new names: the package
+`undercurrent`, the command `undercurrent web`, Grafana uids `undercurrent-*`. Until the
+rename lands, the code keeps today's names (RENAME.md §2).
 
 The web dashboard of `85b365c` (2026-10-31) is a plainer view of what the Grafana dashboards
 show: a Python server with 19 JSON endpoints and a page in plain JavaScript with Preact
@@ -456,8 +457,9 @@ the data, SVG from ECharts' SVG renderer, PNG from the canvas).
 ### 4.5 Color and theme
 
 Colour is the brand's ([BRAND.md](BRAND.md) §5, accepted 2026-11-01), which replaced the
-dataviz reference palette this section first named: the tokens of `docs/brand/tokens.css`,
-copied to `web/src/styles/tokens.css` and exposed as Tailwind v4 `@theme` utilities.
+dataviz reference palette this section first named: the tokens of
+`web/src/styles/tokens.css` (moved from `docs/brand/`), exposed as Tailwind v4 `@theme`
+utilities.
 
 * Categorical, 8 slots in fixed order: teal, rust, violet, amber, magenta, green, blue,
   red, with light and dark steps validated against each theme's chart surface (BRAND.md
@@ -472,7 +474,7 @@ copied to `web/src/styles/tokens.css` and exposed as Tailwind v4 `@theme` utilit
   the page (by order of first appearance in the page's primary list, kept in the url when it
   matters), so filtering never repaints the survivors.
 
-The ECharts theme (`docs/brand/echarts-theme.ts`, moved into the kit) reads the tokens
+The ECharts theme (`web/src/charts/theme.ts`, from `docs/brand/`) reads the tokens
 with `getComputedStyle` at runtime and is rebuilt when the theme changes, so CSS stays
 the single source. Any palette change re-runs the dataviz validator in both modes, and a
 unit test pins the token values so they can't drift silently.
@@ -1298,22 +1300,23 @@ feature-complete replacement of today's page after the second.
   Dockerfile, Compose, CI and `notify/messages.py`; it runs after the rename, and new
   platforms only change what `meta` returns, since nothing tells channels apart by prefix.
 
-## 15. Open questions for the user
+## 15. Decisions
 
-1. **The front end in this repository** (`web/`), with Node and pnpm next to uv: yes, or a
-   repository of its own?
-2. **ECharts as the chart engine**, themed to match, rather than shadcn's Recharts charts
-   (native look, far fewer forms)?
-3. **Pins and saved views on the server** (the same on every device, usable by alerts
-   later), or only in the browser?
-4. **Alert links:** move ntfy's links from Grafana to the term page once it exists?
-5. **Reaching it from the phone:** stays on localhost and an SSH tunnel, or Tailscale or a
-   reverse proxy with TLS? It decides whether anything beyond basic auth is needed.
-6. **Grafana:** decide after four weeks of using the new dashboard (§11.3), or a different
-   rule?
-7. **The v1 leftovers** (`node_modules/`, `packages/`, `config.json`, `v2/`): delete them in
-   phase 0?
-8. **Time travel** and **what-if gates**: worth building (P3 and P2), or cut?
+Asked as open questions; the user took each recommendation on 2026-11-01:
+
+1. **The front end lives in this repository**, in `web/`, with Node and pnpm next to uv.
+2. **ECharts as the chart engine**, behind our own kit and themed to match (§4.3).
+3. **Pins and saved views on the server** (`web_pins`, `web_views`), the same on every
+   device and readable by alerts later.
+4. **Alert links** move from Grafana to the term page once it exists (§6.8).
+5. **Reaching it from the phone** stays as today: localhost, an SSH tunnel and basic auth.
+   Nothing beyond basic auth is built.
+6. **Grafana** stays as the pro mode; decide after four weeks of using the new dashboard
+   (§11.3).
+7. **The v1 leftovers** (`node_modules/`, `packages/`, `config.json`, `v2/`, untracked) are
+   deleted only with the user's OK, since that can't be undone; until then `tsconfig.json`
+   names its `types`, so they're never picked up.
+8. **Time travel and the what-if gates** are built (P3 and P2).
 
 ## 16. Order of work
 

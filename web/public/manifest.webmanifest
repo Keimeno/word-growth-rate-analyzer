@@ -1,0 +1,20 @@
+{
+  "name": "Undercurrent",
+  "short_name": "Undercurrent",
+  "description": "Early signals in online conversation.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7fafa",
+  "theme_color": "#0d191c",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
