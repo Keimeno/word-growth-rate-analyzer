@@ -1,0 +1,529 @@
+/*
+ * Undercurrent design tokens. Generated with docs/brand/tokens.json; the reasoning and the
+ * rules are in docs/BRAND.md. Change a value in both, and re-run the palette validator for any
+ * series-*, seq-* or div-* change (BRAND.md, "Color").
+ *
+ * Use: in web/src/index.css
+ *   @import "tailwindcss";
+ *   @import "@fontsource-variable/ibm-plex-sans";
+ *   @import "@fontsource-variable/source-serif-4";
+ *   @import "@fontsource/ibm-plex-mono/400.css";
+ *   @import "./tokens.css";
+ * index.html resolves the theme before the first paint and sets data-theme="light" or "dark"
+ * on <html>; the media query below only covers a page without JavaScript.
+ */
+
+/* Primitives: the same in both themes. Components never use these directly. */
+:root {
+  --current-50: #ebfafb;
+  --current-100: #d5f4f4;
+  --current-200: #b2e8e9;
+  --current-300: #84d6d8;
+  --current-400: #54bfc3;
+  --current-500: #17a1a5;
+  --current-600: #0e8185;
+  --current-700: #096669;
+  --current-800: #054f51;
+  --current-900: #033b3d;
+  --current-950: #032a2b;
+  --neutral-0: #fcfefe;
+  --neutral-25: #f7fafa;
+  --neutral-50: #f2f5f6;
+  --neutral-100: #e9eeef;
+  --neutral-150: #dfe5e7;
+  --neutral-200: #d3dadc;
+  --neutral-300: #b7bfc2;
+  --neutral-400: #909a9d;
+  --neutral-450: #818b8e;
+  --neutral-500: #6d787b;
+  --neutral-600: #515d60;
+  --neutral-700: #3d494c;
+  --neutral-800: #2d383a;
+  --neutral-850: #242d30;
+  --neutral-875: #1f282a;
+  --neutral-900: #1b2325;
+  --neutral-925: #151d1f;
+  --neutral-950: #101719;
+  --neutral-1000: #0c1213;
+  --rust-100: #fee7dd;
+  --rust-300: #f8b495;
+  --rust-500: #cd7146;
+  --rust-700: #8e3f14;
+  --rust-900: #56250d;
+  --brand-ink: #0d191c;
+  --brand-paper: #f7fafa;
+}
+
+/* Semantic tokens, light */
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --bg: #f7fafa;
+  --surface: #fcfefe;
+  --surface-sunken: #f2f5f6;
+  --surface-raised: #fcfefe;
+  --surface-hover: #e9eeef;
+  --border: #d3dadc;
+  --border-strong: #818b8e;
+  --ink: #0d191c;
+  --ink-secondary: #3d494c;
+  --ink-muted: #515d60;
+  --ink-disabled: #909a9d;
+  --primary: #096669;
+  --primary-hover: #054f51;
+  --on-primary: #ffffff;
+  --primary-wash: #ebfafb;
+  --primary-ink: #096669;
+  --focus-ring: #0e8185;
+  --selection: #d5f4f4;
+  --status-good: #0ca30c;
+  --status-good-text: #18781a;
+  --status-good-wash: #e9f6e7;
+  --status-warning: #fab219;
+  --status-warning-text: #8a5a00;
+  --status-warning-wash: #fdf3dc;
+  --status-serious: #ec835a;
+  --status-serious-text: #a8471d;
+  --status-serious-wash: #fcece4;
+  --status-critical: #d03b3b;
+  --status-critical-text: #b42d2d;
+  --status-critical-wash: #fbe9e8;
+  --series-1: #15a0a1;
+  --series-2: #b24b0a;
+  --series-3: #8e65d4;
+  --series-4: #b07d00;
+  --series-5: #e267a3;
+  --series-6: #23851b;
+  --series-7: #2d72d3;
+  --series-8: #c24242;
+  --seq-100: #d5f4f4;
+  --seq-200: #b2e8e9;
+  --seq-300: #84d6d8;
+  --seq-400: #54bfc3;
+  --seq-500: #17a1a5;
+  --seq-600: #0e8185;
+  --seq-700: #096669;
+  --seq-800: #054f51;
+  --seq-900: #033b3d;
+  --div-neg-3: #8e3f14;
+  --div-neg-2: #cd7146;
+  --div-neg-1: #f8b495;
+  --div-mid: #e9eeef;
+  --div-pos-1: #84d6d8;
+  --div-pos-2: #17a1a5;
+  --div-pos-3: #096669;
+  --chart-grid: #dfe5e7;
+  --chart-axis: #b7bfc2;
+  --chart-label: #515d60;
+  --chart-crosshair: #6d787b;
+  --chart-threshold: #6d787b;
+  --chart-band: #ebfafb;
+  --elevation-popover: 0 1px 2px rgba(13,25,28,0.06), 0 6px 16px -4px rgba(13,25,28,0.14);
+  --elevation-dialog: 0 2px 6px rgba(13,25,28,0.08), 0 24px 56px -12px rgba(13,25,28,0.28);
+}
+
+/* Semantic tokens, dark: selected steps, not an inversion */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0c1213;
+    --surface: #101719;
+    --surface-sunken: #151d1f;
+    --surface-raised: #1b2325;
+    --surface-hover: #1f282a;
+    --border: #242d30;
+    --border-strong: #6d787b;
+    --ink: #edf1f2;
+    --ink-secondary: #d3dadc;
+    --ink-muted: #909a9d;
+    --ink-disabled: #515d60;
+    --primary: #54bfc3;
+    --primary-hover: #84d6d8;
+    --on-primary: #0c1213;
+    --primary-wash: #092e2f;
+    --primary-ink: #84d6d8;
+    --focus-ring: #54bfc3;
+    --selection: #033b3d;
+    --status-good: #0ca30c;
+    --status-good-text: #4cc14a;
+    --status-good-wash: #122a14;
+    --status-warning: #fab219;
+    --status-warning-text: #f4b73a;
+    --status-warning-wash: #2e2410;
+    --status-serious: #ec835a;
+    --status-serious-text: #f09a76;
+    --status-serious-wash: #2f1d15;
+    --status-critical: #d03b3b;
+    --status-critical-text: #f07272;
+    --status-critical-wash: #311819;
+    --series-1: #19a8a8;
+    --series-2: #c4570f;
+    --series-3: #9672e0;
+    --series-4: #b08200;
+    --series-5: #d9619e;
+    --series-6: #2f8f25;
+    --series-7: #4a86e8;
+    --series-8: #d75656;
+    --seq-100: #033b3d;
+    --seq-200: #054f51;
+    --seq-300: #096669;
+    --seq-400: #0e8185;
+    --seq-500: #17a1a5;
+    --seq-600: #54bfc3;
+    --seq-700: #84d6d8;
+    --seq-800: #b2e8e9;
+    --seq-900: #d5f4f4;
+    --div-neg-3: #efac8d;
+    --div-neg-2: #d2764a;
+    --div-neg-1: #8b492a;
+    --div-mid: #242d30;
+    --div-pos-1: #216a6c;
+    --div-pos-2: #30a5a8;
+    --div-pos-3: #84d6d8;
+    --chart-grid: #242d30;
+    --chart-axis: #3d494c;
+    --chart-label: #909a9d;
+    --chart-crosshair: #6d787b;
+    --chart-threshold: #6d787b;
+    --chart-band: #0e2627;
+    --elevation-popover: 0 1px 2px rgba(0,0,0,0.45), 0 8px 24px -4px rgba(0,0,0,0.65);
+    --elevation-dialog: 0 2px 6px rgba(0,0,0,0.5), 0 24px 56px -12px rgba(0,0,0,0.8);
+  }
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c1213;
+  --surface: #101719;
+  --surface-sunken: #151d1f;
+  --surface-raised: #1b2325;
+  --surface-hover: #1f282a;
+  --border: #242d30;
+  --border-strong: #6d787b;
+  --ink: #edf1f2;
+  --ink-secondary: #d3dadc;
+  --ink-muted: #909a9d;
+  --ink-disabled: #515d60;
+  --primary: #54bfc3;
+  --primary-hover: #84d6d8;
+  --on-primary: #0c1213;
+  --primary-wash: #092e2f;
+  --primary-ink: #84d6d8;
+  --focus-ring: #54bfc3;
+  --selection: #033b3d;
+  --status-good: #0ca30c;
+  --status-good-text: #4cc14a;
+  --status-good-wash: #122a14;
+  --status-warning: #fab219;
+  --status-warning-text: #f4b73a;
+  --status-warning-wash: #2e2410;
+  --status-serious: #ec835a;
+  --status-serious-text: #f09a76;
+  --status-serious-wash: #2f1d15;
+  --status-critical: #d03b3b;
+  --status-critical-text: #f07272;
+  --status-critical-wash: #311819;
+  --series-1: #19a8a8;
+  --series-2: #c4570f;
+  --series-3: #9672e0;
+  --series-4: #b08200;
+  --series-5: #d9619e;
+  --series-6: #2f8f25;
+  --series-7: #4a86e8;
+  --series-8: #d75656;
+  --seq-100: #033b3d;
+  --seq-200: #054f51;
+  --seq-300: #096669;
+  --seq-400: #0e8185;
+  --seq-500: #17a1a5;
+  --seq-600: #54bfc3;
+  --seq-700: #84d6d8;
+  --seq-800: #b2e8e9;
+  --seq-900: #d5f4f4;
+  --div-neg-3: #efac8d;
+  --div-neg-2: #d2764a;
+  --div-neg-1: #8b492a;
+  --div-mid: #242d30;
+  --div-pos-1: #216a6c;
+  --div-pos-2: #30a5a8;
+  --div-pos-3: #84d6d8;
+  --chart-grid: #242d30;
+  --chart-axis: #3d494c;
+  --chart-label: #909a9d;
+  --chart-crosshair: #6d787b;
+  --chart-threshold: #6d787b;
+  --chart-band: #0e2627;
+  --elevation-popover: 0 1px 2px rgba(0,0,0,0.45), 0 8px 24px -4px rgba(0,0,0,0.65);
+  --elevation-dialog: 0 2px 6px rgba(0,0,0,0.5), 0 24px 56px -12px rgba(0,0,0,0.8);
+}
+
+/* Spacing, radius, sizes, type, motion */
+:root {
+  --space-0: 0px;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --radius-none: 0px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+  --control-sm: 28px;
+  --control: 32px;
+  --control-lg: 40px;
+  --row-compact: 32px;
+  --row-comfortable: 40px;
+  --touch-target: 44px;
+  --app-bar: 48px;
+  --icon-sm: 14px;
+  --icon: 16px;
+  --icon-lg: 20px;
+  --border-hairline: 1px;
+  --focus-width: 2px;
+  --typeface-sans: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --typeface-serif: "Source Serif 4 Variable", "Source Serif 4", ui-serif, Georgia, serif;
+  --typeface-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* density: compact by default, data views are working tools */
+  --row-h: var(--row-compact);
+  --cell-px: 12px;
+  --cell-py: 6px;
+  --control-h: var(--control);
+  /* motion: short, functional, never decorative */
+  --duration-instant: 0ms;
+  --duration-fast: 100ms;   /* hover, press, toggles */
+  --duration-base: 160ms;   /* popovers, tooltips, tabs */
+  --duration-slow: 240ms;   /* sheets, dialogs */
+  --duration-chart: 300ms;  /* chart transitions, at most once per data change */
+  --motion-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+[data-density="comfortable"] {
+  --row-h: var(--row-comfortable);
+  --cell-py: 10px;
+  --control-h: 36px;
+}
+@media (pointer: coarse) {
+  :root { --control-h: var(--touch-target); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 0ms; --duration-base: 0ms; --duration-slow: 0ms; --duration-chart: 0ms; }
+}
+
+/* shadcn/ui's theme variables, mapped onto ours (shadcn reads these names) */
+:root {
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--ink);
+  --primary-foreground: var(--on-primary);
+  --secondary: var(--surface-sunken);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-sunken);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--ink);
+  --destructive: var(--status-critical-text);
+  --destructive-foreground: var(--surface);
+  /* --border is ours already */
+  --input: var(--border-strong);
+  --ring: var(--focus-ring);
+  --chart-1: var(--series-1);
+  --chart-2: var(--series-2);
+  --chart-3: var(--series-3);
+  --chart-4: var(--series-4);
+  --chart-5: var(--series-5);
+  --radius: 6px;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--ink-secondary);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--on-primary);
+  --sidebar-accent: var(--primary-wash);
+  --sidebar-accent-foreground: var(--primary-ink);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--focus-ring);
+}
+/* --primary is both ours and shadcn's, with the same meaning. */
+
+/* Tailwind v4: utilities over the variables above (bg-surface, text-ink-muted, border-border...) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-border-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-disabled: var(--ink-disabled);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-primary-wash: var(--primary-wash);
+  --color-primary-ink: var(--primary-ink);
+  --color-focus-ring: var(--focus-ring);
+  --color-selection: var(--selection);
+  --color-status-good: var(--status-good);
+  --color-status-good-text: var(--status-good-text);
+  --color-status-good-wash: var(--status-good-wash);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-text: var(--status-warning-text);
+  --color-status-warning-wash: var(--status-warning-wash);
+  --color-status-serious: var(--status-serious);
+  --color-status-serious-text: var(--status-serious-text);
+  --color-status-serious-wash: var(--status-serious-wash);
+  --color-status-critical: var(--status-critical);
+  --color-status-critical-text: var(--status-critical-text);
+  --color-status-critical-wash: var(--status-critical-wash);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-7: var(--series-7);
+  --color-series-8: var(--series-8);
+  --color-seq-100: var(--seq-100);
+  --color-seq-200: var(--seq-200);
+  --color-seq-300: var(--seq-300);
+  --color-seq-400: var(--seq-400);
+  --color-seq-500: var(--seq-500);
+  --color-seq-600: var(--seq-600);
+  --color-seq-700: var(--seq-700);
+  --color-seq-800: var(--seq-800);
+  --color-seq-900: var(--seq-900);
+  --color-div-neg-3: var(--div-neg-3);
+  --color-div-neg-2: var(--div-neg-2);
+  --color-div-neg-1: var(--div-neg-1);
+  --color-div-mid: var(--div-mid);
+  --color-div-pos-1: var(--div-pos-1);
+  --color-div-pos-2: var(--div-pos-2);
+  --color-div-pos-3: var(--div-pos-3);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+  --color-chart-label: var(--chart-label);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --color-chart-threshold: var(--chart-threshold);
+  --color-chart-band: var(--chart-band);
+  --color-current-50: var(--current-50);
+  --color-current-100: var(--current-100);
+  --color-current-200: var(--current-200);
+  --color-current-300: var(--current-300);
+  --color-current-400: var(--current-400);
+  --color-current-500: var(--current-500);
+  --color-current-600: var(--current-600);
+  --color-current-700: var(--current-700);
+  --color-current-800: var(--current-800);
+  --color-current-900: var(--current-900);
+  --color-current-950: var(--current-950);
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-25: var(--neutral-25);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-150: var(--neutral-150);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-450: var(--neutral-450);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-850: var(--neutral-850);
+  --color-neutral-875: var(--neutral-875);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-925: var(--neutral-925);
+  --color-neutral-950: var(--neutral-950);
+  --color-neutral-1000: var(--neutral-1000);
+  --color-rust-100: var(--rust-100);
+  --color-rust-300: var(--rust-300);
+  --color-rust-500: var(--rust-500);
+  --color-rust-700: var(--rust-700);
+  --color-rust-900: var(--rust-900);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-paper: var(--brand-paper);
+  --font-sans: var(--typeface-sans);
+  --font-serif: var(--typeface-serif);
+  --font-mono: var(--typeface-mono);
+  --text-xs: 12px;   --text-xs--line-height: 16px;
+  --text-sm: 13px;   --text-sm--line-height: 18px;
+  --text-base: 14px; --text-base--line-height: 20px;
+  --text-md: 16px;   --text-md--line-height: 22px;
+  --text-lg: 20px;   --text-lg--line-height: 26px;
+  --text-xl: 28px;   --text-xl--line-height: 34px;
+  --text-2xl: 32px;  --text-2xl--line-height: 36px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-popover: var(--elevation-popover);
+  --shadow-dialog: var(--elevation-dialog);
+  --ease-standard: var(--motion-standard);
+  --ease-enter: var(--motion-enter);
+  --ease-exit: var(--motion-exit);
+}
+
+/* Type roles beyond Tailwind's size scale */
+@layer components {
+  .type-figure-lg { font-family: var(--typeface-sans); font-size: 32px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em; }
+  .type-title-xl { font-family: var(--typeface-sans); font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.015em; }
+  .type-title-lg { font-family: var(--typeface-sans); font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; }
+  .type-title-md { font-family: var(--typeface-sans); font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: -0.005em; }
+  .type-title-sm { font-family: var(--typeface-sans); font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0em; }
+  .type-body { font-family: var(--typeface-sans); font-size: 14px; line-height: 20px; font-weight: 400; letter-spacing: 0em; }
+  .type-body-dense { font-family: var(--typeface-sans); font-size: 13px; line-height: 18px; font-weight: 400; letter-spacing: 0em; }
+  .type-label { font-family: var(--typeface-sans); font-size: 13px; line-height: 16px; font-weight: 500; letter-spacing: 0em; }
+  .type-caption { font-family: var(--typeface-sans); font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0em; }
+  .type-overline { font-family: var(--typeface-sans); font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .type-headline-xl { font-family: var(--typeface-serif); font-size: 44px; line-height: 50px; font-weight: 600; letter-spacing: -0.015em; font-optical-sizing: auto; }
+  .type-headline-lg { font-family: var(--typeface-serif); font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; font-optical-sizing: auto; }
+  .type-headline-md { font-family: var(--typeface-serif); font-size: 21px; line-height: 28px; font-weight: 600; letter-spacing: -0.005em; }
+  .type-reading { font-family: var(--typeface-serif); font-size: 16px; line-height: 26px; font-weight: 400; letter-spacing: 0em; }
+  .type-code { font-family: var(--typeface-mono); font-size: 13px; line-height: 20px; font-weight: 400; letter-spacing: 0em; }
+  .type-code-sm { font-family: var(--typeface-mono); font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0em; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .term { font-feature-settings: "zero" 1; } /* slashed zero in raw terms, so 0 and O never meet */
+}

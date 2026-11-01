@@ -455,26 +455,27 @@ the data, SVG from ECharts' SVG renderer, PNG from the canvas).
 
 ### 4.5 Color and theme
 
-The palette is the dataviz method's validated reference palette, already in today's
-`style.css`, moved to Tailwind v4 `@theme` tokens:
+Colour is the brand's ([BRAND.md](BRAND.md) §5, accepted 2026-11-01), which replaced the
+dataviz reference palette this section first named: the tokens of `docs/brand/tokens.css`,
+copied to `web/src/styles/tokens.css` and exposed as Tailwind v4 `@theme` utilities.
 
-* Categorical, 8 slots in fixed order, light `#2a78d6 #eb6834 #1baf7a #eda100 #e87ba4
-  #008300 #6250d6 #e34948`, dark `#3987e5 #d95926 #199e70 #c98500 #d55181 #008300 #9085e9
-  #e66767`. Forms where every pair can meet (scatter, small multiples colored by series)
-  use at most 3 slots; past 8 series the tail folds into "Other".
-* Sequential blue 100–700 for magnitude, diverging blue ↔ red with a gray midpoint
-  (`#f0efec` light, `#383835` dark), status good, warning, serious, critical
-  (`#0ca30c #fab219 #ec835a #d03b3b`) always with an icon and a label.
-* Surfaces `#fcfcfb` and `#1a1a19`, ink, gridlines and baselines from the palette's chrome
-  table.
+* Categorical, 8 slots in fixed order: teal, rust, violet, amber, magenta, green, blue,
+  red, with light and dark steps validated against each theme's chart surface (BRAND.md
+  §5.5). Forms where every pair can meet (scatter, small multiples colored by series) use
+  at most 3 slots; past 8 series the tail folds into "Other".
+* Sequential Current (`seq-100` … `seq-900`) for magnitude, diverging rust ↔ gray ↔
+  Current (`div-neg-3` … `div-pos-3`) for signed values, status good, warning, serious,
+  critical always with an icon and a word (BRAND.md §5.4).
+* Surfaces, ink, gridlines and baselines from the semantic tokens (`bg`, `surface`, `ink`,
+  `chart-grid`, `chart-axis`, `chart-band`; BRAND.md §5.3).
 * **Color follows the entity.** A term or scope gets its slot from a stable assignment for
   the page (by order of first appearance in the page's primary list, kept in the url when it
   matters), so filtering never repaints the survivors.
 
-The ECharts theme reads the tokens with `getComputedStyle` at runtime and is rebuilt when
-the theme changes, so CSS stays the single source. Any palette change re-runs the dataviz
-validator in both modes, and a unit test pins the token values so they can't drift
-silently.
+The ECharts theme (`docs/brand/echarts-theme.ts`, moved into the kit) reads the tokens
+with `getComputedStyle` at runtime and is rebuilt when the theme changes, so CSS stays
+the single source. Any palette change re-runs the dataviz validator in both modes, and a
+unit test pins the token values so they can't drift silently.
 
 ### 4.6 Interaction rules
 
@@ -922,14 +923,17 @@ matter more. So:
 
 ### 8.1 Design system
 
-* **shadcn/ui** components on **Tailwind v4**, themed by CSS variables: surfaces, ink,
-  borders and the accent from the dataviz palette's chrome table, so the UI and the charts
-  share one set of tokens (§4.5). Light and dark set on `<html>` before the first paint (as
-  `index.html` does today), following the system until the reader picks.
-* **Type:** the system sans, as today and as the dataviz method asks; tabular figures in
-  tables and axes only.
-* **Density:** compact rows and 13–14 px text on desktop, where it's a working tool; 44 px
-  touch targets on phones.
+* **shadcn/ui** components on **Tailwind v4**, themed by CSS variables: the semantic tokens
+  of [BRAND.md](BRAND.md) §5.3 and §7 (surfaces, ink, borders, the Current accent), with
+  shadcn's own variable names mapped onto them, so the UI and the charts share one set of
+  tokens (§4.5). Light and dark set on `<html>` before the first paint (as `index.html`
+  does today), following the system until the reader picks.
+* **Type** (BRAND.md §6): IBM Plex Sans for interface and numbers, its figures tabular by
+  default; IBM Plex Mono for raw terms, commands and config keys; Source Serif 4 only for
+  reports and slides, never in the app. Self-hosted from Fontsource, bundled by Vite, so
+  nothing loads from a font CDN.
+* **Density** (BRAND.md §7): rows and controls 32 px, 13/18 text in data views and 14/20
+  elsewhere, radii 4/6/8, hairlines instead of shadows; 44 px touch targets on phones.
 * **Building blocks** beyond shadcn's: `Panel` (title, subtitle, help, actions, the frame
   every chart and table sits in), `StatTile` and `KpiRow`, `DataTable` (TanStack Table with
   sorting, column visibility, CSV export, virtualization, sort in the url), `ScopePicker` (a
