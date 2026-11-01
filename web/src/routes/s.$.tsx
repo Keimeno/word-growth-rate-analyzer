@@ -120,7 +120,7 @@ function ScopePage() {
 
   return (
     <>
-      <PageHeader title={name}>
+      <PageHeader eyebrow={data ? data.type : "Scope"} title={name}>
         {data
           ? `A ${data.type}${data.platform ? ` on ${data.platform}` : ""}${data.members.length > 1 ? ` of ${data.members.length} channels` : ""}${data.groups.length ? `, in ${data.groups.join(", ")}` : ""}.`
           : "Loading…"}
@@ -159,7 +159,7 @@ function ScopePage() {
             </Panel>
             <div className="grid gap-4 lg:grid-cols-2">
               <Panel title="Trending now" flush subtitle="The strongest of the latest run">
-                <Loaded query={trends}>
+                <Loaded query={trends} shape="table">
                   {(loaded) => (
                     <DataTable
                       label="Trending now"

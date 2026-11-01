@@ -3,16 +3,16 @@
 exports[`heatmap and network > colours cells on the sequential scale 1`] = `
 "<svg width="640" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 640 240">
 <rect width="640" height="240" x="0" y="0" fill="none"></rect>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(21.44 137)" fill="#515d60">0h</text>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(21.44 51)" fill="#515d60">1h</text>
-<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" y="6" transform="translate(178.08 188)" fill="#515d60">Mon</text>
-<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" y="6" transform="translate(475.36 188)" fill="#515d60">Tue</text>
-<path d="M31.2 93.8L325 93.8A2 2 0 0 1 327 95.8L327 178.3A2 2 0 0 1 325 180.3L31.2 180.3A2 2 0 0 1 29.2 178.3L29.2 95.8A2 2 0 0 1 31.2 93.8Z" fill="rgb(144,219,220)" stroke="#fcfefe" stroke-width="2" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr3-cls-12"></path>
-<path d="M328.5 7.8L622.3 7.8A2 2 0 0 1 624.3 9.8L624.3 92.3A2 2 0 0 1 622.3 94.3L328.5 94.3A2 2 0 0 1 326.5 92.3L326.5 9.8A2 2 0 0 1 328.5 7.8Z" fill="rgb(5,79,81)" stroke="#fcfefe" stroke-width="2" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr3-cls-13"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(20.32 137.75)" fill="#515d60">0h</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(20.32 51.25)" fill="#515d60">1h</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" y="5.5" transform="translate(177.24 189)" fill="#515d60">Mon</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" y="5.5" transform="translate(475.08 189)" fill="#515d60">Tue</text>
+<path d="M30.1 94.3L324.4 94.3A2 2 0 0 1 326.4 96.3L326.4 179.3A2 2 0 0 1 324.4 181.3L30.1 181.3A2 2 0 0 1 28.1 179.3L28.1 96.3A2 2 0 0 1 30.1 94.3Z" fill="rgb(144,219,220)" stroke="#fcfefe" stroke-width="2" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr3-cls-12"></path>
+<path d="M327.9 7.8L622.3 7.8A2 2 0 0 1 624.3 9.8L624.3 92.8A2 2 0 0 1 622.3 94.8L327.9 94.8A2 2 0 0 1 325.9 92.8L325.9 9.8A2 2 0 0 1 327.9 7.8Z" fill="rgb(5,79,81)" stroke="#fcfefe" stroke-width="2" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr3-cls-13"></path>
 <path d="M-15 -25l150 0l0 40l-150 0Z" transform="translate(260 225)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#cfd2d7" stroke-width="0" class="zr3-cls-14"></path>
 <g clip-path="url(#zr3-c0)">
 <polygon points="0 0 10 0 10 120 0 120" transform="matrix(0,-1,1,0,260,225)" fill="url(#zr3-g0)" class="zr3-cls-16"></polygon>
@@ -292,50 +292,50 @@ fill:rgba(9,112,115,1);
 exports[`timeSeries > draws one area with the brand's first colour 1`] = `
 "<svg width="640" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 640 240">
 <rect width="640" height="240" x="0" y="0" fill="none"></rect>
-<path d="M22.7 212.5L544 212.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
-<path d="M22.7 173.5L544 173.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
-<path d="M22.7 133.5L544 133.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
-<path d="M22.7 94.5L544 94.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
-<path d="M22.7 55.5L544 55.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
-<path d="M22.7 16.5L544 16.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
-<path d="M22.7 212.5L544 212.5" fill="none" pointer-events="visible" stroke="#b7bfc2" stroke-linecap="round" class="zr0-cls-0"></path>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(14.72 212)" fill="#515d60">0</text>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(14.72 172.8)" fill="#515d60">1</text>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(14.72 133.6)" fill="#515d60">2</text>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(14.72 94.4)" fill="#515d60">3</text>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(14.72 55.2)" fill="#515d60">4</text>
-<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;" transform="translate(14.72 16)" fill="#515d60">5</text>
-<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif" y="6" transform="translate(80.64 220)" fill="#515d60">01:20</text>
-<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif" y="6" transform="translate(138.56 220)" fill="#515d60">01:40</text>
-<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif" y="6" transform="translate(254.4 220)" fill="#515d60">02:20</text>
-<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif" y="6" transform="translate(312.32 220)" fill="#515d60">02:40</text>
-<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif" y="6" transform="translate(428.16 220)" fill="#515d60">03:20</text>
-<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 12px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif" y="6" transform="translate(486.08 220)" fill="#515d60">03:40</text>
-<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;font-weight:bold;" y="6" transform="translate(22.72 220)" fill="#0d191c">01:00</text>
-<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;font-weight:bold;" y="6" transform="translate(196.48 220)" fill="#0d191c">02:00</text>
-<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;font-weight:bold;" y="6" transform="translate(370.24 220)" fill="#0d191c">03:00</text>
-<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;font-weight:bold;" y="6" transform="translate(544 220)" fill="#0d191c">04:00</text>
+<path d="M22.2 212.5L544 212.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.2 173.5L544 173.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.2 133.5L544 133.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.2 94.5L544 94.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.2 55.5L544 55.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.2 16.5L544 16.5" fill="none" pointer-events="visible" stroke="#dfe5e7" class="zr0-cls-0"></path>
+<path d="M22.2 212.5L544 212.5" fill="none" pointer-events="visible" stroke="#b7bfc2" stroke-linecap="round" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.16 212)" fill="#515d60">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.16 172.8)" fill="#515d60">1</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.16 133.6)" fill="#515d60">2</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.16 94.4)" fill="#515d60">3</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.16 55.2)" fill="#515d60">4</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;" transform="translate(14.16 16)" fill="#515d60">5</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 11px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="5.5" transform="translate(80.1422 220)" fill="#515d60">01:20</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 11px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="5.5" transform="translate(138.1244 220)" fill="#515d60">01:40</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 11px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="5.5" transform="translate(254.0889 220)" fill="#515d60">02:20</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 11px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="5.5" transform="translate(312.0711 220)" fill="#515d60">02:40</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 11px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="5.5" transform="translate(428.0356 220)" fill="#515d60">03:20</text>
+<text dominant-baseline="central" text-anchor="middle" style="font: normal normal 11px "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif" y="5.5" transform="translate(486.0178 220)" fill="#515d60">03:40</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="5.5" transform="translate(22.16 220)" fill="#0d191c">01:00</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="5.5" transform="translate(196.1067 220)" fill="#0d191c">02:00</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="5.5" transform="translate(370.0533 220)" fill="#0d191c">03:00</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;font-weight:bold;" y="5.5" transform="translate(544 220)" fill="#0d191c">04:00</text>
 <g clip-path="url(#zr0-c0)">
-<path d="M22.7 172.8L196.5 94.4L370.2 133.6L544 16L544 212L370.2 212L196.5 212L22.7 212Z" fill="#15a0a1" fill-opacity="0.12" class="zr0-cls-2"></path>
-<path d="M22.7 172.8L196.5 94.4L370.2 133.6L544 16" fill="none" pointer-events="visible" stroke="#15a0a1" stroke-width="2" stroke-linejoin="bevel" class="zr0-cls-3"></path>
+<path d="M22.2 172.8L196.1 94.4L370.1 133.6L544 16L544 212L370.1 212L196.1 212L22.2 212Z" fill="#15a0a1" fill-opacity="0.12" class="zr0-cls-2"></path>
+<path d="M22.2 172.8L196.1 94.4L370.1 133.6L544 16" fill="none" pointer-events="visible" stroke="#15a0a1" stroke-width="2" stroke-linejoin="bevel" class="zr0-cls-3"></path>
 </g>
-<text dominant-baseline="central" text-anchor="start" style="font-size:12px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+<text dominant-baseline="central" text-anchor="start" style="font-size:11px;font-family:"IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     sans-serif;" transform="translate(552 16)" fill="#3d494c">claude</text>
 <defs >
 <clipPath id="zr0-c0">

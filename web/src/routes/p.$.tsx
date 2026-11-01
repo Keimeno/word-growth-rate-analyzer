@@ -47,7 +47,7 @@ function ProductPage() {
   });
   return (
     <>
-      <PageHeader title={name}>
+      <PageHeader eyebrow="Product" title={name}>
         Who switches to it and away, who considers leaving, complains, or looks for something else.
       </PageHeader>
       <div className="flex flex-col gap-4">

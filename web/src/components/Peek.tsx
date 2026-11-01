@@ -37,7 +37,7 @@ export function Peek() {
   return (
     <Sheet open={peek !== null} onOpenChange={(open) => !open && close()}>
       <SheetContent
-        className="w-full gap-0 overflow-y-auto sm:max-w-xl"
+        className="w-full gap-0 overflow-y-auto sm:max-w-[600px]"
         aria-describedby={undefined}
       >
         {peek && (
@@ -84,27 +84,29 @@ function PeekBody({ kind, term, scope }: { kind: string; term: string; scope: st
   const total = explore.data?.points.reduce((sum, point) => sum + point.mentions, 0) ?? 0;
   return (
     <>
-      <SheetHeader className="border-b border-border pb-3">
-        <p className="text-xs text-ink-muted">
+      <SheetHeader className="gap-1 border-b border-border bg-surface px-5 pt-5 pb-4">
+        <p className="type-overline text-ink-muted">
           {(KIND_LABELS[kind] ?? kind).replace(/s$/, "")} in {scope}
         </p>
-        <SheetTitle className="term type-title-lg break-words">{term}</SheetTitle>
-        <SheetDescription>
+        <SheetTitle className="term pr-8 text-[22px] leading-7 font-normal break-words">
+          {term}
+        </SheetTitle>
+        <SheetDescription className="text-[13px] text-ink-muted">
           {explore.data ? `${count(total)} comments and posts in the last 7 days` : "Loading…"}
         </SheetDescription>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button size="sm" asChild>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild>
             <Link to="/t/$kind/$" params={{ kind, _splat: term }} search={searchOf({ scope })}>
               <Maximize2 className="size-3.5" /> Open term page
             </Link>
           </Button>
-          <Button size="sm" variant="outline" asChild>
+          <Button variant="outline" asChild>
             <Link to="/explore" search={searchOf({ terms: [term], range: "7d" })}>
               <Compass className="size-3.5" /> Explore
             </Link>
           </Button>
           {meta.data && (
-            <Button size="sm" variant="ghost" asChild>
+            <Button variant="ghost" asChild>
               <a
                 href={grafanaLink(meta.data.grafana_url, "explore", {
                   terms: term,
@@ -120,7 +122,7 @@ function PeekBody({ kind, term, scope }: { kind: string; term: string; scope: st
           )}
         </div>
       </SheetHeader>
-      <div className="flex flex-col gap-4 p-4">
+      <div className="flex flex-1 flex-col gap-4 bg-bg p-5">
         <Panel
           title="Share of the conversation"
           subtitle={`Per 1,000 comments and posts in ${scope}, per hour`}

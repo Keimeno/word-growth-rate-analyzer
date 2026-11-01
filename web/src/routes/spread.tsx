@@ -209,7 +209,7 @@ function SpreadPage() {
           subtitle="A term rising in a leader that a follower hasn't picked up yet."
           help="Chance: that the follower picks it up within 7 days of the leader's onset, with its 80% interval. Usually: how often the follower picks up any trending term. Expected: the leader's onset plus the pair's median lead."
         >
-          <Loaded query={forecasts}>
+          <Loaded query={forecasts} shape="table">
             {(rows) => (
               <DataTable
                 label="Pending forecasts"
@@ -312,7 +312,7 @@ function SpreadPage() {
             flush
             subtitle="Terms of the last 14 days that reached more than one place, in the order they got there."
           >
-            <Loaded query={events}>
+            <Loaded query={events} shape="table">
               {(rows) => (
                 <DataTable
                   label="Recent cascades"
@@ -370,7 +370,7 @@ function SpreadPage() {
           flush
           help="Learned daily from the events of the last 180 days. Lead: median time from the leader's onset to the follower's, with the middle half. Chance: hits shrunk towards the usual rate, with its 80% interval. Leader first: of the events where both picked it up within 7 days of each other, how often the leader was first. (rest): a group of the leader's, without the leader's own mentions."
         >
-          <Loaded query={edges}>
+          <Loaded query={edges} shape="table">
             {(loaded) => (
               <DataTable
                 label="Leader → follower pairs"
@@ -492,7 +492,7 @@ function SpreadPage() {
             flush
             subtitle="Came true when the follower picked the term up in time, missed otherwise."
           >
-            <Loaded query={record}>
+            <Loaded query={record} shape="table">
               {(loaded) => (
                 <DataTable
                   label="Resolved forecasts"

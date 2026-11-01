@@ -82,10 +82,11 @@ export function DataTable<T extends object>({
 
   return (
     <div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm" aria-label={label}>
-          <thead>
-            <tr className="border-y border-border bg-surface-sunken">
+      {/* clip, not scroll, from md: the header row then sticks under the app's top bar */}
+      <div className="max-md:overflow-x-auto md:overflow-x-clip">
+        <table className="w-full border-collapse text-[13px] leading-[18px]" aria-label={label}>
+          <thead className="md:sticky md:top-12 md:z-10">
+            <tr className="border-b border-border bg-surface-sunken">
               {table.getHeaderGroups()[0]?.headers.map((header) => {
                 const column = byId.get(header.column.id);
                 if (!column) return null;
@@ -102,21 +103,25 @@ export function DataTable<T extends object>({
                           : undefined
                     }
                     className={cn(
-                      "h-8 px-3 text-left text-xs font-medium whitespace-nowrap text-ink-muted",
+                      "h-8 px-3 text-left type-overline whitespace-nowrap text-ink-muted first:pl-4 last:pr-4",
                       column.numeric && "text-right",
                       column.wide && "hidden sm:table-cell",
                     )}
                   >
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1",
+                        "inline-flex items-center gap-0.5",
                         column.numeric && "flex-row-reverse",
                       )}
                     >
                       {column.sort ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-0.5 hover:text-ink"
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-xs uppercase hover:text-ink",
+                            direction && "text-ink",
+                            column.numeric && "flex-row-reverse",
+                          )}
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           {column.header}
@@ -136,13 +141,15 @@ export function DataTable<T extends object>({
           <tbody>
             {shown.map((row) => {
               const key = row.id;
+              const isSelected = selected === key;
               return (
                 <tr
                   key={key}
                   className={cn(
-                    "border-b border-border last:border-b-0",
+                    "border-b border-border transition-colors duration-100 last:border-b-0",
                     onRowClick && "cursor-pointer hover:bg-surface-hover",
-                    selected === key && "bg-primary-wash",
+                    isSelected &&
+                      "bg-primary-wash shadow-[inset_2px_0_0_var(--primary)] hover:bg-primary-wash",
                   )}
                   onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                 >
@@ -150,8 +157,8 @@ export function DataTable<T extends object>({
                     <td
                       key={column.id}
                       className={cn(
-                        "h-8 px-3 py-1.5 align-middle",
-                        column.numeric && "text-right tabular-nums",
+                        "h-10 px-3 py-2 align-middle text-ink-secondary first:pl-4 first:text-ink last:pr-4",
+                        column.numeric && "text-right tabular-nums text-ink",
                         column.wide && "hidden sm:table-cell",
                       )}
                     >
@@ -164,17 +171,22 @@ export function DataTable<T extends object>({
           </tbody>
         </table>
       </div>
-      {sorted.length > limit && (
-        <div className="border-t border-border px-3 py-1.5">
+      <div className="flex h-9 items-center justify-between gap-3 border-t border-border px-4 text-xs text-ink-muted">
+        <span className="tabular-nums">
+          {sorted.length > limit && !all
+            ? `${limit} of ${sorted.length.toLocaleString("en")} rows`
+            : `${sorted.length.toLocaleString("en")} ${sorted.length === 1 ? "row" : "rows"}`}
+        </span>
+        {sorted.length > limit && (
           <button
             type="button"
-            className="text-xs text-primary hover:underline"
+            className="rounded-xs font-medium text-primary hover:underline"
             onClick={() => setAll(!all)}
           >
-            {all ? "Show fewer" : `Show all ${sorted.length}`}
+            {all ? "Show fewer" : `Show all ${sorted.length.toLocaleString("en")}`}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -34,7 +34,11 @@ function ToggleGroup({
       data-spacing={spacing}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
-        "group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs",
+        "group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-sm",
+        // outline: a segmented control, the options in a sunken well
+        "data-[variant=outline]:min-h-8 data-[variant=outline]:gap-0.5 data-[variant=outline]:rounded-[5px] data-[variant=outline]:border data-[variant=outline]:border-border data-[variant=outline]:bg-surface-sunken data-[variant=outline]:p-[3px]",
+        // many options on a narrow screen: the well scrolls instead of overflowing
+        "data-[variant=outline]:min-w-0 data-[variant=outline]:max-w-full data-[variant=outline]:overflow-x-auto data-[variant=outline]:[scrollbar-width:none]",
         className,
       )}
       {...props}
@@ -66,8 +70,8 @@ function ToggleGroupItem({
           variant: context.variant || variant,
           size: context.size || size,
         }),
-        "w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10",
-        "data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l",
+        "w-auto min-w-0 shrink-0 px-2.5 focus:z-10 focus-visible:z-10",
+        "data-[variant=outline]:h-6 data-[variant=outline]:rounded-[3px]",
         className,
       )}
       {...props}

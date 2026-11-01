@@ -182,6 +182,7 @@ Components use these, never the scales. Full list with usage notes in
 | `surface-hover` | `#e9eeef` | `#1f282a` | Row and item hover |
 | `border` | `#d3dadc` | `#242d30` | Hairlines |
 | `border-strong` | `#818b8e` | `#6d787b` | Input and control outlines |
+| `control-border` | `#b7bfc2` | `#3d494c` | Outlines of buttons, segmented controls and filter triggers, whose labels name them |
 | `ink` | `#0d191c` | `#edf1f2` | Primary text and numbers |
 | `ink-secondary` | `#3d494c` | `#d3dadc` | The rest of a row, secondary text |
 | `ink-muted` | `#515d60` | `#909a9d` | Help, captions, axis labels |
@@ -290,8 +291,9 @@ the dashboard works offline. Import the latin and latin-ext subsets only.
 
 | Style | Size / line | Weight | Tracking | For |
 | --- | --- | --- | --- | --- |
-| `figure-lg` | 32 / 36 | 500 | −0.02em | Stat tile values |
-| `title-xl` | 28 / 34 | 600 | −0.015em | Term and scope page headers |
+| `figure-lg` | 32 / 36 | 500 | −0.02em | Hero numbers: a report's, a slide's |
+| `figure-md` | 24 / 28 | 500 | −0.015em | Values in a page's KPI strip and the term peek |
+| `title-xl` | 28 / 34 | 600 | −0.015em | Large titles outside the app; a term page sets the term in mono at 26 / 32 |
 | `title-lg` | 20 / 26 | 600 | −0.01em | Page titles |
 | `title-md` | 16 / 22 | 600 | −0.005em | Panel and section titles |
 | `title-sm` | 14 / 20 | 600 | 0 | Card titles, a table's key column |
@@ -340,31 +342,60 @@ regenerate) and re-run the palette checks for any `series-*`, `seq-*` or `div-*`
 | Family | Values | Rules |
 | --- | --- | --- |
 | Spacing | 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64 px | 4 inside chips, 8 between controls, 16 panel padding and gaps, 24 page gutter on desktop (16 on phones) |
-| Radius | 0, 2, 4, 6, 8, full | 4 buttons, inputs, chips and bar ends; 6 panels and popovers; 8 dialogs; 0 for tables and the app bar; full only for dots and toggles |
+| Radius | 0, 2, 4, 6, 8, full | 4 buttons, inputs, chips, nav items and bar ends; 6 panels, the filter toolbar, the KPI strip and popovers; 8 dialogs; 0 for tables, the sidebar and the top bar; full only for dots and toggles |
 | Elevation | none, popover, dialog | Panels are separated by hairlines, not shadows; shadows only on what floats |
-| Borders | 1 px hairline, 2 px focus | `border` for panels and rules, `border-strong` for inputs |
+| Borders | 1 px hairline, 2 px focus | `border` for panels and rules, `control-border` for buttons, segmented controls and filter triggers, `border-strong` for text inputs |
 | Density | compact (default), comfortable, touch | Rows 32 / 40 px, controls 32 / 36 / 44 px; `data-density="comfortable"` on `<html>`; touch screens get 44 px targets |
 | Motion | 100, 160, 240, 300 ms; standard ease `cubic-bezier(0.2, 0, 0, 1)` | Hover and press, popovers, sheets, charts. Nothing loops or animates on load; reduced motion makes all of it instant |
-| Icons | lucide, 14 / 16 / 20 px, stroke 1.75 | Beside a label, never decorative; alone only with a tooltip and an aria-label; nav is text |
+| Sizes | top bar 48 px, sidebar 232 px (52 collapsed) | `app-bar`, `sidebar-width`, `sidebar-width-collapsed` |
+| Icons | lucide, 14 / 16 / 20 px, stroke 1.75 | Beside a label, never decorative; alone only with a tooltip and an aria-label: the collapsed sidebar, the chart toolbar |
 
 ## 8. Applications
 
 Each is drawn in the specimen, in light and dark, with example data.
 
-* **App shell.** A 48 px app bar on `surface`: lockup (symbol alone below 900 px), the pages
-  as text tabs (the current one `primary-wash`), search with ⌘K, the theme toggle and
-  "Pro mode". The scope picker sits in the page's filter row, since it scopes the page. A page
-  is its title and one sentence, one row of filters, the headline numbers, then panels on
-  `bg`, separated by `space-16`.
+* **App shell.** A sidebar on `surface` with a hairline to its right: the lockup over the
+  48 px line of the top bar, then the pages in three sections under `overline` labels
+  (Monitor: Trending, Alerts, Pinned; Analyze: Long-term, Why people switch, Early warning,
+  Explore; System: Collection), each an icon and its name, the current one `primary-wash`
+  (entity pages light up the page they belong to). At its foot the system's status (a status
+  dot and a few words, the Collection page's reading) and a row of quiet actions: theme,
+  keyboard shortcuts, "Pro mode" and collapse. Collapsed (`[`), it keeps the icons, each with
+  a tooltip; the reader's choice stays in the browser. The 48 px top bar on `surface`: the
+  breadcrumb (section and page, or an entity and what it belongs to), search with ⌘K as an
+  input-shaped button, and the time-travel control: "Live" with a `status-good` dot, or the
+  time travelled to in the warning colours with a banner under the bar. On phones the
+  sidebar becomes a drawer behind a menu button, and a bottom bar keeps the main four pages
+  and "More".
+* **Page.** A header (an `overline` eyebrow on entity pages, the title, one sentence in
+  `ink-muted`, the page's actions on the right), then one filter toolbar (a `surface` panel
+  of labelled controls: segmented controls for a few options, popover pickers for many),
+  then the KPI strip (one panel whose cells are divided by hairlines, each a label, a
+  `figure-md` value with its unit, and a line of comparison or a sparkline; it wraps
+  without holes), then panels on `bg`, separated by `space-16`. The scope picker sits in
+  the filter toolbar, since it scopes the page.
+* **Panel.** A header over a hairline: the title in 14 / 20 semibold naming the measure, a
+  caption with unit, bucket and window, the panel's controls on the right; then the content,
+  to the edges for tables. Loading shows the shape that's coming (rows for a table); an
+  error says so and offers a retry; an empty panel says why and when there will be data.
+* **Table.** `overline` column headers on `surface-sunken` that stay under the top bar while
+  the page scrolls, numbers right-aligned in tabular figures, 40 px rows with a hairline,
+  `surface-hover` under the pointer, the selected row `primary-wash` with a 2 px `primary`
+  edge, and a footer with the count of rows and "Show all".
 * **Trend row.** Term chip with kind, scope, "× usual" in ink with ▲ (or "New"), mentions,
   people, channels, the strength word with three steps of `seq-700`, and a 7-day sparkline in
   `series-1`. The open row is `primary-wash`.
-* **Term page header.** Breadcrumb, the term in `title-xl` with its kind, one sentence that
-  says what is true ("Trending in tech: 12× its usual share, … in 3 of the 9 channels"), the
-  strength word, quiet actions, then tabs underlined in `primary`.
+* **Term page header.** The kind and scope as the eyebrow, the term in mono at 26 / 32, one
+  sentence that says what is true ("Trending in tech: 12× its usual share, … in 3 of the 9
+  channels"), the scope picker, "Explore", "Pin" and a menu of the rest (copy link, search
+  on Reddit, Pro mode); then the term's KPI strip (comments and posts with a 7-day
+  sparkline, people, against usual, strength, stories, first seen).
 * **Chart.** In a panel with a title that names the measure and a subtitle with unit, bucket
   and window. 2 px lines, no smoothing, one y axis, hairline grid, legend plus end labels,
-  dashed labelled thresholds, `chart-band` windows, ink pins for alerts sent, a table view.
+  dashed labelled thresholds, `chart-band` windows (touching ones merged, each label once),
+  ink lines for alerts sent and onsets (labelled up to four, on hover past that), a dashed
+  crosshair, and a toolbar on hover or focus: the table view and a download menu (CSV, PNG,
+  SVG).
 * **Alert on a phone (ntfy).** Title `term · scope`, body that leads with the comparison,
   then breadth, then the score; forecasts give their record and the base rate; the digest is
   a numbered list. The icon is `notification-icon.png` through ntfy's `Icon` header. No

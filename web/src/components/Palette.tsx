@@ -93,6 +93,23 @@ export function Palette() {
       onOpenChange={setOpen}
       title="Search"
       description="Pages, scopes and terms"
+      showCloseButton={false}
+      footer={
+        <>
+          <span>
+            <Key>↑</Key> <Key>↓</Key> to move
+          </span>
+          <span>
+            <Key>↵</Key> to open
+          </span>
+          <span>
+            <Key>esc</Key> to close
+          </span>
+          <span className="ml-auto hidden sm:inline">
+            Type a date, 2026-10-01 14:00, to travel in time
+          </span>
+        </>
+      }
     >
       <CommandInput
         placeholder="A page, a scope or a term…"
@@ -270,5 +287,13 @@ export function Palette() {
         )}
       </CommandList>
     </CommandDialog>
+  );
+}
+
+function Key({ children }: { children: string }) {
+  return (
+    <kbd className="rounded-xs border border-border bg-surface px-1 font-sans text-[10px] leading-[14px] font-medium text-ink-secondary">
+      {children}
+    </kbd>
   );
 }

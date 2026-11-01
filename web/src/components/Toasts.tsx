@@ -31,11 +31,11 @@ export function Toasts() {
         <div
           key={toast.id}
           role="status"
-          className="flex items-start gap-3 rounded-md border border-border bg-surface-raised p-3 text-sm shadow-[var(--elevation-popover)]"
+          className="flex items-start gap-3 rounded-md border border-border bg-surface-raised p-3 text-[13px] shadow-popover"
         >
           <Bell className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           <div className="min-w-0 flex-1">
-            <div className="text-xs text-ink-muted">
+            <div className="type-overline text-ink-muted">
               {toast.kind === "forecast" ? "Forecast alert" : "Alert"} · {toast.scope}
             </div>
             <Link

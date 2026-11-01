@@ -18,8 +18,8 @@ import { cn } from "@/lib/utils";
 /** A labelled control in a page's filter row. */
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-ink-muted">{label}</span>
+    <div className="flex max-w-full min-w-0 items-center gap-2">
+      <span className="text-xs font-medium whitespace-nowrap text-ink-muted">{label}</span>
       {children}
     </div>
   );
@@ -49,7 +49,7 @@ export function Segmented<T extends string>({
       }}
     >
       {options.map(([key, text]) => (
-        <ToggleGroupItem key={key} value={key} className="px-2.5 text-xs">
+        <ToggleGroupItem key={key} value={key}>
           {text}
         </ToggleGroupItem>
       ))}
@@ -57,7 +57,8 @@ export function Segmented<T extends string>({
   );
 }
 
-/** Several of many: kinds of terms. */
+/** Several of many: kinds of terms, in a popover with what's picked on the trigger; at
+ * least one stays picked. */
 export function KindChips({
   kinds,
   value,
@@ -67,24 +68,57 @@ export function KindChips({
   value: readonly string[];
   onChange: (value: string[]) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const label = (kind: string) => KIND_LABELS[kind] ?? kind;
+  const all = kinds.every((kind) => value.includes(kind));
+  const summary = all
+    ? `All ${kinds.length}`
+    : value.length <= 2
+      ? value.map(label).join(", ")
+      : `${value.length} of ${kinds.length}`;
+  const toggle = (kind: string) => {
+    const next = value.includes(kind) ? value.filter((item) => item !== kind) : [...value, kind];
+    if (next.length) onChange(kinds.filter((item) => next.includes(item)));
+  };
   return (
-    <ToggleGroup
-      type="multiple"
-      variant="outline"
-      size="sm"
-      aria-label="Kinds of terms"
-      value={[...value]}
-      onValueChange={(next) => {
-        if (next.length) onChange(kinds.filter((kind) => next.includes(kind)));
-      }}
-      className="flex-wrap"
-    >
-      {kinds.map((kind) => (
-        <ToggleGroupItem key={kind} value={kind} className="px-2.5 text-xs">
-          {KIND_LABELS[kind] ?? kind}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
+    <Field label="Kinds">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            aria-label={`Kinds of terms: ${summary}`}
+            className="max-w-60 justify-between gap-2 px-2.5 font-normal"
+          >
+            <span className="truncate">{summary}</span>
+            <ChevronsUpDown className="size-3.5 text-ink-muted" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-56 p-0" align="start">
+          <Command>
+            <CommandList>
+              <CommandGroup>
+                <CommandItem onSelect={() => onChange([...kinds])}>
+                  <Check className={cn("size-3.5", all ? "opacity-100" : "opacity-0")} />
+                  All kinds
+                </CommandItem>
+                {kinds.map((kind) => (
+                  <CommandItem
+                    key={kind}
+                    value={`${kind} ${label(kind)}`}
+                    onSelect={() => toggle(kind)}
+                  >
+                    <Check
+                      className={cn("size-3.5", value.includes(kind) ? "opacity-100" : "opacity-0")}
+                    />
+                    {label(kind)}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </Field>
   );
 }
 
@@ -116,11 +150,7 @@ export function MultiPicker({
     <Field label={label}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 max-w-56 justify-between gap-2 font-normal"
-          >
+          <Button variant="outline" className="max-w-56 justify-between gap-2 px-2.5 font-normal">
             <span className="truncate">{summary}</span>
             <ChevronsUpDown className="size-3.5 text-ink-muted" />
           </Button>
@@ -169,14 +199,13 @@ export function ScopePicker({
   const groups = meta?.groups ?? {};
   const members = groups[value];
   return (
-    <Field label="In">
+    <Field label="Scope">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
-            size="sm"
             aria-label={`Scope: ${value}`}
-            className="h-8 max-w-64 justify-between gap-2 font-normal"
+            className="max-w-72 justify-between gap-2 px-2.5 font-normal"
           >
             <span className="truncate">
               <span className="font-medium">{value}</span>

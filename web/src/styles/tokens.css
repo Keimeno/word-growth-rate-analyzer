@@ -65,6 +65,7 @@
   --surface-hover: #e9eeef;
   --border: #d3dadc;
   --border-strong: #818b8e;
+  --control-border: #b7bfc2;
   --ink: #0d191c;
   --ink-secondary: #3d494c;
   --ink-muted: #515d60;
@@ -133,6 +134,7 @@
     --surface-hover: #1f282a;
     --border: #242d30;
     --border-strong: #6d787b;
+    --control-border: #3d494c;
     --ink: #edf1f2;
     --ink-secondary: #d3dadc;
     --ink-muted: #909a9d;
@@ -199,6 +201,7 @@
   --surface-hover: #1f282a;
   --border: #242d30;
   --border-strong: #6d787b;
+  --control-border: #3d494c;
   --ink: #edf1f2;
   --ink-secondary: #d3dadc;
   --ink-muted: #909a9d;
@@ -284,6 +287,8 @@
   --row-comfortable: 40px;
   --touch-target: 44px;
   --app-bar: 48px;
+  --sidebar-width: 232px;
+  --sidebar-width-collapsed: 52px;
   --icon-sm: 14px;
   --icon: 16px;
   --icon-lg: 20px;
@@ -406,6 +411,7 @@
   --color-surface-raised: var(--surface-raised);
   --color-surface-hover: var(--surface-hover);
   --color-border-strong: var(--border-strong);
+  --color-control-border: var(--control-border);
   --color-ink: var(--ink);
   --color-ink-secondary: var(--ink-secondary);
   --color-ink-muted: var(--ink-muted);
@@ -531,6 +537,13 @@
     line-height: 36px;
     font-weight: 500;
     letter-spacing: -0.02em;
+  }
+  .type-figure-md {
+    font-family: var(--typeface-sans);
+    font-size: 24px;
+    line-height: 28px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
   }
   .type-title-xl {
     font-family: var(--typeface-sans);

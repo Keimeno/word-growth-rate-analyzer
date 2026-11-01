@@ -1,7 +1,7 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useIngestion, useIngestionSeries } from "@/api/generated/endpoints";
-import type { Feed, FeedRate } from "@/api/generated/model";
+import type { FeedRate } from "@/api/generated/model";
 import { useAsOf, useMetaData } from "@/api/hooks";
 import { Chart, useChartTokens, useReducedMotion } from "@/charts/Chart";
 import { Meter } from "@/charts/micro";
@@ -12,9 +12,9 @@ import { StatusBadge } from "@/components/Entity";
 import { Loaded, Notice, Panel } from "@/components/Panel";
 import { Field, MultiPicker, Segmented } from "@/components/Pickers";
 import { KpiRow, StatTile } from "@/components/Stat";
-import { now } from "@/lib/clock";
 import { seriesColor } from "@/lib/colors";
 import { ago, bytes, count, decimal, formatDateTime, percent } from "@/lib/format";
+import { collectionHealth, feedState } from "@/lib/health";
 import { useSetSearch } from "@/lib/navigation";
 import { collectionDefaults, collectionSearch } from "@/lib/search";
 
@@ -26,14 +26,6 @@ export const Route = createFileRoute("/collection")({
 
 // Reddit allows 1,000 requests per 10 minutes and client id
 const RATE_LIMIT = 1000;
-
-function feedState(feed: Feed): ["good" | "warning" | "critical", string] {
-  const age = (now() - Date.parse(feed.last_poll)) / 1000;
-  if (feed.errors > 0 && feed.errors >= feed.polls / 2) return ["critical", "Failing"];
-  if (age > Math.max(300, 4 * (feed.poll_every_s ?? 0))) return ["warning", "Late"];
-  if (feed.errors > 0 || feed.gaps > 0) return ["warning", feed.errors > 0 ? "Errors" : "Gaps"];
-  return ["good", "OK"];
-}
 
 /** Every feed's items per minute, the biggest 7 on their own and the rest as "other". */
 function feedSeries(items: FeedRate[]): Series[] {
@@ -112,24 +104,10 @@ function CollectionPage() {
     [series.data, tokens, reducedMotion],
   );
 
-  const lastPollAge = data?.last_poll ? (now() - Date.parse(data.last_poll)) / 1000 : null;
-  const failing = (data?.feeds ?? []).filter((feed) => feedState(feed)[0] !== "good");
-  const status: ["good" | "warning", string] | null = !data
-    ? null
-    : lastPollAge === null || lastPollAge > 300
-      ? [
-          "warning",
-          `No requests for ${data.last_poll ? ago(data.last_poll).replace(" ago", "") : "a while"}. Is the ingester running? (docker compose ps)`,
-        ]
-      : failing.length
-        ? [
-            "warning",
-            `${failing.length} feed${failing.length === 1 ? " needs" : "s need"} a look: ${failing.map((feed) => feed.feed).join(", ")}.`,
-          ]
-        : [
-            "good",
-            "Collecting normally: every feed polled recently, without errors or gaps in the last hour.",
-          ];
+  const health = data ? collectionHealth(data) : null;
+  const status: ["good" | "warning", string] | null = health
+    ? [health.status === "good" ? "good" : "warning", health.long]
+    : null;
 
   return (
     <>
@@ -241,7 +219,7 @@ function CollectionPage() {
         </div>
 
         <Panel title="Feeds, last hour" flush>
-          <Loaded query={ingestion}>
+          <Loaded query={ingestion} shape="table">
             {(loaded) => (
               <DataTable
                 label="Feeds"
@@ -328,7 +306,7 @@ function CollectionPage() {
             flush
             help="Every channel of config.yaml: the tracked ones, the samples (r/all) and the radar's search (r/_search). People add up per type: someone writing a comment and a post counts twice."
           >
-            <Loaded query={ingestion}>
+            <Loaded query={ingestion} shape="table">
               {(loaded) => (
                 <DataTable
                   label="Channels"
@@ -383,7 +361,7 @@ function CollectionPage() {
             </Loaded>
           </Panel>
           <Panel title="Storage" flush>
-            <Loaded query={ingestion}>
+            <Loaded query={ingestion} shape="table">
               {(loaded) => (
                 <DataTable
                   label="Storage per table"

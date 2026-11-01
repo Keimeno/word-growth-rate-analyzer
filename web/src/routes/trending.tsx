@@ -217,7 +217,7 @@ function Scored() {
         }
         help="Ranked by strength. A term trends with at least 10 mentions by 5 different people, twice its usual share, and a strength of 3. 'pro' isn't shown when 'vision pro' explains it, unless explained bursts are shown."
       >
-        <Loaded query={trends} height={320}>
+        <Loaded query={trends} height={320} shape="table">
           {(loaded) => (
             <DataTable
               label="Trending terms"
@@ -377,7 +377,7 @@ function Scored() {
           flush
           subtitle="Each term at its strongest, in any scope here and either window. The daily digest sends a group's top 10."
         >
-          <Loaded query={digest}>
+          <Loaded query={digest} shape="table">
             {(entries) => (
               <DataTable
                 label="Strongest in the last 24 hours"
@@ -425,7 +425,7 @@ function Scored() {
           </Loaded>
         </Panel>
         <Panel title="Alerts, last 14 days" flush help={ALERT_HELP}>
-          <Loaded query={alerts}>
+          <Loaded query={alerts} shape="table">
             {(entries) => (
               <DataTable
                 label="Alerts of the last 14 days"
@@ -538,7 +538,7 @@ function QuickLook() {
         flush
         help="× usual: the share of comments and posts mentioning a term in the last 24 hours, divided by its usual share. Usual blends its share in the 7 days before with its share in the platform's background (the r/all sample), so without history this first shows what is distinctive for the group."
       >
-        <Loaded query={rising} height={320}>
+        <Loaded query={rising} height={320} shape="table">
           {(rows) => (
             <DataTable
               label="Rising terms"

@@ -311,7 +311,7 @@ function ExplorePage() {
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <Panel title="Where it's discussed" flush subtitle="In this range">
-                <Loaded query={explore}>
+                <Loaded query={explore} shape="table">
                   {(data) => (
                     <DataTable
                       label="Where it's discussed"

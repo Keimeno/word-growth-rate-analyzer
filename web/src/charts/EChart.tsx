@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { Download, Table2 } from "lucide-react";
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { type EChartsOption, echarts } from "./echarts";
@@ -106,17 +114,37 @@ export default function EChart({
         if (event.key === "t" && event.target === event.currentTarget) setAsTable(!asTable);
       }}
     >
-      <div className="absolute top-0 right-0 z-10 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-        <ToolButton onClick={() => setAsTable(!asTable)}>{asTable ? "Chart" : "Table"}</ToolButton>
-        <ToolButton onClick={() => download(`${name}.csv`, csv(tableOf(option)), "text/csv")}>
-          CSV
-        </ToolButton>
-        <ToolButton onClick={() => exportPng(instance.current, name)}>PNG</ToolButton>
+      <div className="absolute top-0 right-0 z-10 flex overflow-hidden rounded-sm border border-border bg-surface-raised opacity-0 shadow-popover transition-opacity duration-100 group-focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
         <ToolButton
-          onClick={() => exportSvg(option, box.current?.clientWidth ?? 800, height, name)}
+          label={asTable ? "Show the chart" : "Show as a table"}
+          pressed={asTable}
+          onClick={() => setAsTable(!asTable)}
         >
-          SVG
+          <Table2 />
         </ToolButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <ToolButton label="Download">
+              <Download />
+            </ToolButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            <DropdownMenuLabel className="type-overline text-ink-muted">Download</DropdownMenuLabel>
+            <DropdownMenuItem
+              onSelect={() => download(`${name}.csv`, csv(tableOf(option)), "text/csv")}
+            >
+              Data as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => exportPng(instance.current, name)}>
+              Image as PNG
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => exportSvg(option, box.current?.clientWidth ?? 800, height, name)}
+            >
+              Image as SVG
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {asTable && <ChartTableView option={option} label={label} height={height} />}
       <div
@@ -130,12 +158,24 @@ export default function EChart({
   );
 }
 
-function ToolButton({ onClick, children }: { onClick: () => void; children: string }) {
+function ToolButton({
+  label,
+  pressed,
+  children,
+  ...props
+}: {
+  label: string;
+  pressed?: boolean;
+  children: ReactNode;
+} & Omit<ComponentProps<"button">, "children">) {
   return (
     <button
       type="button"
-      className="rounded-xs border border-border bg-surface-raised px-1.5 py-0.5 text-[11px] text-ink-secondary hover:text-ink"
-      onClick={onClick}
+      aria-label={label}
+      title={label}
+      aria-pressed={pressed}
+      className="flex size-7 items-center justify-center text-ink-muted not-first:border-l not-first:border-border hover:bg-surface-hover hover:text-ink aria-pressed:bg-primary-wash aria-pressed:text-primary-ink [&_svg]:size-3.5"
+      {...props}
     >
       {children}
     </button>
@@ -177,13 +217,13 @@ function ChartTableView({
   return (
     <div className="overflow-auto" style={{ maxHeight: Math.max(height, 240) }}>
       <table className="w-full text-xs" aria-label={`${label}, as a table`}>
-        <thead>
+        <thead className="sticky top-0">
           <tr className="border-b border-border bg-surface-sunken">
             {table.columns.map((column) => (
               <th
                 key={column}
                 scope="col"
-                className="px-2 py-1 text-left font-medium text-ink-muted"
+                className="h-7 px-2 text-left type-overline whitespace-nowrap text-ink-muted"
               >
                 {column}
               </th>
@@ -196,7 +236,7 @@ function ChartTableView({
             <tr key={index} className="border-b border-border last:border-b-0">
               {row.map((cell, column) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: cells of one row, in order
-                <td key={column} className="px-2 py-0.5 tabular-nums">
+                <td key={column} className="h-7 px-2 tabular-nums text-ink-secondary">
                   {typeof cell === "number"
                     ? cell.toLocaleString("en", { maximumFractionDigits: 3 })
                     : (cell ?? "–")}

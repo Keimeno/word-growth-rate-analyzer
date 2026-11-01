@@ -55,7 +55,7 @@ export function chartTokens(read: TokenReader = (name) => css(name)) {
 export type ChartTokens = ReturnType<typeof chartTokens>;
 
 export function buildTheme(t: ChartTokens = chartTokens()) {
-  const label = { color: t.muted, fontFamily: t.sans, fontSize: 12 };
+  const label = { color: t.muted, fontFamily: t.sans, fontSize: 11 };
   const axisCommon = {
     axisLine: { show: true, lineStyle: { color: t.axis, width: 1 } },
     axisTick: { show: false },
@@ -79,10 +79,13 @@ export function buildTheme(t: ChartTokens = chartTokens()) {
       top: 0,
       left: 0,
       icon: "roundRect",
-      itemWidth: 12,
-      itemHeight: 3,
-      itemGap: 16,
+      itemWidth: 10,
+      itemHeight: 2,
+      itemGap: 14,
       textStyle: { color: t.inkSecondary, fontFamily: t.sans, fontSize: 12 },
+      pageIconColor: t.inkSecondary,
+      pageIconInactiveColor: t.axis,
+      pageTextStyle: { color: t.muted, fontFamily: t.sans, fontSize: 11 },
       inactiveColor: t.axis,
     },
     tooltip: {
@@ -90,11 +93,11 @@ export function buildTheme(t: ChartTokens = chartTokens()) {
       backgroundColor: t.raised,
       borderColor: t.border,
       borderWidth: 1,
-      padding: [8, 10],
+      padding: [8, 12],
       textStyle: { color: t.ink, fontFamily: t.sans, fontSize: 12 },
       extraCssText:
-        "box-shadow: var(--elevation-popover); border-radius: 6px; font-variant-numeric: tabular-nums;",
-      axisPointer: { type: "line", lineStyle: { color: t.crosshair, width: 1, type: "solid" } },
+        "box-shadow: var(--elevation-popover); border-radius: 6px; font-variant-numeric: tabular-nums; min-width: 160px;",
+      axisPointer: { type: "line", lineStyle: { color: t.crosshair, width: 1, type: [3, 3] } },
     },
     axisPointer: {
       lineStyle: { color: t.crosshair, width: 1 },
@@ -112,7 +115,7 @@ export function buildTheme(t: ChartTokens = chartTokens()) {
       smooth: false, // shares are measured per bucket: never interpolate a curve between them
       emphasis: { focus: "series", lineStyle: { width: 2.5 } },
       blur: { lineStyle: { opacity: 0.25 } },
-      endLabel: { color: t.inkSecondary, fontFamily: t.sans, fontSize: 12 },
+      endLabel: { color: t.inkSecondary, fontFamily: t.sans, fontSize: 11 },
     },
     bar: {
       barMaxWidth: 24,

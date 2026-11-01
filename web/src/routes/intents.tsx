@@ -205,7 +205,7 @@ function IntentsPage() {
           subtitle="Switches that happened, in this range. Open one for its trend and the comments behind it."
           help="Mentions: comments and posts (each counts once). The other way: mentions of the reverse switch, so you see who's winning. Per 10,000: of all comments and posts here."
         >
-          <Loaded query={flows}>
+          <Loaded query={flows} shape="table">
             {(data) => (
               <DataTable
                 label="Switching flows"
@@ -316,7 +316,7 @@ function IntentsPage() {
                 Rising: the last 7 days (today included) against the 28 days before, the most extra
                 mentions first. Ignores the range above.
               </p>
-              <Loaded query={rising}>
+              <Loaded query={rising} shape="table">
                 {(data) => (
                   <DataTable
                     key={search.rising}

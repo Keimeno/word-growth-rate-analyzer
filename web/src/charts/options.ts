@@ -128,7 +128,10 @@ export function timeSeries(spec: TimeSeriesSpec, tokens: ChartTokens): EChartsOp
     grid: {
       left: 8,
       right: labelled ? 96 : 16,
-      top: spec.series.length > 1 ? 32 : 16,
+      // room above the plot for labelled marks
+      top:
+        (spec.series.length > 1 ? 32 : 16) +
+        ((spec.marks ?? []).length > 0 && (spec.marks ?? []).length <= 4 ? 14 : 0),
       bottom: 8,
       containLabel: true,
     },
@@ -177,12 +180,34 @@ export function timeSeries(spec: TimeSeriesSpec, tokens: ChartTokens): EChartsOp
   };
 }
 
+/** Bands that touch or overlap merged, each label written once: a run of trending windows
+ * reads as one stretch, not a row of repeated words. */
+function mergeBands(bands: NonNullable<Annotation["bands"]>) {
+  const merged: Array<{ from: number; to: number; label: string }> = [];
+  for (const band of [...bands].sort((x, y) => x.from - y.from)) {
+    const last = merged.findLast((other) => other.label === band.label);
+    if (last && band.from <= last.to) last.to = Math.max(last.to, band.to);
+    else merged.push({ ...band });
+  }
+  // each label once, on its own line, so two kinds of band starting together stay legible
+  const lines = new Map<string, number>();
+  return merged.map((band) => {
+    const first = !lines.has(band.label);
+    if (first) lines.set(band.label, lines.size);
+    return { ...band, label: first ? band.label : "", line: lines.get(band.label) ?? 0 };
+  });
+}
+
 function annotate(spec: Annotation, tokens: ChartTokens) {
   const label = { color: tokens.muted, fontFamily: tokens.sans, fontSize: 11 };
+  const marks = spec.marks ?? [];
+  // up to 4 marks are labelled; more would stack on each other, so they say what they are
+  // on hover
+  const labelled = marks.length <= 4;
   return {
     markLine: {
       symbol: "none",
-      silent: true,
+      silent: labelled,
       animation: false,
       data: [
         ...(spec.thresholds ?? []).map((line) => ({
@@ -190,19 +215,30 @@ function annotate(spec: Annotation, tokens: ChartTokens) {
           lineStyle: { color: tokens.threshold, width: 1, type: [4, 3] },
           label: { ...label, formatter: line.label, position: "insideEndTop" },
         })),
-        ...(spec.marks ?? []).map((mark) => ({
+        ...marks.map((mark) => ({
           xAxis: mark.at,
-          lineStyle: { color: tokens.ink, width: 1, type: "solid" },
-          label: { ...label, color: tokens.ink, formatter: mark.label, position: "insideEndTop" },
+          lineStyle: { color: tokens.ink, width: 1, type: "solid", opacity: 0.55 },
+          label: {
+            ...label,
+            show: labelled,
+            color: tokens.inkSecondary,
+            formatter: mark.label,
+            position: "end",
+            distance: 4,
+          },
+          emphasis: {
+            label: { show: true, color: tokens.ink },
+            lineStyle: { opacity: 1, width: 1 },
+          },
         })),
       ],
     },
     markArea: {
       silent: true,
       itemStyle: { color: tokens.band },
-      label: { ...label, position: "insideTop" },
-      data: (spec.bands ?? []).map((band) => [
-        { xAxis: band.from, name: band.label },
+      label: { ...label, position: "insideTopLeft", distance: 6 },
+      data: mergeBands(spec.bands ?? []).map((band) => [
+        { xAxis: band.from, name: band.label, label: { offset: [0, 14 * band.line] } },
         { xAxis: band.to },
       ]),
     },

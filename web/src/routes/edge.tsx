@@ -33,7 +33,7 @@ function EdgePage() {
   const follower = `${search.follower}${search.without_leader ? " (rest)" : ""}`;
   return (
     <>
-      <PageHeader title={`${search.leader} → ${follower}`}>
+      <PageHeader eyebrow="Leader and follower" title={`${search.leader} → ${follower}`}>
         How often {follower} picks up what {search.leader} starts talking about, and how long it
         takes.
       </PageHeader>

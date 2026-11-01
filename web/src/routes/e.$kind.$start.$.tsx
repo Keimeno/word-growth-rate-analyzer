@@ -29,7 +29,11 @@ function EventPage() {
   const event = useEventDetail(kind, start, pathPart(term), asOf);
   return (
     <>
-      <PageHeader title={`${term}, from ${formatDateTime(start)}`}>
+      <PageHeader
+        eyebrow={`Story from ${formatDateTime(start)}`}
+        title={term}
+        titleClassName="term text-[22px] leading-7 font-normal"
+      >
         A story: the term trended somewhere and the places it reached after, in the order they
         crossed their onset.
       </PageHeader>

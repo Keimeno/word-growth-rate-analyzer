@@ -985,7 +985,8 @@ leftovers:
 The most common mobile path is an ntfy alert on the phone opening the term page, so the term
 page is designed phone-first:
 
-* Navigation collapses to a bottom bar with the main pages and the palette.
+* Navigation collapses to a bottom bar with the main pages and "More", which opens the
+  sidebar as a drawer.
 * Tables become lists of cards with the two or three numbers that matter and a sparkline.
 * Charts take the full width with fewer ticks; a tap shows the tooltip, a second tap opens
   the entity. Brushing becomes a range picker.

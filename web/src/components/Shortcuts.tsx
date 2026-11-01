@@ -17,6 +17,7 @@ const KEYS: Array<[string, string]> = [
   ["⌘K or /", "Search pages, scopes and terms; save a view; time travel"],
   ["?", "These shortcuts"],
   ...Object.entries(GO).map(([key, [, label]]): [string, string] => [`g ${key}`, `Go to ${label}`]),
+  ["[", "Collapse or expand the sidebar"],
   ["t", "On a focused chart: its table, or the chart again"],
   ["Esc", "Close the peek, a dialog or the palette"],
 ];
@@ -36,6 +37,8 @@ export function Shortcuts() {
       if (event.key === "?") {
         event.preventDefault();
         setOpen(true);
+      } else if (event.key === "[") {
+        window.dispatchEvent(new Event("undercurrent:sidebar"));
       } else if (event.key === "g") {
         leader = Date.now();
       } else if (Date.now() - leader < 1200 && GO[event.key]) {
@@ -58,13 +61,27 @@ export function Shortcuts() {
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>Everywhere but in a text field.</DialogDescription>
         </DialogHeader>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <dl className="-mx-6 border-t border-border text-[13px]">
           {KEYS.map(([keys, what]) => (
-            <div key={keys} className="contents">
-              <dt>
-                <kbd className="rounded-xs border border-border bg-surface-sunken px-1.5 py-0.5 text-xs">
-                  {keys}
-                </kbd>
+            <div
+              key={keys}
+              className="flex flex-row-reverse items-center justify-between gap-4 border-b border-border px-6 py-2 last:border-b-0"
+            >
+              <dt className="flex shrink-0 gap-1">
+                {keys.split(" ").map((part) =>
+                  part === "or" ? (
+                    <span key={part} className="text-xs text-ink-muted">
+                      or
+                    </span>
+                  ) : (
+                    <kbd
+                      key={part}
+                      className="min-w-5 rounded-xs border border-border border-b-control-border bg-surface-sunken px-1.5 py-px text-center font-sans text-[11px] leading-4 font-medium text-ink-secondary"
+                    >
+                      {part}
+                    </kbd>
+                  ),
+                )}
               </dt>
               <dd className="text-ink-secondary">{what}</dd>
             </div>

@@ -115,7 +115,7 @@ export function RelatedPanel({ kind, term, scope }: { kind: string; term: string
       }
       help="Ranked by how much more often a term appears in the comments with this one than in the rest of the scope's comments (the detector's weighted log odds). Raw text is kept for 48 hours, so this only covers them."
     >
-      <Loaded query={query}>
+      <Loaded query={query} shape="table">
         {(data) => (
           <DataTable
             label="Terms mentioned with it"

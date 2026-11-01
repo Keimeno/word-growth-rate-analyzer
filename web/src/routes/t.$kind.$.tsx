@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { ArrowUpRight, Compass, Link2 } from "lucide-react";
+import { ArrowUpRight, Compass, Ellipsis, Link2 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import {
   useExplore,
@@ -11,8 +11,9 @@ import {
 import type { Annotations, TermSummary } from "@/api/generated/model";
 import { useAsOf, useMetaData } from "@/api/hooks";
 import { Chart, useChartTokens, useReducedMotion } from "@/charts/Chart";
-import { BarList } from "@/charts/micro";
+import { BarList, Sparkline } from "@/charts/micro";
 import { timeSeries } from "@/charts/options";
+import { PageHeader } from "@/components/AppShell";
 import { Comments } from "@/components/Comments";
 import { DataTable } from "@/components/DataTable";
 import { EventLink, ScopeLink, StrengthWord } from "@/components/Entity";
@@ -21,9 +22,17 @@ import { PinButton } from "@/components/Personal";
 import { ChannelsPanel, RelatedPanel, RhythmPanel } from "@/components/TermSections";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, ScopePicker, Segmented } from "@/components/Pickers";
+import { KpiRow, StatTile } from "@/components/Stat";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   count,
+  decimal,
   confidence,
   formatDate,
   formatShortDate,
@@ -68,89 +77,158 @@ function TermPage() {
   const kindLabel = (KIND_LABELS[kind] ?? kind).replace(/s$/, "").toLowerCase();
 
   return (
-    <div className="flex flex-col gap-4">
-      <header className="flex flex-col gap-2">
-        <nav aria-label="Breadcrumb" className="text-xs text-ink-muted">
-          Terms · {kindLabel} · <ScopeLink scope={scope} />
-        </nav>
-        <h1 className="term type-title-xl break-words">{term}</h1>
-        <p className="max-w-3xl text-sm text-ink-secondary">
-          <StatusLine data={summary.data} />
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <ScopePicker meta={meta.data} value={scope} onChange={(next) => set({ scope: next })} />
-          <Button size="sm" variant="outline" asChild>
-            <a
-              href={`/explore?terms=${encodeURIComponent(term)}&scope=${encodeURIComponent(scope)}`}
-            >
-              <Compass className="size-3.5" /> Explore
-            </a>
-          </Button>
-          <Button size="sm" variant="ghost" asChild>
-            <a href={platformSearch(term, scope)} target="_blank" rel="noreferrer">
-              On Reddit <ArrowUpRight className="size-3.5" />
-            </a>
-          </Button>
-          {meta.data && (
-            <Button size="sm" variant="ghost" asChild>
+    <>
+      <PageHeader
+        eyebrow={
+          <>
+            {kindLabel} in <ScopeLink scope={scope} />
+          </>
+        }
+        title={term}
+        titleClassName="term text-[26px] leading-8 font-normal tracking-[-0.01em]"
+        actions={
+          <>
+            <ScopePicker meta={meta.data} value={scope} onChange={(next) => set({ scope: next })} />
+            <Button variant="outline" asChild>
               <a
-                href={grafanaLink(meta.data.grafana_url, "explore", {
-                  terms: term,
-                  scope,
-                  range: search.range,
-                })}
-                target="_blank"
-                rel="noreferrer"
+                href={`/explore?terms=${encodeURIComponent(term)}&scope=${encodeURIComponent(scope)}`}
               >
-                Pro mode <ArrowUpRight className="size-3.5" />
+                <Compass className="size-3.5" /> Explore
               </a>
             </Button>
-          )}
-          <PinButton kind={kind} term={term} scope={scope} />
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => void navigator.clipboard.writeText(location.href)}
+            <PinButton kind={kind} term={term} scope={scope} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="More actions">
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-48">
+                <DropdownMenuItem
+                  onSelect={() => void navigator.clipboard.writeText(location.href)}
+                >
+                  <Link2 /> Copy link
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={platformSearch(term, scope)} target="_blank" rel="noreferrer">
+                    <ArrowUpRight /> Search on Reddit
+                  </a>
+                </DropdownMenuItem>
+                {meta.data && (
+                  <DropdownMenuItem asChild>
+                    <a
+                      href={grafanaLink(meta.data.grafana_url, "explore", {
+                        terms: term,
+                        scope,
+                        range: search.range,
+                      })}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ArrowUpRight /> Pro mode, in Grafana
+                    </a>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      >
+        <StatusLine data={summary.data} />
+      </PageHeader>
+      <div className="flex flex-col gap-4">
+        <TermKpis data={summary.data} term={term} />
+
+        <ShareOverTime kind={kind} term={term} />
+
+        {top && (
+          <Panel
+            title="Why it's trending"
+            subtitle={`In ${top.scope}, the ${top.horizon === "24h" ? "24-hour" : "6-hour"} window of the latest run`}
           >
-            <Link2 className="size-3.5" /> Copy link
-          </Button>
+            <Explainer kind={kind} term={term} scope={top.scope} horizon={top.horizon} />
+          </Panel>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Where kind={kind} term={term} />
+          <Spread kind={kind} term={term} summary={summary.data} />
         </div>
-      </header>
 
-      <ShareOverTime kind={kind} term={term} />
+        <ChannelsPanel
+          kind={kind}
+          term={term}
+          scope={scope}
+          range={search.range === "24h" || search.range === "2d" ? "7d" : search.range}
+        />
 
-      {top && (
-        <Panel
-          title="Why it's trending"
-          subtitle={`In ${top.scope}, the ${top.horizon === "24h" ? "24-hour" : "6-hour"} window of the latest run`}
-        >
-          <Explainer kind={kind} term={term} scope={top.scope} horizon={top.horizon} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <RelatedPanel kind={kind} term={term} scope={scope} />
+          <RhythmPanel kind={kind} term={term} scope={scope} />
+        </div>
+
+        <LongTerm summary={summary.data} />
+
+        <Panel title="Comments and posts" subtitle="The last 48 hours, the newest first" flush>
+          <Mentions term={term} />
         </Panel>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Where kind={kind} term={term} />
-        <Spread kind={kind} term={term} summary={summary.data} />
       </div>
+    </>
+  );
+}
 
-      <ChannelsPanel
-        kind={kind}
-        term={term}
-        scope={scope}
-        range={search.range === "24h" || search.range === "2d" ? "7d" : search.range}
+/** The term's headline numbers: how much, by how many, against usual, how sure. */
+function TermKpis({ data, term }: { data: TermSummary | undefined; term: string }) {
+  const top = data?.trending[0];
+  return (
+    <KpiRow>
+      <StatTile
+        label="Comments and posts, 7 days"
+        value={data ? count(data.mentions_7d) : "…"}
+        hint={
+          data && (
+            <Sparkline
+              values={data.sparkline}
+              width={140}
+              height={18}
+              label={`${term}, mentions per hour, 7 days`}
+            />
+          )
+        }
       />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <RelatedPanel kind={kind} term={term} scope={scope} />
-        <RhythmPanel kind={kind} term={term} scope={scope} />
-      </div>
-
-      <LongTerm summary={summary.data} />
-
-      <Panel title="Comments and posts" subtitle="The last 48 hours, the newest first" flush>
-        <Mentions term={term} />
-      </Panel>
-    </div>
+      <StatTile
+        label="People, 7 days"
+        value={data ? count(data.authors_7d) : "…"}
+        unit="who mentioned it"
+      />
+      <StatTile
+        label="Against usual"
+        value={data ? (top ? times(top.ratio, top.is_new) : "–") : "…"}
+        unit={top && !top.is_new ? "its usual share" : undefined}
+        hint={top ? `in ${top.scope}, last ${top.horizon}` : data ? "not trending now" : undefined}
+      />
+      <StatTile
+        label="Strength"
+        value={data ? (top ? strength(top.score).label : "–") : "…"}
+        hint={top ? `z ${decimal(top.score)} on the detector's scale` : undefined}
+        help="How strong the evidence is that it's mentioned more than usual, from the latest run."
+      />
+      <StatTile
+        label="Stories"
+        value={data ? count(data.events) : "…"}
+        hint={
+          data
+            ? `${count(data.pending_forecasts)} forecast${data.pending_forecasts === 1 ? "" : "s"} waiting`
+            : undefined
+        }
+        help="Times it trended somewhere and was followed across channels for 17 days."
+      />
+      <StatTile
+        label="First seen"
+        value={data ? (data.first_seen ? formatShortDate(data.first_seen) : "–") : "…"}
+        hint={data?.first_seen ? formatTime(data.first_seen) : undefined}
+      />
+    </KpiRow>
   );
 }
 
@@ -349,7 +427,7 @@ function Spread({
       }
       flush
     >
-      <Loaded query={events}>
+      <Loaded query={events} shape="table">
         {(rows) => (
           <DataTable
             label="Stories it was part of"
