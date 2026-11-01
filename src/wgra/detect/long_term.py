@@ -610,7 +610,7 @@ def report_trends(
         SELECT latest, term, argMax(scope, strength), category,
                argMax(toUInt16(toUInt16OrZero(trimRight(horizon, 'w'))), strength),
                argMax(growth, strength), argMax(start_share, strength),
-               argMax(end_share, strength)
+               argMax(end_share, strength), argMax(kind, strength)
         FROM (
             SELECT *, abs(log(growth)) AS strength FROM long_term_trends FINAL
             WHERE week = latest AND scope IN {scopes:Array(String)}

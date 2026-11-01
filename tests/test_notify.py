@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from wgra.notify.messages import (
+    Links,
     LongTermSummary,
     TrendSummary,
     alert_message,
@@ -127,7 +128,27 @@ def test_alert_message():
     assert "New: 312 comments and posts" in new.body
     assert "in the 12 days before" in new.body
     assert "Trending in 6 of the 9 channels" in new.body
-    assert new.tags == ("sparkles",)
+    # no emoji tags (docs/BRAND.md §8), and no icon without the dashboard's url
+    assert (new.tags, new.icon) == ((), "")
+
+
+def test_alerts_open_the_term_page_with_grafana_second():
+    links = Links(GRAFANA, "https://web.example")
+    message = alert_message(summary(kind="phrase", scope="r/technology"), links)
+    assert message.click == "https://web.example/t/phrase/vision%20pro?scope=r/technology"
+    assert [label for label, _ in message.links] == ["Open", "Trending now", "Pro mode"]
+    assert message.links[2][1] == explorer_url(GRAFANA, "vision pro", "r/technology")
+    assert message.icon == "https://web.example/notification-icon.png"
+    assert message.payload("t")["icon"] == message.icon
+    # a term with a slash stays a path, a switch's arrow is encoded
+    assert links.term("ollama/ollama", "tech", "repo").endswith("/t/repo/ollama/ollama?scope=tech")
+    assert "/t/switch/notion%20%E2%86%92%20obsidian?" in links.term(
+        "notion → obsidian", "pkm", "switch"
+    )
+    grafana = Links(GRAFANA, "https://web.example", web_first=False)
+    assert alert_message(summary(), grafana).click == explorer_url(
+        GRAFANA, "vision pro", "r/technology"
+    )
 
 
 def test_digest_lists_terms_with_links():

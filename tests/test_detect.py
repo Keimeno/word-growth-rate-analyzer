@@ -220,7 +220,9 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
 
 def test_analyzer_alerts_once_and_sends_one_digest_per_day(history_client):
     ntfy, sent = recording_ntfy()
-    env = Env(b"", "", 0, "", "", "", grafana_url="https://grafana.test")
+    env = Env(
+        b"", "", 0, "", "", "", grafana_url="https://grafana.test", web_url="https://web.test"
+    )
     analyzer = Analyzer(config_for_tests(), env, history_client, ntfy)
     now = END - timedelta(minutes=1)
 
@@ -229,7 +231,11 @@ def test_analyzer_alerts_once_and_sends_one_digest_per_day(history_client):
     # the strongest story alerts once, though it trends in r/technology, tech and reddit
     assert [trend.term for trend in alerts] == ["vision pro"]
     assert sent[0]["title"].startswith("vision pro · ")
-    assert sent[0]["click"].startswith("https://grafana.test/d/wgra-terms?var-terms=vision+pro")
+    # the term page, with Grafana as the second button, and the brand's icon, no emoji
+    assert sent[0]["click"].startswith("https://web.test/t/phrase/vision%20pro?scope=")
+    assert sent[0]["actions"][-1]["url"].startswith("https://grafana.test/d/wgra-terms?")
+    assert sent[0]["icon"] == "https://web.test/notification-icon.png"
+    assert "tags" not in sent[0]
     # 11:59 UTC is past the digest time: one digest for the only configured group
     assert first.digests == ["tech"]
     digest = sent[-1]

@@ -259,6 +259,9 @@ class NotifyConfig:
     report_time: str = "08:00"
     # terms per category (emerging, mainstreaming, fading)
     report_size: int = 5
+    # where tapping a notification leads: the web dashboard's term page (WEB_URL), with
+    # Grafana as a second button, or Grafana's term explorer (GRAFANA_URL)
+    links: str = "web"
 
 
 @dataclass(frozen=True)
@@ -716,6 +719,8 @@ def parse_notify(raw: dict[str, Any]) -> NotifyConfig:
     _check_time("notify.report_time", notify.report_time)
     if notify.report_day not in WEEKDAYS:
         raise ValueError(f"config: notify.report_day is a weekday: {notify.report_day}")
+    if notify.links not in ("web", "grafana"):
+        raise ValueError(f"config: notify.links is web or grafana: {notify.links}")
     ZoneInfo(notify.timezone)  # raises for unknown time zones
     return notify
 
@@ -814,6 +819,8 @@ class Env:
     ntfy_token: str = ""
     # how the phone reaches grafana, for the links in alerts
     grafana_url: str = "http://localhost:3608"
+    # and the web dashboard, for the term page an alert opens and the notification's icon
+    web_url: str = "http://localhost:3610"
 
     @classmethod
     def from_environ(cls, require_author_hash_key: bool = False) -> Env:
@@ -837,4 +844,5 @@ class Env:
             ntfy_topic=os.environ.get("NTFY_TOPIC") or "wgra",
             ntfy_token=os.environ.get("NTFY_TOKEN", ""),
             grafana_url=(os.environ.get("GRAFANA_URL") or "http://localhost:3608").rstrip("/"),
+            web_url=(os.environ.get("WEB_URL") or "http://localhost:3610").rstrip("/"),
         )

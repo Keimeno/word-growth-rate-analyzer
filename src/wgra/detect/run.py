@@ -33,6 +33,7 @@ from wgra.leadlag.forecasts import Forecast, decide_forecast_alerts, write_forec
 from wgra.leadlag.run import ForecastStep, LeadLag, LearnResult
 from wgra.notify.messages import (
     ForecastSummary,
+    Links,
     TrendSummary,
     alert_message,
     digest_message,
@@ -59,6 +60,7 @@ def summary(trend: Trend) -> TrendSummary:
         breadth=trend.breadth,
         members=trend.members,
         reference_days=trend.reference_days,
+        kind=trend.kind,
     )
 
 
@@ -79,6 +81,7 @@ def forecast_summary(forecast: Forecast, config: Config) -> ForecastSummary:
         edge_hits=forecast.edge_hits,
         lag_median=forecast.lag_median,
         follower_label=follower.label if follower else "",
+        kind=forecast.kind,
     )
 
 
@@ -103,7 +106,8 @@ def digest_trends(
         """
         SELECT term, argMax(scope, z), argMax(horizon, z), max(z), argMax(ratio, z),
                argMax(mentions, z), argMax(authors, z), argMax(is_new, z),
-               argMax(breadth, z), argMax(members, z), argMax(reference_days, z)
+               argMax(breadth, z), argMax(members, z), argMax(reference_days, z),
+               argMax(kind, z)
         FROM trends
         WHERE detected_at > toDateTime({since:UInt32}, 'UTC')
           AND detected_at <= toDateTime({now:UInt32}, 'UTC')
@@ -129,6 +133,7 @@ class Analyzer:
         """Without ntfy, nothing is sent: alerts that would be sent are marked "muted"."""
         self._config = config
         self._env = env
+        self._links = Links(env.grafana_url, env.web_url, web_first=config.notify.links == "web")
         self._client = client
         self._ntfy = ntfy
         # the UTC day of this process's last long-term run. After a restart it runs again
@@ -153,7 +158,7 @@ class Analyzer:
             if self._ntfy is None:
                 trend.alert = MUTED
                 continue
-            message = alert_message(summary(trend), self._env.grafana_url)
+            message = alert_message(summary(trend), self._links)
             ok = self._send("alert", trend.scope, trend.term, message)
             trend.alert = SENT if ok else FAILED
         write_trends(self._client, trends)
@@ -208,9 +213,7 @@ class Analyzer:
                 if self._ntfy is None:
                     forecast.alert = MUTED
                     continue
-                message = forecast_message(
-                    forecast_summary(forecast, self._config), self._env.grafana_url
-                )
+                message = forecast_message(forecast_summary(forecast, self._config), self._links)
                 ok = self._send("forecast", forecast.follower, forecast.term, message)
                 forecast.alert = SENT if ok else FAILED
         write_forecasts(self._client, step.new + step.resolved)
@@ -262,7 +265,7 @@ class Analyzer:
                 # nothing to say today, remember that the digest is done
                 self._log_notification("digest", group.name, "", "nothing trending", "", True)
                 continue
-            message = digest_message(group.name, day, trends, self._env.grafana_url)
+            message = digest_message(group.name, day, trends, self._links)
             if self._send("digest", group.name, "", message):
                 sent.append(group.name)
         return sent
@@ -333,7 +336,7 @@ class Analyzer:
                 # not enough history yet, or nothing growing or fading: the report is done
                 self._log_notification("weekly", group.name, "", "no long-term trends", "", True)
                 continue
-            message = weekly_report_message(group.name, week, trends, self._env.grafana_url)
+            message = weekly_report_message(group.name, week, trends, self._links)
             if self._send("weekly", group.name, "", message):
                 sent.append(group.name)
         return sent
@@ -343,7 +346,7 @@ class Analyzer:
 
         if self._ntfy is None:
             raise RuntimeError("notifications are off")
-        if not self._send("test", "", "", ping_message(self._env.grafana_url)):
+        if not self._send("test", "", "", ping_message(self._links)):
             raise RuntimeError("the test notification couldn't be sent, see the log")
 
     def _send(self, kind: str, scope: str, term: str, message: Message) -> bool:

@@ -270,6 +270,9 @@ notify:
   report_size: 5
   # scored and shown in Grafana, but no alerts, digests or reports
   skip_scopes: [r/all]
+  # where tapping a notification leads: web (the dashboard's term page, WEB_URL, with
+  # Grafana as a second button) or grafana (its term explorer, GRAFANA_URL)
+  links: web
 
 # The churn radar (docs/CHURN-RADAR.md): per watchlist, who leaves which product, for what
 # and why. A watchlist's channels are a group above, tracked completely. Its products'

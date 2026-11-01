@@ -335,7 +335,9 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
 
 def test_analyzer_runs_daily_and_reports_on_mondays(history_client):
     ntfy, sent = recording_ntfy()
-    env = Env(b"", "", 0, "", "", "", grafana_url="https://grafana.test")
+    env = Env(
+        b"", "", 0, "", "", "", grafana_url="https://grafana.test", web_url="https://web.test"
+    )
     analyzer = Analyzer(config_for_tests(), env, history_client, ntfy)
     scopes = load_scopes(history_client)
     monday_night = datetime(2026, 6, 22, 0, 15, tzinfo=UTC)
@@ -361,12 +363,13 @@ def test_analyzer_runs_daily_and_reports_on_mondays(history_client):
     )
     assert tech["title"] == "Long-term trends in tech, weeks to Sun 21 Jun"
     body = tech["message"]
-    assert "**Emerging**\n1. [emerging thing](https://grafana.test/d/wgra-terms?" in body
+    assert "**Emerging**\n1. [emerging thing](https://web.test/t/phrase/emerging%20thing?" in body
     assert "**Mainstreaming**" in body
     assert "**Fading**\n1. [fading]" in body
     assert "spike" not in body  # one-offs aren't reported
-    assert "var-bucket=week" in body
-    assert tech["click"] == "https://grafana.test/d/wgra-long-term?var-group=tech"
+    # the term page over the window's weeks
+    assert "range=26w" in body or "range=90d" in body
+    assert tech["click"] == "https://web.test/long-term?scope=tech"
     kinds = history_client.query("SELECT kind, scope, ok FROM notifications ORDER BY scope")
     assert kinds.result_rows == [("weekly", "other", True), ("weekly", "tech", True)]
 

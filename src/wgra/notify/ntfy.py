@@ -15,8 +15,11 @@ class Message:
     body: str
     # opened when the notification is tapped
     click: str = ""
-    # emoji shortcodes or plain tags, https://docs.ntfy.sh/emojis/
+    # emoji shortcodes or plain tags, https://docs.ntfy.sh/emojis/; none since the brand
+    # (docs/BRAND.md §8: ntfy prints them as emoji)
     tags: tuple[str, ...] = ()
+    # the notification's icon, a url the phone can reach
+    icon: str = ""
     # 1 (min) to 5 (max), 3 is the default
     priority: int = 3
     # buttons, (label, url), at most three
@@ -34,6 +37,8 @@ class Message:
             payload["tags"] = list(self.tags)
         if self.click:
             payload["click"] = self.click
+        if self.icon:
+            payload["icon"] = self.icon
         if self.links:
             payload["actions"] = [
                 {"action": "view", "label": label, "url": url, "clear": False}

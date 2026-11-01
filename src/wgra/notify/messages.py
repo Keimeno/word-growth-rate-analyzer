@@ -1,11 +1,12 @@
-"""What alerts, digests and weekly reports say, and where tapping them leads (Grafana)."""
+"""What alerts, digests and weekly reports say, and where tapping them leads: the web
+dashboard's term page (notify.links: web, the default), or Grafana's term explorer."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from wgra.notify.ntfy import Message
 
@@ -30,6 +31,8 @@ class TrendSummary:
     breadth: int = 0
     members: int = 0
     reference_days: int = 28
+    # word, phrase, or an intent's kind: the term page's url needs it
+    kind: str = "word"
 
 
 def explorer_url(grafana_url: str, term: str, scope: str, weeks: int | None = None) -> str:
@@ -53,13 +56,65 @@ def long_term_url(grafana_url: str, group: str) -> str:
     return f"{grafana_url}/d/{LONG_TERM_UID}?{urlencode({'var-group': group})}"
 
 
+@dataclass(frozen=True)
+class Links:
+    """Where tapping a notification leads. With a web url and `web` first, the dashboard's
+    pages (the term page for a term), with the matching Grafana dashboard as a second
+    button; otherwise Grafana's, as before. The icon comes from the dashboard either way."""
+
+    grafana_url: str
+    web_url: str = ""
+    web_first: bool = True
+
+    @classmethod
+    def of(cls, links: Links | str) -> Links:
+        return links if isinstance(links, Links) else cls(grafana_url=links)
+
+    @property
+    def web(self) -> bool:
+        return bool(self.web_url) and self.web_first
+
+    @property
+    def icon(self) -> str:
+        # docs/brand/notification-icon.png, served by the dashboard
+        return f"{self.web_url}/notification-icon.png" if self.web_url else ""
+
+    def term(self, term: str, scope: str, kind: str = "word", weeks: int | None = None) -> str:
+        if not self.web:
+            return explorer_url(self.grafana_url, term, scope, weeks)
+        query = {"scope": scope}
+        if weeks:
+            query["range"] = "90d" if weeks <= 13 else "26w" if weeks <= 26 else "52w"
+        path = f"/t/{quote(kind, safe='')}/{quote(term, safe='/')}"
+        return f"{self.web_url}{path}?{urlencode(query, quote_via=quote, safe='/')}"
+
+    def trending(self, scope: str, horizon: str = "24h") -> str:
+        if not self.web:
+            return trending_url(self.grafana_url, scope, horizon)
+        query = {"scope": scope} | ({"horizon": horizon} if horizon != "24h" else {})
+        return f"{self.web_url}/trending?{urlencode(query, quote_via=quote, safe='/')}"
+
+    def long_term(self, group: str) -> str:
+        if not self.web:
+            return long_term_url(self.grafana_url, group)
+        return f"{self.web_url}/long-term?{urlencode({'scope': group}, quote_via=quote)}"
+
+    def early_warning(self) -> str:
+        return f"{self.web_url}/spread" if self.web else early_warning_url(self.grafana_url)
+
+    def pro(self, label: str, url: str) -> tuple[tuple[str, str], ...]:
+        """The second button: Grafana, when the first link went to the dashboard."""
+        return ((label, url),) if self.web else ()
+
+
 def _times(trend: TrendSummary) -> str:
     if trend.is_new:
         return "new"
     return f"{trend.ratio:.0f}×" if trend.ratio >= 10 else f"{trend.ratio:.1f}×"
 
 
-def alert_message(trend: TrendSummary, grafana_url: str) -> Message:
+def alert_message(trend: TrendSummary, links: Links | str) -> Message:
+    links = Links.of(links)
     lines = []
     if trend.is_new:
         lines.append(
@@ -74,23 +129,25 @@ def alert_message(trend: TrendSummary, grafana_url: str) -> Message:
     if trend.breadth:
         lines.append(f"Trending in {trend.breadth} of the {trend.members} channels mentioning it.")
     lines.append(f"Score {trend.z:.1f}")
-    explorer = explorer_url(grafana_url, trend.term, trend.scope)
+    term = links.term(trend.term, trend.scope, trend.kind)
     return Message(
         title=f"{trend.term} · {trend.scope}",
         body="\n\n".join(lines),
-        click=explorer,
-        tags=("sparkles" if trend.is_new else "chart_with_upwards_trend",),
+        click=term,
+        icon=links.icon,
         priority=4,
         links=(
-            ("Explore", explorer),
-            ("Trending now", trending_url(grafana_url, trend.scope, trend.horizon)),
+            ("Open" if links.web else "Explore", term),
+            ("Trending now", links.trending(trend.scope, trend.horizon)),
+            *links.pro("Pro mode", explorer_url(links.grafana_url, trend.term, trend.scope)),
         ),
     )
 
 
 def digest_message(
-    group: str, day: date, trends: Sequence[TrendSummary], grafana_url: str
+    group: str, day: date, trends: Sequence[TrendSummary], links: Links | str
 ) -> Message:
+    links = Links.of(links)
     lines = []
     for number, trend in enumerate(trends, start=1):
         details = [_times(trend), f"{trend.mentions} mentions"]
@@ -98,23 +155,24 @@ def digest_message(
             details.append(trend.scope)
         if trend.breadth > 1:
             details.append(f"in {trend.breadth} channels")
-        url = explorer_url(grafana_url, trend.term, trend.scope)
+        url = links.term(trend.term, trend.scope, trend.kind)
         lines.append(f"{number}. [{trend.term}]({url}) · {' · '.join(details)}")
     return Message(
         title=f"Trending in {group}, {day:%a %d %b}",
         body="\n".join(lines),
-        click=trending_url(grafana_url, group),
-        tags=("bar_chart",),
+        click=links.trending(group),
+        icon=links.icon,
         priority=3,
     )
 
 
-def ping_message(grafana_url: str) -> Message:
+def ping_message(links: Links | str) -> Message:
+    links = Links.of(links)
     return Message(
         title="WGRA test notification",
         body="Notifications work. Alerts and daily digests will arrive here.",
-        click=f"{grafana_url}/d/{TRENDING_UID}",
-        tags=("white_check_mark",),
+        click=links.trending("reddit") if links.web else f"{links.grafana_url}/d/{TRENDING_UID}",
+        icon=links.icon,
     )
 
 
@@ -132,6 +190,7 @@ class LongTermSummary:
     # per 1,000 comments and posts, the trend line at the start and end of the window
     start_share: float
     end_share: float
+    kind: str = "word"
 
 
 REPORTED = ("emerging", "mainstreaming", "fading")
@@ -146,16 +205,17 @@ def per_month_text(growth: float) -> str:
 
 
 def weekly_report_message(
-    group: str, week: date, trends: Sequence[LongTermSummary], grafana_url: str
+    group: str, week: date, trends: Sequence[LongTermSummary], links: Links | str
 ) -> Message:
     """`week` is the Monday the analyzed weeks end before."""
+    links = Links.of(links)
     sections = []
     for category in REPORTED:
         lines = [f"**{category.capitalize()}**"]
         for number, trend in enumerate(
             (trend for trend in trends if trend.category == category), start=1
         ):
-            url = explorer_url(grafana_url, trend.term, trend.scope, trend.weeks)
+            url = links.term(trend.term, trend.scope, trend.kind, trend.weeks)
             details = [per_month_text(trend.growth), f"{trend.weeks} weeks"]
             if trend.scope != group:
                 details.append(trend.scope)
@@ -166,8 +226,8 @@ def weekly_report_message(
     return Message(
         title=f"Long-term trends in {group}, weeks to {last_day:%a %d %b}",
         body="\n\n".join(sections),
-        click=long_term_url(grafana_url, group),
-        tags=("chart_with_upwards_trend",),
+        click=links.long_term(group),
+        icon=links.icon,
         priority=3,
     )
 
@@ -193,6 +253,7 @@ class ForecastSummary:
     lag_median: float
     # how the follower reads, when not by its name: "reddit-wide (the r/all sample)"
     follower_label: str = ""
+    kind: str = "word"
 
 
 def early_warning_url(grafana_url: str) -> str:
@@ -203,7 +264,8 @@ def _duration(hours: float) -> str:
     return f"{hours / 24:.1f} days" if hours >= 36 else f"{hours:.0f} hours"
 
 
-def forecast_message(forecast: ForecastSummary, grafana_url: str) -> Message:
+def forecast_message(forecast: ForecastSummary, links: Links | str) -> Message:
+    links = Links.of(links)
     follower = forecast.follower_label or forecast.follower
     window = (forecast.due_by - forecast.leader_onset).total_seconds() / 3600
     lines = [
@@ -215,12 +277,16 @@ def forecast_message(forecast: ForecastSummary, grafana_url: str) -> Message:
         f"{forecast.probability_high:.0%}), against {forecast.base_rate:.0%} for any trending "
         f"term. Expected around {forecast.expected_at:%a %d %b %H:00} UTC.",
     ]
-    explorer = explorer_url(grafana_url, forecast.term, forecast.leader)
+    term = links.term(forecast.term, forecast.leader, forecast.kind)
     return Message(
         title=f"{forecast.term}: {forecast.leader} → {forecast.follower}?",
         body="\n\n".join(lines),
-        click=explorer,
-        tags=("crystal_ball",),
+        click=term,
+        icon=links.icon,
         priority=3,
-        links=(("Explore", explorer), ("Early warning", early_warning_url(grafana_url))),
+        links=(
+            ("Open" if links.web else "Explore", term),
+            ("Early warning", links.early_warning()),
+            *links.pro("Pro mode", explorer_url(links.grafana_url, forecast.term, forecast.leader)),
+        ),
     )
