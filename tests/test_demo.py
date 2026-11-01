@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from wgra.config import Env, load_config
+from undercurrent.config import Env, load_config
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "bench"))
 import demo

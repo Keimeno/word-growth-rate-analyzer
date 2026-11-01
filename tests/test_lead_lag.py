@@ -16,17 +16,17 @@ import pytest
 from helpers import make_config
 from lead_lag_history import END, GROUPS, LEAD, SAMPLE_LEAD, START, build, detect_daily
 
-from wgra.config import Env
-from wgra.detect.replay import replay, stored_steps
-from wgra.detect.run import Analyzer
-from wgra.detect.short_term import Detector
-from wgra.leadlag.edges import ALL, Edge, Network, learn_edges, load_edges
-from wgra.leadlag.evaluate import evaluate, report
-from wgra.leadlag.events import load_events
-from wgra.leadlag.forecasts import HIT, OFF, PENDING, load_forecasts, write_forecasts
-from wgra.leadlag.onsets import OnsetFinder
-from wgra.leadlag.run import LeadLag
-from wgra.notify.ntfy import Ntfy
+from undercurrent.config import Env
+from undercurrent.detect.replay import replay, stored_steps
+from undercurrent.detect.run import Analyzer
+from undercurrent.detect.short_term import Detector
+from undercurrent.leadlag.edges import ALL, Edge, Network, learn_edges, load_edges
+from undercurrent.leadlag.evaluate import evaluate, report
+from undercurrent.leadlag.events import load_events
+from undercurrent.leadlag.forecasts import HIT, OFF, PENDING, load_forecasts, write_forecasts
+from undercurrent.leadlag.onsets import OnsetFinder
+from undercurrent.leadlag.run import LeadLag
+from undercurrent.notify.ntfy import Ntfy
 
 # the reddit group adds nothing here and costs a third of the detector's time
 CONFIG = make_config(groups=GROUPS, detect={"exclude_scopes": ["reddit"]})
@@ -183,7 +183,7 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
         sent.append(json.loads(request.content))
         return httpx.Response(200, json={"id": "x"})
 
-    return Ntfy("http://ntfy", "wgra", transport=httpx.MockTransport(handle)), sent
+    return Ntfy("http://ntfy", "undercurrent", transport=httpx.MockTransport(handle)), sent
 
 
 def test_forecasts_in_the_live_loop(history_db):

@@ -104,7 +104,7 @@ Three sources, in order of cost (all of it within reddit's free API tier):
 1. **The watchlist's subreddits** (no new code). The vendors' own subreddits and the
    category subreddits are where "I'm leaving Notion" gets written. They join the tracked
    multireddits and count like every other subreddit.
-2. **Brand search** ([`sources/reddit/search.py`](../src/wgra/sources/reddit/search.py)). Every 15
+2. **Brand search** ([`sources/reddit/search.py`](../src/undercurrent/sources/reddit/search.py)). Every 15
    minutes per product, reddit search for new posts naming any of its names, anywhere
    (`"notion" OR "notion ai" OR "notion.so"`, newest first). Checked on 2026-10-31:
    * Search finds posts only. `type=comment` is ignored.
@@ -146,8 +146,9 @@ Measure with `bench/intent_precision.py`, with a new `--watchlist pkm` option th
 only intents about watched products. Hand-labeling is the only cost.
 
 As built (phase 2): the filter is `products_of` in
-[`radar/candidates.py`](../src/wgra/radar/candidates.py), which `wgra radar candidates`
-and `bench/intent_precision.py sample --watchlist` share. The fixes are in
+[`radar/candidates.py`](../src/undercurrent/radar/candidates.py), which
+`undercurrent radar candidates` and `bench/intent_precision.py sample --watchlist` share.
+The fixes are in
 [ARCHITECTURE.md §4.7](ARCHITECTURE.md#47-intents-why-people-mention-things): one word in
 front of a name can be trimmed, more can't; a name with lowercase words cut after it doesn't
 count when it's possessive, has a determiner or the pattern ends the entity ("Figma's
@@ -170,7 +171,8 @@ considering, debating, about to, should I), and one known side, like switches. "
 "would" and "could" stay hypothetical and count as nothing. Golden tests for each line of
 the table, positives and negatives, like the 118 that exist.
 
-As built (phase 2), in [`text/intents.py`](../src/wgra/text/intents.py), english only:
+As built (phase 2), in [`text/intents.py`](../src/undercurrent/text/intents.py), english
+only:
 
 * The considering verbs as planned, plus "planning to" or "on", with adverbs in between
   ("I'm seriously thinking of"), and with the "I" left out at the start of a sentence
@@ -238,7 +240,7 @@ is stored.
 
 ### 2.7 The weekly report
 
-`wgra radar report --watchlist pkm [--week 2026-W45]`, from `term_daily` and
+`undercurrent radar report --watchlist pkm [--week 2026-W45]`, from `term_daily` and
 `intent_items`, every watchlist's `report` day. Per product:
 
 1. **Flows:** switched to it and away from it, with the top destinations and origins,
@@ -267,8 +269,8 @@ library, `SMTP_URL` in `.env`), through your own mailbox.
   48 hours. Deploy lead–lag and intents (ARCHITECTURE.md §6, "Deploying it").
 * Done on 2026-10-31: the stack runs from the repository root on `develop`, migrations 004
   and 005 applied, on the laptop it was developed on. Still open: an always-on machine.
-* **Done when:** `wgra status` and the ingestion dashboard show 7 complete days, and
-  `wgra intents --scope r/all --days 1` counts intents.
+* **Done when:** `undercurrent status` and the ingestion dashboard show 7 complete days, and
+  `undercurrent intents --scope r/all --days 1` counts intents.
 
 ### Phase 1: watchlists and collection (built 2026-10-31, collecting)
 
@@ -281,11 +283,11 @@ Built:
 * Brand search as feeds of their own (`Feed.search`, fixed interval, budget taken off the
   tracked feeds), comment trees every 10 minutes, the `_search` scope (since the
   cross-platform phase 1 the channel `r/_search`,
-  [`sources/reddit/search.py`](../src/wgra/sources/reddit/search.py)). What reddit's search
-  returns is in §2.2.
-* `wgra radar candidates [--watchlist pkm] [--days 1]`
-  ([`radar/candidates.py`](../src/wgra/radar/candidates.py)): per product and where it
-  comes from, the comments and posts naming it (by its most named name) and those with an
+  [`sources/reddit/search.py`](../src/undercurrent/sources/reddit/search.py)). What reddit's
+  search returns is in §2.2.
+* `undercurrent radar candidates [--watchlist pkm] [--days 1]`
+  ([`radar/candidates.py`](../src/undercurrent/radar/candidates.py)): per product and where
+  it comes from, the comments and posts naming it (by its most named name) and those with an
   intent about it, per kind.
 * 26 tests: config, names, the search scope, titles that want a tree, the candidates, and
   against ClickHouse the due trees and the candidates query.
@@ -299,14 +301,15 @@ Built:
 
 * The watchlist filter: `products_of` counts an intent for a product when its entity is a
   watched alias, or for a switch or a switch considered either side is. Needs are never
-  about a product. `wgra radar candidates` shows switch, considering, alternative and
-  complaint per product.
+  about a product. `undercurrent radar candidates` shows switch, considering, alternative
+  and complaint per product.
 * The fixes of §2.3 in `text/intents.py` and `generic_en.txt` (the trimming bug, cuts that
   drop a part of the product, languages, countries and game characters), and advice ("you
   should switch from …") no longer counts as a switch.
 * The `considering` kind (§2.4), with its gates in `config.yaml` (3 mentions by 3 authors
-  short term, 2 a week long term, onsets at 3), `--kind considering` in `wgra intents`, a
-  stat and a "Rising: switches considered" table on the Intent radar dashboard.
+  short term, 2 a week long term, onsets at 3), `--kind considering` in
+  `undercurrent intents`, a stat and a "Rising: switches considered" table on the Intent
+  radar dashboard.
 * `bench/intent_precision.py sample --watchlist pkm`: only intents about the watchlist's
   products, with the products each is about. It sets the watched names like the ingester
   and refuses to write the sample inside the repository.
@@ -335,8 +338,8 @@ product would need 90% (§7).
 
 ### Phase 4: the report (about 3 days)
 
-* Migration 006 and `intent_items`, `wgra radar report`, quotes through `/api/info`, the
-  HTML file, ntfy, the Grafana dashboard, and the weekly schedule in the analyzer loop.
+* Migration 006 and `intent_items`, `undercurrent radar report`, quotes through `/api/info`,
+  the HTML file, ntfy, the Grafana dashboard, and the weekly schedule in the analyzer loop.
 * **Done when:** the report for a pilot week reads correctly end to end, and every number
   in it opens the threads behind it.
 

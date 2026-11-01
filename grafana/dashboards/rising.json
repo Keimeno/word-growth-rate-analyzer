@@ -1,9 +1,9 @@
 {
-  "uid": "wgra-rising",
+  "uid": "undercurrent-rising",
   "title": "Rising (preview)",
   "description": "A first, simple look at what's rising. The real trend scoring is in Trending now.",
   "tags": [
-    "wgra"
+    "undercurrent"
   ],
   "timezone": "browser",
   "schemaVersion": 41,

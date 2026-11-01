@@ -1,9 +1,9 @@
 {
-  "uid": "wgra-early-warning",
+  "uid": "undercurrent-early-warning",
   "title": "Early warning",
   "description": "Which channels pick up terms before others, and forecasts of which current bursts will reach other channels, groups or all of reddit (r/all). Learned from at least 4–6 weeks of history.",
   "tags": [
-    "wgra"
+    "undercurrent"
   ],
   "timezone": "browser",
   "schemaVersion": 41,
@@ -64,7 +64,7 @@
     {
       "type": "stat",
       "title": "Edges learned",
-      "description": "When wgra analyze last learned the edges. It does once a day, after lead_lag.run_at (01:00 UTC).",
+      "description": "When undercurrent analyze last learned the edges. It does once a day, after lead_lag.run_at (01:00 UTC).",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -238,7 +238,7 @@
     {
       "type": "stat",
       "title": "Forecasts that came true, 30 days",
-      "description": "Precision of the forecasts resolved in the last 30 days. `wgra replay --forecast` measures it on past data, with recall and calibration.",
+      "description": "Precision of the forecasts resolved in the last 30 days. `undercurrent replay --forecast` measures it on past data, with recall and calibration.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -609,7 +609,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    term,\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    probability AS chance,\n    concat(toString(round(100 * probability_low)), '–',\n           toString(round(100 * probability_high)), '%') AS interval,\n    base_rate,\n    expected_at,\n    due_by,\n    leader_onset,\n    created_at,\n    edge_events AS n,\n    round(lift, 1) AS lift,\n    alert,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(leader), '&from=now-7d&to=now') AS explore\nFROM forecasts FINAL\nWHERE outcome = 'pending'\nORDER BY probability DESC\nLIMIT 200",
+          "rawSql": "SELECT\n    term,\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    probability AS chance,\n    concat(toString(round(100 * probability_low)), '–',\n           toString(round(100 * probability_high)), '%') AS interval,\n    base_rate,\n    expected_at,\n    due_by,\n    leader_onset,\n    created_at,\n    edge_events AS n,\n    round(lift, 1) AS lift,\n    alert,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(leader), '&from=now-7d&to=now') AS explore\nFROM forecasts FINAL\nWHERE outcome = 'pending'\nORDER BY probability DESC\nLIMIT 200",
           "refId": "A"
         }
       ],
@@ -724,7 +724,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    created_at,\n    term,\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    probability AS chance,\n    outcome,\n    dateDiff('hour', created_at, follower_onset) AS warning,\n    dateDiff('hour', leader_onset, follower_onset) AS lag,\n    round(lag_median) AS expected_lag,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(follower), '&from=now-7d&to=now') AS explore\nFROM forecasts FINAL\nWHERE outcome IN ('hit', 'miss') AND created_at > now() - INTERVAL 30 DAY\nORDER BY created_at DESC\nLIMIT 500",
+          "rawSql": "SELECT\n    created_at,\n    term,\n    leader,\n    if(without_leader, concat(follower, ' (rest)'), follower) AS follower,\n    probability AS chance,\n    outcome,\n    dateDiff('hour', created_at, follower_onset) AS warning,\n    dateDiff('hour', leader_onset, follower_onset) AS lag,\n    round(lag_median) AS expected_lag,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(follower), '&from=now-7d&to=now') AS explore\nFROM forecasts FINAL\nWHERE outcome IN ('hit', 'miss') AND created_at > now() - INTERVAL 30 DAY\nORDER BY created_at DESC\nLIMIT 500",
           "refId": "A"
         }
       ],
@@ -926,7 +926,7 @@
     {
       "type": "table",
       "title": "Onsets vs Wikipedia (optional)",
-      "description": "With wikipedia.enabled: for events whose term names a Wikipedia article, did daily pageviews rise (3x their 28-day median, at least 100) after the term's first onset? `wgra wikipedia` prints a sign test.",
+      "description": "With wikipedia.enabled: for events whose term names a Wikipedia article, did daily pageviews rise (3x their 28-day median, at least 100) after the term's first onset? `undercurrent wikipedia` prints a sign test.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"

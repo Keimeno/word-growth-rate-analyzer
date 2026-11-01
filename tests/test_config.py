@@ -4,13 +4,13 @@ import pytest
 import yaml
 from helpers import make_config
 
-from wgra.config import (
+from undercurrent.config import (
     Channel,
     Env,
     load_config,
     parse_config,
 )
-from wgra.text.intents import INTENT_KINDS
+from undercurrent.text.intents import INTENT_KINDS
 
 
 def test_channel_ids_are_lowercase_and_deduplicated():
@@ -176,7 +176,7 @@ def test_empty_notification_settings_mean_the_defaults(monkeypatch):
     monkeypatch.setenv("GRAFANA_URL", "https://grafana.example/")
     env = Env.from_environ()
     assert env.ntfy_url == "http://localhost:3609"
-    assert env.ntfy_topic == "wgra"
+    assert env.ntfy_topic == "undercurrent"
     assert env.grafana_url == "https://grafana.example"
 
 

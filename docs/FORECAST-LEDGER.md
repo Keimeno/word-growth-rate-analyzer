@@ -29,21 +29,21 @@ the ledger runs privately first, already stamped, and goes public only past gate
 
 ## 1. Where things stand (checked 2026-11-01)
 
-* **Forecasts are built** (ARCHITECTURE.md §4.6, `src/wgra/leadlag/forecasts.py`). After
-  every analysis run, `decide` makes a forecast for each leader burst that a follower
+* **Forecasts are built** (ARCHITECTURE.md §4.6, `src/undercurrent/leadlag/forecasts.py`).
+  After every analysis run, `decide` makes a forecast for each leader burst that a follower
   hasn't picked up, with its probability at creation, its interval, the base rate, the
   expected time and the due time (7 days after the leader's onset). `resolve` marks it a
   hit or a miss later. The probability is never updated afterwards, so the record is what
   was said when it was said. Forecast alerts are off (`forecast.alert`).
 * **There are no edges and no forecasts.** The database was recreated on 2026-10-31 at 15:50
   UTC for cross-platform phase 1 (CROSS-PLATFORM.md §8.10), and history restarted then.
-  `wgra edges` says "no edges yet" and `wgra forecasts` has none. The first edges are
-  expected after 4–6 weeks (2026-11-28 to 2026-12-12). Replay numbers are worth reading
-  after 6 weeks.
+  `undercurrent edges` says "no edges yet" and `undercurrent forecasts` has none. The first
+  edges are expected after 4–6 weeks (2026-11-28 to 2026-12-12). Replay numbers are worth
+  reading after 6 weeks.
 * **The only measured record is synthetic.** On the benchmark history,
-  `wgra replay --forecast` gave a precision of 87% with daily steps. On the harder history
-  with planted followers it gave 43%, calibrated, with a median warning of 2.7 days. There
-  is no number from real data.
+  `undercurrent replay --forecast` gave a precision of 87% with daily steps. On the harder
+  history with planted followers it gave 43%, calibrated, with a median warning of 2.7 days.
+  There is no number from real data.
 * **Nothing proves when a forecast was made.** `forecasts` is a ReplacingMergeTree: rows
   are rewritten when they resolve, and could be deleted or backdated. That's fine for a
   dashboard and worthless as evidence.
@@ -148,9 +148,9 @@ Why not something simpler:
 
 Python: the OpenTimestamps client (`opentimestamps-client`, and the library under it) for
 the proof format, with the calendars reached over httpx. Full verification needs a Bitcoin
-node, which the stack doesn't run. So `wgra ledger verify` follows each proof to its block
-and takes the block's header from a public block explorer's API, and the page sends readers
-to opentimestamps.org (§2.6). Phase 1 checks the current versions and the explorer.
+node, which the stack doesn't run. So `undercurrent ledger verify` follows each proof to its
+block and takes the block's header from a public block explorer's API, and the page sends
+readers to opentimestamps.org (§2.6). Phase 1 checks the current versions and the explorer.
 
 ### 2.4 Resolution, revisions and gaps
 
@@ -183,8 +183,8 @@ hits too.
 
 Terms come from Reddit. Now and then one is a slur, or the name of a private person in a
 news story. That shouldn't be published as a live prediction. A word list,
-`ledger.withhold` (`src/wgra/ledger/withhold_en.txt`, one term a line, like the intent
-lists), decides automatically. For a matching term,
+`ledger.withhold` (`src/undercurrent/ledger/withhold_en.txt`, one term a line, like the
+intent lists), decides automatically. For a matching term,
 the call line carries `sha256(salt + term)` instead of the term, with a random 16-byte salt
 kept in `ledger_secrets`. The `reveal` line at resolution publishes both, so anyone can
 check that the withheld call said what it now says. A withheld call counts in the record
@@ -193,15 +193,15 @@ like any other. The page shows "withheld until it resolves" and the number of th
 The list starts as a slur list. A word list can't recognise people's names, so gate 3
 reads a week of private calls by hand before anything is public, and adds what it finds.
 
-**Redaction**, for what the list missed: `wgra ledger redact <seq>` publishes that line's
-hash in place of the line, in the page and in the downloadable ledger. The chain still
-verifies, because the next line only needs the hash. The call still counts, and the page
-lists every redaction with its line number, so it can't hide a miss either.
+**Redaction**, for what the list missed: `undercurrent ledger redact <seq>` publishes that
+line's hash in place of the line, in the page and in the downloadable ledger. The chain
+still verifies, because the next line only needs the hash. The call still counts, and the
+page lists every redaction with its line number, so it can't hide a miss either.
 
 ### 2.6 The page
 
-`wgra ledger site --out <dir>` builds a static site from the ledger, with no server and no
-JavaScript beyond small scripts, in the brand of [BRAND.md](BRAND.md):
+`undercurrent ledger site --out <dir>` builds a static site from the ledger, with no server
+and no JavaScript beyond small scripts, in the brand of [BRAND.md](BRAND.md):
 
 * **Record.** Calls, hits, misses, pending, void, withheld. Calibration per probability
   band with Wilson intervals and the base rate beside it. Brier score against forecasting
@@ -266,7 +266,7 @@ ledger:
   # a call is void when a feed of its follower had no successful poll for this long
   # inside its window
   void_gap_hours: 6
-  withhold: withhold_en.txt  # in src/wgra/ledger/
+  withhold: withhold_en.txt  # in src/undercurrent/ledger/
   stamp: true                # OpenTimestamps after every run that appended lines
   calendars:
     - https://a.pool.opentimestamps.org
@@ -290,8 +290,9 @@ Changing `min_probability`, `void_gap_hours` or the posting rule writes a `rules
 
 * An always-on machine for the stack (CHURN-RADAR.md phase 0). On the laptop, voids would
   make the record unreadable.
-* The first edges (2026-11-28 to 2026-12-12), and `wgra replay --forecast --events stored`
-  over the real history, read as in ARCHITECTURE.md §4.6.
+* The first edges (2026-11-28 to 2026-12-12), and
+  `undercurrent replay --forecast --events stored` over the real history, read as in
+  ARCHITECTURE.md §4.6.
 * **Done when:** there are edges, and the replay's precision and calibration are known,
   good or bad.
 
@@ -299,13 +300,14 @@ Changing `min_probability`, `void_gap_hours` or the posting rule writes a `rules
 
 * Migration: `ledger`, `ledger_stamps`, `ledger_secrets`. `ledger:` in `config.yaml` with
   validation. The withhold list.
-* `src/wgra/ledger/`: the call selection (§2.1, sharing `first_per_follower`), the line
-  format and the chain, appending in `run_forecasts`, revisions at event closing (in the
-  daily lead–lag run), voids from `polls`, the daily `edges` line, OpenTimestamps
+* `src/undercurrent/ledger/`: the call selection (§2.1, sharing `first_per_follower`), the
+  line format and the chain, appending in `run_forecasts`, revisions at event closing (in
+  the daily lead–lag run), voids from `polls`, the daily `edges` line, OpenTimestamps
   stamping and the hourly upgrade.
-* CLI: `wgra ledger show [--pending]`, `wgra ledger verify` (recomputes the chain, checks
-  every proof, prints the first line that doesn't match), `wgra ledger record` (the
-  numbers of §2.6), `wgra ledger export --out`, `wgra ledger redact <seq>`.
+* CLI: `undercurrent ledger show [--pending]`, `undercurrent ledger verify` (recomputes the
+  chain, checks every proof, prints the first line that doesn't match),
+  `undercurrent ledger record` (the numbers of §2.6), `undercurrent ledger export --out`,
+  `undercurrent ledger redact <seq>`.
 * Tests: the selection against `evaluate`'s on the same forecasts, the chain (a changed,
   removed or reordered line fails `verify`, a redacted one doesn't), canonical JSON (the
   same object gives the same bytes), revisions, voids, withhold and reveal, one writer,
@@ -313,12 +315,13 @@ Changing `min_probability`, `void_gap_hours` or the posting rule writes a `rules
   synthetic history: the ledger's calls and outcomes equal `evaluate`'s for the same steps.
 * Then it runs privately, stamped from the first line. Its proofs stay valid when it's
   published later, so the record that goes public is already weeks old and checkable.
-* **Done when:** `wgra ledger verify` passes on two weeks of live ledger, and the record
-  agrees with `wgra forecasts --days 14`.
+* **Done when:** `undercurrent ledger verify` passes on two weeks of live ledger, and the
+  record agrees with `undercurrent forecasts --days 14`.
 
 ### Phase 2: the page (about 2 days)
 
-* `wgra ledger site`, its pages (§2.6), the brand's tokens, light and dark, a phone width.
+* `undercurrent ledger site`, its pages (§2.6), the brand's tokens, light and dark, a phone
+  width.
 * Deploy after appending (`site.deploy`), on Cloudflare or GitHub Pages, not public until
   gates 1–3 pass: an unlisted address, or Cloudflare Access in front.
 * **Done when:** someone who has never seen the project checks a call from the page alone

@@ -1,4 +1,4 @@
-# WGRA v2: Architecture and Plan
+# Undercurrent: Architecture and Plan
 
 Status: phases 1, 2 and 4, the lead-lag early warning and intents built, collecting history · October 2026
 
@@ -8,9 +8,11 @@ The comparisons with v1 below explain why.
 
 ## 1. What the system is for
 
-WGRA answers one question: **which words and phrases are gaining or losing
-share of the conversation in a given community, relative to their own normal
-level?** It answers it on two horizons:
+Undercurrent looks for early signals in online conversation: what's rising, where it
+starts and where it spreads next (§4.6), and why people switch products (§4.7). At its
+core is one question: **which words and phrases are gaining or losing share of the
+conversation in a given community, relative to their own normal level?** It answers it on
+two horizons:
 
 | Horizon | Question | Example | Delivery |
 | --- | --- | --- | --- |
@@ -82,13 +84,13 @@ Everything in the solid boxes is free, open source software (see §3.6).
 ### 3.1 `ingest`
 
 Since the cross-platform phase 1 (docs/CROSS-PLATFORM.md §8), collection is split into
-sources and a shared pipeline. A source (`src/wgra/sources/`, one per platform) owns its
-schedule, request budget and restart state, turns what its platform returns into `Item`s
+sources and a shared pipeline. A source (`src/undercurrent/sources/`, one per platform) owns
+its schedule, request budget and restart state, turns what its platform returns into `Item`s
 (id, platform, channel, doc_type, author, created_at, text, url, lang, and `skip`: why the
 pipeline should drop it) and hands them with its poll rows to the `Sink`. The sink
 (`ingest/run.py`, `ingest/pipeline.py`, `ingest/writer.py`) is the same for every source:
 the copypasta filter, terms, intents, the author hash (taken over `platform:author`, so a
-name on two platforms is two people) and buffered writes. `wgra ingest` runs every
+name on two platforms is two people) and buffered writes. `undercurrent ingest` runs every
 enabled platform, `--source` one of them. Reddit is the only source so far, in
 `sources/reddit/` (`RedditSource`); what follows describes it.
 
@@ -159,7 +161,7 @@ enabled platform, `--source` one of them. Reddit is the only source so far, in
 ### 3.2 ClickHouse
 
 The schema as built is in
-[`src/wgra/migrations/001_init.sql`](../src/wgra/migrations/001_init.sql).
+[`src/undercurrent/migrations/001_init.sql`](../src/undercurrent/migrations/001_init.sql).
 
 | Table | Engine | Key | Retention | Purpose |
 | --- | --- | --- | --- | --- |
@@ -206,7 +208,7 @@ If `term_daily` grows faster than wanted, the lever is a TTL that, after
 
 ### 3.3 `analyze`
 
-The same Python package as `ingest`, with a separate entrypoint (`wgra analyze`)
+The same Python package as `ingest`, with a separate entrypoint (`undercurrent analyze`)
 and a plain loop that runs on the clock (:00, :15, :30, :45):
 
 * every 15 min: short-term burst scoring for all scopes → `trends` → alerts, and
@@ -254,8 +256,8 @@ The everyday view, on port 3610, planned and recorded as built in
 [WEB-DASHBOARD.md](WEB-DASHBOARD.md); its look is [BRAND.md](BRAND.md). One container
 serves both halves:
 
-* **The API**, Python in `src/wgra/web/`: FastAPI under `/api/v1/`, a Pydantic model per
-  response, the SQL in `queries/`. Every query runs as of a time (`as_of`, time travel),
+* **The API**, Python in `src/undercurrent/web/`: FastAPI under `/api/v1/`, a Pydantic model
+  per response, the SQL in `queries/`. Every query runs as of a time (`as_of`, time travel),
   says what's missing as null, carries its endpoint as `log_comment`, and waits its turn
   below the web user's cap. The explainer recomputes a trend's score with
   `detect/scoring.py`, co-occurring terms go through the ingester's term extraction, so
@@ -264,7 +266,7 @@ serves both halves:
   Tailwind, charts through a kit on Apache ECharts. Its types are generated from the
   API's OpenAPI schema; CI fails when they drift. Built into static files by Vite and
   served by the API with the CSP of §5.4 of the plan.
-* **ClickHouse enforces the limits:** the dashboard connects as `wgra_web`
+* **ClickHouse enforces the limits:** the dashboard connects as `undercurrent_web`
   (`clickhouse/users.d/web.xml`), which can read and insert into its pins and saved views
   only, with a profile of 2 threads, 1 GB, 30 s and a low priority, so it can't starve
   the analyzer. Migration 005 adds `term_catalog` (the search, kept by two refreshable
@@ -355,7 +357,7 @@ Compare a **window** `W` (last 24h, plus a fast 6h variant) with a
 Colaresi & Quinn, *Fightin' Words*, 2008). It's the standard approach for
 "which words are over-represented in corpus A vs B", and it holds up for rare
 and brand-new terms. As built
-([`src/wgra/detect/scoring.py`](../src/wgra/detect/scoring.py)):
+([`src/undercurrent/detect/scoring.py`](../src/undercurrent/detect/scoring.py)):
 
 ```
 π_w   = share of r/all sample comments mentioning w, last 90 days
@@ -420,10 +422,11 @@ Three changes came out of testing it:
 
 ### 4.3 Long term: sustained trends
 
-As built ([`src/wgra/detect/long_term.py`](../src/wgra/detect/long_term.py)
+As built ([`src/undercurrent/detect/long_term.py`](../src/undercurrent/detect/long_term.py)
 for the queries and the run,
-[`trend_stats.py`](../src/wgra/detect/trend_stats.py) for the statistics), once
-a day after 00:30 UTC in `wgra analyze`, or with `wgra long-term --once [--as-of DATE]`:
+[`trend_stats.py`](../src/undercurrent/detect/trend_stats.py) for the statistics), once
+a day after 00:30 UTC in `undercurrent analyze`, or with
+`undercurrent long-term --once [--as-of DATE]`:
 
 * **Weekly shares.** ISO weeks, Monday to Sunday UTC. The current, partial week is
   left out, so the results change on Mondays and the other daily runs of a week
@@ -478,7 +481,7 @@ a day after 00:30 UTC in `wgra analyze`, or with `wgra long-term --once [--as-of
   Stored: at most 25 per scope, window and category, the fastest growing or
   fading first (one-offs by their change).
 * **Storage: a table of its own**, `long_term_trends`
-  ([`003_long_term_trends.sql`](../src/wgra/migrations/003_long_term_trends.sql)),
+  ([`003_long_term_trends.sql`](../src/undercurrent/migrations/003_long_term_trends.sql)),
   not more horizons in `trends`. The rows share no statistics with burst rows
   (growth, q, spike share and a weekly series instead of z, ratio, prior and
   breadth). They're kept forever instead of 90 days: at most 13,500 rows a week, and
@@ -536,8 +539,8 @@ languages:
   community what it is, which is useful for picking topic keywords and for
   explaining what a group cares about.
 * **Finding subs for a topic:** start from a hand-picked list. As built,
-  `wgra suggest-subreddits` lists untracked subreddits that mention the terms rising now
-  early or far more than their size explains, from the r/all sample's raw items (§4.6).
+  `undercurrent suggest-subreddits` lists untracked subreddits that mention the terms rising
+  now early or far more than their size explains, from the r/all sample's raw items (§4.6).
 
 ### 4.5 Explaining trends with an LLM (optional)
 
@@ -565,11 +568,11 @@ explanation goes into the alert and the dashboard.
 
 ### 4.6 Lead-lag early warning
 
-As built ([`src/wgra/leadlag/`](../src/wgra/leadlag/)), in `wgra analyze`: the
-edges once a day after 01:00 UTC (`lead_lag.run_at`), forecasts after every 15-minute
-run. The question: which subreddits pick up terms before other scopes, and so which of
-today's bursts will reach other subreddits, groups or reddit as a whole? Detection says
-what is rising; this says where it goes next.
+As built ([`src/undercurrent/leadlag/`](../src/undercurrent/leadlag/)), in
+`undercurrent analyze`: the edges once a day after 01:00 UTC (`lead_lag.run_at`), forecasts
+after every 15-minute run. The question: which subreddits pick up terms before other scopes,
+and so which of today's bursts will reach other subreddits, groups or reddit as a whole?
+Detection says what is rising; this says where it goes next.
 
 **Events.** A term trending in any scope with `z ≥ 5` (`event_min_z`, not subsumed)
 starts an event. Its trends within the event's span belong to it, a trend after the span
@@ -671,7 +674,7 @@ Three choices behind these definitions:
   random subreddit's 2 hits of 11 against a base rate of 0.45 are nowhere near an edge.
 * The association test is anti-conservative when events differ in size, because a
   leader's onset makes a big event more likely. The direction test and the lead-share
-  gate carry the weight, and `wgra replay --forecast` is the arbiter.
+  gate carry the weight, and `undercurrent replay --forecast` is the arbiter.
 
 **No lookahead.** An onset only uses the hours up to its own. Edges learned as of time T
 only count:
@@ -718,7 +721,7 @@ take a forecast at 0.6 or more on an edge with at least 10 events, one per term 
 likely follower). They count against `notify.max_alerts_per_day` together with trend
 alerts, each counting the other's, at most 2 a day.
 
-**Evaluation** (`wgra replay --forecast`). The replay's detector runs (or with
+**Evaluation** (`undercurrent replay --forecast`). The replay's detector runs (or with
 `--events stored`, the stored trends, much faster but with the live settings) give the
 sightings of every step. Events come from them, onsets are computed once, edges are
 learned once a day as of the first step after `run_at`, and forecasts are made by the same
@@ -732,9 +735,9 @@ learned once a day as of the first step after `run_at`, and forecasts are made b
 * calibration: per probability bin, the share that came true, and the Brier score
   against always forecasting the base rate
 
-**Community suggestions** (`wgra suggest-subreddits`). The sample pools every untracked
-subreddit in `r/all`, but the raw items (48 hours) still name the real subreddit in their
-url.
+**Community suggestions** (`undercurrent suggest-subreddits`). The sample pools every
+untracked subreddit in `r/all`, but the raw items (48 hours) still name the real subreddit
+in their url.
 For the terms trending now, words and phrases past the detector's warmup, ClickHouse
 finds the sampled items mentioning them (words of the text and of the term matched like
 the term explorer's examples, one pass with `multiSearchAllPositionsUTF8`).
@@ -746,8 +749,8 @@ how many they mentioned first, then how many in all. The command prints lines to
 into a group, and never changes the config. On the live data of the first day it takes
 0.4 s over 136k sampled items.
 
-**External validation** (optional, `wikipedia.enabled` or `wgra wikipedia`). This checks
-whether Reddit onsets lead Wikipedia interest. For closed events whose term names an
+**External validation** (optional, `wikipedia.enabled` or `undercurrent wikipedia`). This
+checks whether Reddit onsets lead Wikipedia interest. For closed events whose term names an
 article:
 
 * The action API resolves the term, as written and in title case, through redirects.
@@ -760,16 +763,16 @@ article:
   of the 28 days before.
 * The lead is that day minus the day of the event's first Reddit onset.
 
-`wgra wikipedia` prints how often Reddit was first, the median lead, and a two-sided sign
-test.
+`undercurrent wikipedia` prints how often Reddit was first, the median lead, and a two-sided
+sign test.
 
 ### 4.7 Intents: why people mention things
 
 Counting that a product is mentioned more says little about what's happening to it.
 Counting why does: people leaving it, people looking for something else, people complaining,
 and what people wish existed. As built
-([`src/wgra/text/intents.py`](../src/wgra/text/intents.py)), the ingester extracts five
-more kinds of terms from every comment and post, next to words and phrases:
+([`src/undercurrent/text/intents.py`](../src/undercurrent/text/intents.py)), the ingester
+extracts five more kinds of terms from every comment and post, next to words and phrases:
 
 | Kind | Term | Extracted from (examples) |
 | --- | --- | --- |
@@ -781,8 +784,8 @@ more kinds of terms from every comment and post, next to words and phrases:
 
 **Only at ingest.** Raw text is deleted after 48 hours (§7), so an intent that isn't
 extracted when the item arrives is lost. There is no history from before the ingester
-extracts them, apart from the 48 hours `wgra backfill-intents` can still read once, right
-after the upgrade.
+extracts them, apart from the 48 hours `undercurrent backfill-intents` can still read once,
+right after the upgrade.
 
 **Matching.** Per sentence (split at `. ! ? ; :` and line breaks), on the same cleaned text
 as words (quotes, code, urls and user mentions removed) and the same tokens (lowercase,
@@ -855,13 +858,13 @@ removed a class of errors that made up most of a kind's mistakes:
 
 **Storage.** Intents go through `term_events` into `term_hourly` and `term_daily` like words,
 under their kind. No new tables: migration 005 only adds `items.intents`, the intent terms of
-each raw item (gone with the text after 48 hours), so dashboards and `wgra intents --examples`
+each raw item (gone with the text after 48 hours), so dashboards and `undercurrent intents --examples`
 show the comments behind an intent exactly instead of guessing them from the words.
 
 The kind is part of the term ("complaint: reddit", not "reddit"): `trends` and
 `long_term_trends` are keyed by term, not kind, so a complaint "reddit" trending in the same
 run as the word "reddit" would replace it. No word or phrase contains a colon or an arrow, so
-every query that looks up a term (the explorer, `wgra term`, alerts, the digest, the cooldown)
+every query that looks up a term (the explorer, `undercurrent term`, alerts, the digest, the cooldown)
 stays correct, and an intent can be typed into the explorer as it is.
 
 **Detection.** The detectors treat intents like any term, with gates of their own (§4.2–4.6
@@ -991,11 +994,11 @@ v2 lived in `v2/` next to v1 until the cutover, and is now the repository root.
   config.yaml               # platforms, groups of channels, languages, budget
   docker-compose.yml        # clickhouse, grafana, ingest (+ ntfy in phase 2)
   Dockerfile
-  clickhouse/wgra.xml       # settings for a small server
+  clickhouse/undercurrent.xml  # settings for a small server
   grafana/
     build_dashboards.py     # generates dashboards/*.json
     provisioning/           # datasource, dashboard provider
-  src/wgra/
+  src/undercurrent/
     sources/                # base.py: Item, Sink, Source
       reddit/               # channels.py (r/x, r/all, r/_search), client.py (auth, pacing
                             # by rate limit headers), models.py (listing parsing),
@@ -1008,8 +1011,9 @@ v2 lived in `v2/` next to v1 until the cutover, and is now the repository root.
     store/                  # clickhouse client, migrations runner
     migrations/*.sql
     query.py                # read-only queries for the CLI
-    cli.py                  # wgra ingest | analyze | replay | trends | intents | notify-test |
-                            # migrate | status | term | backfill-intents | …
+    cli.py                  # undercurrent (or uc) ingest | analyze | replay | trends |
+                            # intents | notify-test | migrate | status | term |
+                            # backfill-intents | …
     detect/                 # scoring.py, short_term.py, alerts.py, run.py, replay.py,
                             # long_term.py, trend_stats.py
     notify/                 # ntfy.py, messages.py
@@ -1074,7 +1078,7 @@ Built:
     term's own last 7 days with its share in the r/all sample. On day one it
     shows what's distinctive for a group (for tech: claude, gpu, ddr4, ryzen,
     prompt, tokens) and it becomes "what's rising" as history accumulates.
-* CLI: `wgra status`, `wgra term "<term>" --scope <group|subreddit>`.
+* CLI: `undercurrent status`, `undercurrent term "<term>" --scope <group|subreddit>`.
 
 Measured in the first hour (Saturday evening, European time):
 
@@ -1101,7 +1105,7 @@ Still open:
 Built (see §4.2 for the scoring as built):
 
 * `trends` and `notifications` tables
-  ([`002_trends.sql`](../src/wgra/migrations/002_trends.sql)). Every run
+  ([`002_trends.sql`](../src/undercurrent/migrations/002_trends.sql)). Every run
   stores the top 50 trends per scope and horizon, with the counts behind the
   score, breadth, subsumption and what happened with the alert. Re-running the
   same time replaces rows. Non-alert rows expire after 90 days.
@@ -1115,16 +1119,16 @@ Built (see §4.2 for the scoring as built):
 * Alerts: at most 5 a day, only for `z ≥ 10` with 20 authors, or broad group
   trends; a 72h cooldown across scopes unless the score doubles; one alert per
   term and run; no alerts before 3 days of history ("warmup").
-* `wgra analyze` (every 15 minutes, or `--once`, `--no-notify`), an `analyze`
+* `undercurrent analyze` (every 15 minutes, or `--once`, `--no-notify`), an `analyze`
   service and ntfy v2.28.0 in the compose file. A daily digest per group at
   08:00 Europe/Berlin (configurable) with the 10 strongest trends of the last
   24 hours in the group and its subreddits.
-* `wgra replay --from … --to … [--min-z …]`: runs the detector as of past
+* `undercurrent replay --from … --to … [--min-z …]`: runs the detector as of past
   hours over stored data, simulates warmup, cooldown and the cap in memory, and
   reports alerts per day and group. Nothing is written or sent, so it can run
   next to the live loop with any settings. `--csv` dumps every trend of every
   step.
-* `wgra trends`, `wgra notify-test`.
+* `undercurrent trends`, `undercurrent notify-test`.
 * Grafana **Trending now**: last run, days of history, the latest trends per
   group and its subreddits with score, times usual, mentions, authors,
   breadth and a 7-day sparkline, linking to the term explorer; the top trends
@@ -1139,7 +1143,7 @@ Built (see §4.2 for the scoring as built):
 
 Measured on 2026-10-10:
 
-* **Live, first hour of data:** `wgra analyze --once` took 2.6s and wrote 433
+* **Live, first hour of data:** `undercurrent analyze --once` took 2.6s and wrote 433
   trends in 23 scopes. Without history these are "distinctive vs reddit"
   (tech: ai, code, claude; news: trump; gaming: game), all in warmup, no
   alerts. A test notification arrived through the local ntfy; alert and digest
@@ -1154,14 +1158,14 @@ Measured on 2026-10-10:
 * **Noise floor:** on that synthetic data, which has no trends, Poisson noise
   alone reached z ≈ 6 for mid-frequency terms, never the alert threshold of 10.
   Those noise trends rank low on the dashboard; real data is burstier, so
-  check the floor again with `wgra replay` once there's history.
+  check the floor again with `undercurrent replay` once there's history.
 
 Still open:
 
 * **Done when:** about 10 or fewer alerts per day per group at default
   settings, and in a one-week manual review you judge at least 70% of them
   "real". Needs about 4 weeks of data for the full reference period;
-  `wgra replay` over the first 1–2 weeks gives the first numbers.
+  `undercurrent replay` over the first 1–2 weeks gives the first numbers.
 * Tuning `prior_weight`, `alert_min_z` and the gates on real data.
 * If runs get slow as `term_hourly` grows: read full days of the reference
   period from `term_daily` (only the 6h horizon needs hours).
@@ -1178,14 +1182,14 @@ Still open:
 Built (see §4.3 and §4.4 for the method as built):
 
 * `long_term_trends`
-  ([`003_long_term_trends.sql`](../src/wgra/migrations/003_long_term_trends.sql)),
+  ([`003_long_term_trends.sql`](../src/undercurrent/migrations/003_long_term_trends.sql)),
   the detector and its statistics, the `long_term:` section of `config.yaml`.
-* Daily run in `wgra analyze` after 00:30 UTC (`--no-long-term` turns it off). After
+* Daily run in `undercurrent analyze` after 00:30 UTC (`--no-long-term` turns it off). After
   a restart it runs again at the next tick, so the Monday report never has stale
-  results. `wgra long-term --once [--as-of DATE] [--dry-run]` runs it on demand, as
+  results. `undercurrent long-term --once [--as-of DATE] [--dry-run]` runs it on demand, as
   of a past date for replays; without `--once` it's a daily loop of its own.
-  `wgra trends --horizon 13w|26w|52w` shows the stored results, `wgra term --bucket
-  week` weekly counts.
+  `undercurrent trends --horizon 13w|26w|52w` shows the stored results,
+  `undercurrent term --bucket week` weekly counts.
 * Weekly report per group on Mondays at 08:00 (`notify.report_day`, `report_time`,
   `report_size`) through ntfy.
 * Grafana: the Long-term trends dashboard; the term explorer got the weekly bucket
@@ -1202,7 +1206,7 @@ Built (see §4.3 and §4.4 for the method as built):
 
 Measured on 2026-10-11:
 
-* **Live:** `wgra long-term --once` applied migration 003 and reported
+* **Live:** `undercurrent long-term --once` applied migration 003 and reported
   insufficient history for all 45 scopes and windows (the first complete week of
   data starts Monday 2026-10-12, so 13-week results from Monday 2027-01-11). Nothing
   stored.
@@ -1248,16 +1252,17 @@ Still open:
 Built (see §4.6 for the method as built):
 
 * `lead_lag_events`, `propagation_edges`, `forecasts`, and the optional Wikipedia cache
-  ([`004_lead_lag.sql`](../src/wgra/migrations/004_lead_lag.sql)). The `lead_lag:`,
+  ([`004_lead_lag.sql`](../src/undercurrent/migrations/004_lead_lag.sql)). The `lead_lag:`,
   `forecast:` and `wikipedia:` sections of `config.yaml`.
-* In `wgra analyze`: daily events, onsets and edges after 01:00 UTC (`--no-lead-lag` turns
-  it off), and forecasts after every run. Forecast alerts through ntfy are optional and
-  off, and inside the daily alert cap.
+* In `undercurrent analyze`: daily events, onsets and edges after 01:00 UTC (`--no-lead-lag`
+  turns it off), and forecasts after every run. Forecast alerts through ntfy are optional
+  and off, and inside the daily alert cap.
 * CLI:
-  * `wgra lead-lag --once [--as-of] [--dry-run]`, `wgra edges`, `wgra forecasts`
-  * `wgra replay --forecast [--events stored]` with overrides for the gates
-  * `wgra suggest-subreddits`
-  * `wgra wikipedia`
+  * `undercurrent lead-lag --once [--as-of] [--dry-run]`, `undercurrent edges`,
+    `undercurrent forecasts`
+  * `undercurrent replay --forecast [--events stored]` with overrides for the gates
+  * `undercurrent suggest-subreddits`
+  * `undercurrent wikipedia`
 * Grafana: the Early warning dashboard, checked in a throwaway Grafana on demo data (the
   synthetic history run through the live loop day by day).
 * 208 tests (from 153). They cover:
@@ -1304,7 +1309,7 @@ Measured on 2026-10-11:
   | daily run (onsets of the 6,423 open events, edges) | 43 s | 945 MiB | 117 queries, 26 s in all, slowest 1.5 s, at most 558 MiB |
   | forecast step of one analyze run (30 leading terms, 300 pending) | 2.4 s | 214 MiB | 21 queries, 1.6 s, at most 113 MiB |
   | learning the edges from 180 days of events (53,538 events, 1.2M onsets) | 3.1 s | 351 MiB | — |
-  | `wgra replay --forecast --events stored`, 30 days of hourly steps | 71 s | 782 MiB | 35 s in all, at most 221 MiB |
+  | `undercurrent replay --forecast --events stored`, 30 days of hourly steps | 71 s | 782 MiB | 35 s in all, at most 221 MiB |
 
   * The first live run reads up to 90 days of trends, about 3 minutes at this rate.
   * Most rows read are whole granules of common words, which are in every subreddit every
@@ -1327,8 +1332,8 @@ before they mean anything.**
   after correcting over thousands of pairs, and the leader first in at least 70% of
   shared events. Topic edges need even more.
 * At live rates, the first edges should show up after 3–4 weeks for the most active
-  pairs. Precision and calibration numbers from `wgra replay --forecast --events stored`
-  start to be worth reading after 6 weeks.
+  pairs. Precision and calibration numbers from
+  `undercurrent replay --forecast --events stored` start to be worth reading after 6 weeks.
 * Until then the dashboard shows few or no edges, and that's the honest answer.
 
 Next:
@@ -1352,10 +1357,11 @@ Built (see §4.7 for the method as built):
 * Per-kind gates and rankings in short-term, long-term and lead-lag detection:
   `detect.kind_thresholds`, `detect.max_per_intent`, `long_term.kind_min_mentions_per_week`,
   `lead_lag.kind_onset_min_mentions`.
-* `wgra intents --scope <group|subreddit> --kind <kind> --days N [--examples N]`: the most
-  mentioned intents of a kind against as many days before, per 10,000 comments and posts,
-  whether they trend, and the sentences they came from. `wgra backfill-intents --before …`:
-  the intents of the items stored before the upgrade, once.
+* `undercurrent intents --scope <group|subreddit> --kind <kind> --days N [--examples N]`:
+  the most mentioned intents of a kind against as many days before, per 10,000 comments and
+  posts, whether they trend, and the sentences they came from.
+  `undercurrent backfill-intents --before …`: the intents of the items stored before the
+  upgrade, once.
 * Grafana: the Intent radar dashboard; intents as options of Kind on Trending now and
   Long-term trends; the term explorer shows the comments behind an intent term. Checked in
   a throwaway Grafana on a copy of the live items with synthetic intent history added.
@@ -1379,11 +1385,11 @@ Measured on 2026-10-11:
   subreddits, and a switch flow every few days there.
 * **Cost:** 30 → 77 µs per item in the ingester, about 2 CPU minutes a day.
 * **Detection:** on the copy of the live items plus 35 days of synthetic intent history,
-  `wgra analyze --once` found a complaint spike (z 8.7, 19× its usual share) and a rising
-  switch flow (z 8.3) with the intent gates; at the words' gates neither would pass.
+  `undercurrent analyze --once` found a complaint spike (z 8.7, 19× its usual share) and a
+  rising switch flow (z 8.3) with the intent gates; at the words' gates neither would pass.
 
 Deploying it (to a stack that runs phase 4 from a checkout of this repository,
-compose project `wgra`). The version to deploy also brings the lead-lag early
+compose project `undercurrent`). The version to deploy also brings the lead-lag early
 warning (§4.6) on top of phase 4: the analyzer applies migration 004 and starts its daily
 lead-lag run.
 
@@ -1397,8 +1403,8 @@ lead-lag run.
    ```
 
 2. Rebuild and restart everything from the repository root. A stack started from `v2/`
-   before the move is the same compose project (`wgra`) with the same volumes, so this
-   replaces its containers and keeps the data. Its `.env` moves to the root, replacing
+   before the move is the same compose project (`undercurrent`) with the same volumes, so
+   this replaces its containers and keeps the data. Its `.env` moves to the root, replacing
    v1's, which nothing reads any more. Compose stops the old ingester (it flushes what it
    buffered) before it starts the new one, so only one ingester polls reddit at a time.
    The new containers apply migrations 004 and 005 when they start.
@@ -1407,15 +1413,15 @@ lead-lag run.
    cp v2/.env .env               # only when the stack ran from v2/ before
    docker compose up -d --build
    docker compose logs ingest analyze | grep "applied migrations"   # 004, 005
-   docker inspect -f '{{.State.StartedAt}}' wgra-ingest-1     # note it, UTC
+   docker inspect -f '{{.State.StartedAt}}' undercurrent-ingest-1     # note it, UTC
    ```
 
 3. Count the intents of the items stored before the new ingester started, once (they still
    have their text for up to 48 hours, from then on it's gone). First a dry run:
 
    ```bash
-   docker compose run --rm --no-deps analyze wgra backfill-intents --before <StartedAt> --dry-run
-   docker compose run --rm --no-deps analyze wgra backfill-intents --before <StartedAt>
+   docker compose run --rm --no-deps analyze undercurrent backfill-intents --before <StartedAt> --dry-run
+   docker compose run --rm --no-deps analyze undercurrent backfill-intents --before <StartedAt>
    ```
 
    `<StartedAt>` without fractions, e.g. `2026-10-12T09:30:15`. Running it twice counts the
@@ -1425,7 +1431,7 @@ lead-lag run.
    restart. After 15 minutes, check that intents are counted:
 
    ```bash
-   docker compose run --rm --no-deps analyze wgra intents --scope sample --days 1
+   docker compose run --rm --no-deps analyze undercurrent intents --scope sample --days 1
    ```
 
 Done since, with the churn radar's phase 2 (2026-10-31, [CHURN-RADAR.md](CHURN-RADAR.md)):
@@ -1454,8 +1460,8 @@ A weekly report per product and its competitors: switches, people considering le
 complaints, reasons and missing features, with the threads behind them. Built on intents
 without paid APIs or a model. The plan, its phases and go/no-go gates are in
 [CHURN-RADAR.md](CHURN-RADAR.md). Built so far: watchlists, brand search and comment trees,
-`wgra radar candidates` (phase 1); the watchlist filter, the precision fixes of §4.7 and
-the `considering` kind (phase 2, not measured yet).
+`undercurrent radar candidates` (phase 1); the watchlist filter, the precision fixes of §4.7
+and the `considering` kind (phase 2, not measured yet).
 
 ### Cross-platform spread map (phase 1 built 2026-10-31)
 
@@ -1468,7 +1474,7 @@ several and can be switched off. The plan, its phases and go/no-go gates are in
 Phase 1 is built: storage, analysis and dashboards count channels (`r/technology`, the
 sample `r/all`) and document types instead of subreddits and sources, the `channels`
 table says what each channel is, and Reddit is a source behind the `Item`/`Sink`/`Source`
-interface in `src/wgra/sources/reddit/`. The same benchmark history gives the same
+interface in `src/undercurrent/sources/reddit/`. The same benchmark history gives the same
 trends, onsets and edges as before, apart from the names (CROSS-PLATFORM.md §8.7).
 
 ### Web dashboard (built 2026-11-01)
@@ -1546,7 +1552,8 @@ Facts below were checked against primary sources on 2026-10-10.
   * The binomial test assumes independent events, while terms of one story are not
     independent.
 
-  Forecasts stay off as alerts until `wgra replay --forecast` shows they're calibrated.
+  Forecasts stay off as alerts until `undercurrent replay --forecast` shows they're
+  calibrated.
 * **r/all is a sample.** It's good for priors and for "what's big
   everywhere". It can't support per-sub conclusions for subs you don't track
   explicitly.
@@ -1564,7 +1571,7 @@ Open questions:
 ## Appendix A: ClickHouse schema
 
 The schema as built is
-[`src/wgra/migrations/001_init.sql`](../src/wgra/migrations/001_init.sql) to `004_lead_lag.sql`.
+[`src/undercurrent/migrations/001_init.sql`](../src/undercurrent/migrations/001_init.sql) to `004_lead_lag.sql`.
 Changes from the first sketch:
 
 * raw comments and posts share one `items` table with a `doc_type` column
@@ -1586,7 +1593,7 @@ Changes from the first sketch:
 ## Appendix B: short-term candidate query
 
 The query as built is `COUNTS_SQL` in
-[`src/wgra/detect/short_term.py`](../src/wgra/detect/short_term.py). In
+[`src/undercurrent/detect/short_term.py`](../src/undercurrent/detect/short_term.py). In
 short, per scope and horizon:
 
 ```sql
@@ -1616,7 +1623,7 @@ GROUP BY kind, term;
 ## Appendix C: long-term first pass
 
 The query as built is `FIRST_PASS` in
-[`src/wgra/detect/long_term.py`](../src/wgra/detect/long_term.py). Per scope
+[`src/undercurrent/detect/long_term.py`](../src/undercurrent/detect/long_term.py). Per scope
 and window, in short:
 
 ```sql

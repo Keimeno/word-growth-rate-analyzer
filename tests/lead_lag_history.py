@@ -21,11 +21,11 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
-from wgra.config import Config
-from wgra.detect.short_term import Detector, write_trends
-from wgra.ingest.pipeline import TERM_COLUMNS
-from wgra.ingest.run import write_channels
-from wgra.store import migrate
+from undercurrent.config import Config
+from undercurrent.detect.short_term import Detector, write_trends
+from undercurrent.ingest.pipeline import TERM_COLUMNS
+from undercurrent.ingest.run import write_channels
+from undercurrent.store import migrate
 
 DAYS = 70
 # recent: `trends` deletes rows older than 90 days

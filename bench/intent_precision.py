@@ -29,11 +29,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from wgra.config import Env, load_config
-from wgra.radar.candidates import RADAR_KINDS, products_of
-from wgra.store import connect
-from wgra.text.intents import INTENT_KINDS, configure_names, extractor, sentences_as_written
-from wgra.text.terms import clean
+from undercurrent.config import Env, load_config
+from undercurrent.radar.candidates import RADAR_KINDS, products_of
+from undercurrent.store import connect
+from undercurrent.text.intents import INTENT_KINDS, configure_names, extractor, sentences_as_written
+from undercurrent.text.terms import clean
 
 REPOSITORY = Path(__file__).resolve().parent.parent
 

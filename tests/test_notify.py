@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
-from wgra.notify.messages import (
+from undercurrent.notify.messages import (
     Links,
     LongTermSummary,
     TrendSummary,
@@ -16,7 +16,7 @@ from wgra.notify.messages import (
     trending_url,
     weekly_report_message,
 )
-from wgra.notify.ntfy import Message, Ntfy, NtfyError
+from undercurrent.notify.ntfy import Message, Ntfy, NtfyError
 
 GRAFANA = "https://grafana.example"
 
@@ -43,7 +43,9 @@ def recording_ntfy(status: int = 200) -> tuple[Ntfy, list[httpx.Request]]:
         requests.append(request)
         return httpx.Response(status, json={"id": "abc"} if status == 200 else {"error": "no"})
 
-    return Ntfy("http://ntfy", "wgra", "secret", transport=httpx.MockTransport(handle)), requests
+    return Ntfy(
+        "http://ntfy", "undercurrent", "secret", transport=httpx.MockTransport(handle)
+    ), requests
 
 
 def test_publishes_json_with_unicode_title_and_actions():
@@ -63,7 +65,7 @@ def test_publishes_json_with_unicode_title_and_actions():
     assert request.url == "http://ntfy/"
     assert request.headers["authorization"] == "Bearer secret"
     assert json.loads(request.content) == {
-        "topic": "wgra",
+        "topic": "undercurrent",
         "title": "für · r/de",
         "message": "**bold**",
         "priority": 4,
@@ -85,7 +87,7 @@ def test_errors_are_raised():
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused", request=request)
 
-    unreachable = Ntfy("http://ntfy", "wgra", transport=httpx.MockTransport(refuse))
+    unreachable = Ntfy("http://ntfy", "undercurrent", transport=httpx.MockTransport(refuse))
     with pytest.raises(NtfyError, match="unreachable"):
         unreachable.send(Message(title="t", body="b"))
 
@@ -97,7 +99,7 @@ def query(url: str) -> dict[str, list[str]]:
 def test_explorer_links_open_the_term_in_its_scope():
     # the dashboards' scope variable takes a group or a channel alike
     channel = explorer_url(GRAFANA, "vision pro", "r/technology")
-    assert channel.startswith(f"{GRAFANA}/d/wgra-terms?")
+    assert channel.startswith(f"{GRAFANA}/d/undercurrent-terms?")
     assert query(channel) == {
         "var-terms": ["vision pro"],
         "var-group": ["r/technology"],
@@ -160,7 +162,7 @@ def test_digest_lists_terms_with_links():
     )
     assert message.title == "Trending in tech, Mon 12 Oct"
     first, second = message.body.splitlines()
-    assert first.startswith("1. [vision pro](https://grafana.example/d/wgra-terms?")
+    assert first.startswith("1. [vision pro](https://grafana.example/d/undercurrent-terms?")
     assert first.endswith(" · 14× · 312 mentions · r/technology")
     assert second.endswith(" · new · 312 mentions · in 4 channels")
     assert message.click == trending_url(GRAFANA, "tech")
@@ -197,7 +199,7 @@ def test_weekly_report_lists_terms_per_category():
     emerging, fading = message.body.split("\n\n")
     lines = emerging.splitlines()
     assert lines[0] == "**Emerging**"
-    assert lines[1].startswith("1. [local llm](https://grafana.example/d/wgra-terms?")
+    assert lines[1].startswith("1. [local llm](https://grafana.example/d/undercurrent-terms?")
     assert lines[1].endswith(" · +9% a month · 26 weeks · r/programming")
     assert lines[2].endswith(" · +30% a month · 26 weeks")
     # no mainstreaming terms: no section
@@ -206,4 +208,4 @@ def test_weekly_report_lists_terms_per_category():
         fading.splitlines()[1],
     ]
     assert "−10% a month" in fading
-    assert message.click == "https://grafana.example/d/wgra-long-term?var-group=tech"
+    assert message.click == "https://grafana.example/d/undercurrent-long-term?var-group=tech"

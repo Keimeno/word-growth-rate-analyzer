@@ -1,4 +1,4 @@
-"""`wgra suggest-subreddits` and the optional Wikipedia check.
+"""`undercurrent suggest-subreddits` and the optional Wikipedia check.
 
 The ClickHouse parts use a throwaway database (conftest.py). Wikimedia is never called:
 its two APIs are answered by a mock transport.
@@ -11,12 +11,12 @@ import httpx
 import pytest
 from helpers import make_config
 
-from wgra.config import WikipediaConfig
-from wgra.detect.short_term import TREND_COLUMNS
-from wgra.ingest.pipeline import ITEM_COLUMNS
-from wgra.leadlag.events import Event, Onset, write_events
-from wgra.leadlag.suggest import suggest, yaml_snippet
-from wgra.leadlag.wikipedia import (
+from undercurrent.config import WikipediaConfig
+from undercurrent.detect.short_term import TREND_COLUMNS
+from undercurrent.ingest.pipeline import ITEM_COLUMNS
+from undercurrent.leadlag.events import Event, Onset, write_events
+from undercurrent.leadlag.suggest import suggest, yaml_snippet
+from undercurrent.leadlag.wikipedia import (
     Lead,
     Wikimedia,
     WikipediaCheck,
@@ -24,7 +24,7 @@ from wgra.leadlag.wikipedia import (
     load_leads,
     summarize,
 )
-from wgra.store import migrate
+from undercurrent.store import migrate
 
 NOW = datetime.now(UTC).replace(microsecond=0)
 
@@ -184,7 +184,7 @@ def test_articles_resolve_through_redirects_and_skip_disambiguation():
     found = wikimedia(fake).articles(["ollama", "mercury", "nothinghere"])
     assert found == {"ollama": "Ollama", "mercury": "", "nothinghere": ""}
     [request] = fake.requests
-    assert request.headers["user-agent"].startswith("wgra/2.0 (https://github.com/")
+    assert request.headers["user-agent"].startswith("undercurrent/2.0 (https://github.com/")
     assert "httpx/" in request.headers["user-agent"]
 
 

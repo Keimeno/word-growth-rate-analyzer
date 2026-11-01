@@ -2,8 +2,8 @@ from datetime import timedelta
 
 from helpers import make_trend
 
-from wgra.config import DetectConfig, NotifyConfig
-from wgra.detect.alerts import (
+from undercurrent.config import DetectConfig, NotifyConfig
+from undercurrent.detect.alerts import (
     CAPPED,
     COOLDOWN,
     SKIPPED,

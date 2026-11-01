@@ -4,7 +4,7 @@ The dashboard's page: React 19 and TypeScript 7, built by Vite 8, styled with Ta
 shadcn/ui, routed by TanStack Router, data through TanStack Query, charts through our own kit
 on Apache ECharts 6. The plan is [docs/WEB-DASHBOARD.md](../docs/WEB-DASHBOARD.md), the
 look [docs/BRAND.md](../docs/BRAND.md). The data comes from the Python API in
-`src/wgra/web/` (FastAPI), the only server.
+`src/undercurrent/web/` (FastAPI), the only server.
 
 ## Commands
 
@@ -23,8 +23,9 @@ Node 26 and pnpm 12 (`.nvmrc`, `packageManager`); run them in `web/`.
 ## Rules
 
 - `src/api/generated/` is generated, never edited. A change to the API's data is a change
-  to a Pydantic model in `src/wgra/web/models.py`, then `uv run wgra web openapi >
-  web/src/api/openapi.json` and `pnpm gen:api`. CI fails when they disagree.
+  to a Pydantic model in `src/undercurrent/web/models.py`, then
+  `uv run undercurrent web openapi > web/src/api/openapi.json` and `pnpm gen:api`. CI fails
+  when they disagree.
 - Add a shadcn/ui component with the CLI (`pnpm dlx shadcn@4.23.0 add <name>`), then edit
   it like our own code; `pnpm dlx shadcn@4.23.0 docs <name>` answers for the version in use.
 - Every view's state lives in its route's search schema (Zod, `src/lib/search.ts`). Nothing

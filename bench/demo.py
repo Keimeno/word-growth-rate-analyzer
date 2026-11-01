@@ -25,14 +25,14 @@ must stay), then writes:
    run is the backfill of events, onsets and edges), `Analyzer.run_once` (all scopes and
    horizons, alerts, digests, forecasts) at 12:00, and every hour of the last 24 hours.
 
-    docker run -d --name wgra-dev-bench-clickhouse --cpus 4 --memory 8g \\
-        -p 127.0.0.1:3617:8123 -e CLICKHOUSE_USER=wgra -e CLICKHOUSE_PASSWORD=bench \\
-        -v "$PWD/clickhouse/wgra.xml:/etc/clickhouse-server/config.d/wgra.xml:ro" \\
+    docker run -d --name undercurrent-dev-bench-clickhouse --cpus 4 --memory 8g \\
+        -p 127.0.0.1:3617:8123 -e CLICKHOUSE_USER=undercurrent -e CLICKHOUSE_PASSWORD=bench \\
+        -v "$PWD/clickhouse/undercurrent.xml:/etc/clickhouse-server/config.d/undercurrent.xml:ro" \\
         clickhouse/clickhouse-server:26.8
-    export CLICKHOUSE_PORT=3617 CLICKHOUSE_PASSWORD=bench CLICKHOUSE_USER=wgra
-    uv run python bench/demo.py seed --database wgra_demo            # about 15 minutes
-    uv run python bench/demo.py seed --database wgra_demo --small    # about 1.5 minutes
-    UNDERCURRENT_NOW=2026-11-01T12:00:00Z CLICKHOUSE_DB=wgra_demo uv run wgra web
+    export CLICKHOUSE_PORT=3617 CLICKHOUSE_PASSWORD=bench CLICKHOUSE_USER=undercurrent
+    uv run python bench/demo.py seed --database undercurrent_demo            # about 15 minutes
+    uv run python bench/demo.py seed --database undercurrent_demo --small    # about 1.5 minutes
+    UNDERCURRENT_NOW=2026-11-01T12:00:00Z CLICKHOUSE_DB=undercurrent_demo uv run undercurrent web
 
 `--small` is for CI: the channels of tech and pkm, 52 days of hourly counts (the
 detector needs 29 days of them before its first run, the lead–lag layer three weeks of
@@ -100,21 +100,21 @@ from clickhouse_connect.driver.client import Client
 from dotenv import load_dotenv
 from numpy.typing import NDArray
 
-from wgra.config import Config, Env, load_config
-from wgra.detect.long_term import week_start
-from wgra.detect.run import NOTIFICATION_COLUMNS, Analyzer
-from wgra.detect.short_term import CHANNEL, Detector, load_scopes, next_hour, write_trends
-from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
-from wgra.ingest.run import write_channels
-from wgra.notify.ntfy import Message, Ntfy
-from wgra.sources.base import POLL_COLUMNS, Poll
-from wgra.sources.reddit.channels import PLATFORM, SAMPLE, subreddit_of
-from wgra.sources.reddit.feeds import build_feeds
-from wgra.sources.reddit.models import RedditItem
-from wgra.sources.reddit.source import to_item
-from wgra.store import connect, migrate
-from wgra.text import extract_terms
-from wgra.text.lexicon import stopwords
+from undercurrent.config import Config, Env, load_config
+from undercurrent.detect.long_term import week_start
+from undercurrent.detect.run import NOTIFICATION_COLUMNS, Analyzer
+from undercurrent.detect.short_term import CHANNEL, Detector, load_scopes, next_hour, write_trends
+from undercurrent.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from undercurrent.ingest.run import write_channels
+from undercurrent.notify.ntfy import Message, Ntfy
+from undercurrent.sources.base import POLL_COLUMNS, Poll
+from undercurrent.sources.reddit.channels import PLATFORM, SAMPLE, subreddit_of
+from undercurrent.sources.reddit.feeds import build_feeds
+from undercurrent.sources.reddit.models import RedditItem
+from undercurrent.sources.reddit.source import to_item
+from undercurrent.store import connect, migrate
+from undercurrent.text import extract_terms
+from undercurrent.text.lexicon import stopwords
 
 HOUR = timedelta(hours=1)
 DAY = timedelta(days=1)

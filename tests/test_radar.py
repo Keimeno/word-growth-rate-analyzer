@@ -4,13 +4,19 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from helpers import make_config, make_doc
 
-from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
-from wgra.ingest.run import write_channels
-from wgra.radar.candidates import candidates, products_of, summarize
-from wgra.sources.reddit.search import due_trees, names_any, search_query, stored_ids, wants_tree
-from wgra.store import migrate
-from wgra.text.intents import configure_names, extract_intents
-from wgra.text.terms import clean
+from undercurrent.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from undercurrent.ingest.run import write_channels
+from undercurrent.radar.candidates import candidates, products_of, summarize
+from undercurrent.sources.reddit.search import (
+    due_trees,
+    names_any,
+    search_query,
+    stored_ids,
+    wants_tree,
+)
+from undercurrent.store import migrate
+from undercurrent.text.intents import configure_names, extract_intents
+from undercurrent.text.terms import clean
 
 PKM = {
     "groups": {"tech": ["r/technology"], "pkm": ["r/Notion", "r/ObsidianMD"]},

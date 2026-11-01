@@ -9,17 +9,17 @@ from datetime import UTC, date, datetime, timedelta
 
 from helpers import make_config, make_doc
 
-from wgra.config import IntentsConfig, LongTermConfig
-from wgra.detect.long_term import LongTermDetector
-from wgra.detect.short_term import Detector
-from wgra.ingest.backfill import backfill_intents
-from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
-from wgra.ingest.run import write_channels
-from wgra.leadlag.events import Event
-from wgra.leadlag.onsets import OnsetFinder
-from wgra.query import intent_examples, intent_report
-from wgra.store import migrate
-from wgra.text.intents import INTENT_KINDS
+from undercurrent.config import IntentsConfig, LongTermConfig
+from undercurrent.detect.long_term import LongTermDetector
+from undercurrent.detect.short_term import Detector
+from undercurrent.ingest.backfill import backfill_intents
+from undercurrent.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from undercurrent.ingest.run import write_channels
+from undercurrent.leadlag.events import Event
+from undercurrent.leadlag.onsets import OnsetFinder
+from undercurrent.query import intent_examples, intent_report
+from undercurrent.store import migrate
+from undercurrent.text.intents import INTENT_KINDS
 
 FLOW = "notion → obsidian"
 CONFIG = make_config(groups={"tech": ["r/technology", "r/programming"]})

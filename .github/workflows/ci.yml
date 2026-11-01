@@ -11,8 +11,8 @@ jobs:
       clickhouse:
         image: clickhouse/clickhouse-server:26.8
         env:
-          CLICKHOUSE_DB: wgra
-          CLICKHOUSE_USER: wgra
+          CLICKHOUSE_DB: undercurrent
+          CLICKHOUSE_USER: undercurrent
           CLICKHOUSE_PASSWORD: ci-password
           # so tests can create the web dashboard's read-only user with SQL
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
@@ -25,9 +25,9 @@ jobs:
     env:
       CLICKHOUSE_HOST: localhost
       CLICKHOUSE_PORT: "8123"
-      CLICKHOUSE_USER: wgra
+      CLICKHOUSE_USER: undercurrent
       CLICKHOUSE_PASSWORD: ci-password
-      CLICKHOUSE_DB: wgra
+      CLICKHOUSE_DB: undercurrent
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -37,7 +37,7 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest
       # the page's copy of the API's schema is up to date
-      - run: uv run wgra web openapi > web/src/api/openapi.json && git diff --exit-code
+      - run: uv run undercurrent web openapi > web/src/api/openapi.json && git diff --exit-code
       - run: docker build .
       - run: docker build --target web .
 
@@ -73,8 +73,8 @@ jobs:
       clickhouse:
         image: clickhouse/clickhouse-server:26.8
         env:
-          CLICKHOUSE_DB: wgra
-          CLICKHOUSE_USER: wgra
+          CLICKHOUSE_DB: undercurrent
+          CLICKHOUSE_USER: undercurrent
           CLICKHOUSE_PASSWORD: ci-password
         ports:
           - 8123:8123
@@ -85,9 +85,9 @@ jobs:
     env:
       CLICKHOUSE_HOST: localhost
       CLICKHOUSE_PORT: "8123"
-      CLICKHOUSE_USER: wgra
+      CLICKHOUSE_USER: undercurrent
       CLICKHOUSE_PASSWORD: ci-password
-      CLICKHOUSE_DB: wgra_demo
+      CLICKHOUSE_DB: undercurrent_demo
       UNDERCURRENT_NOW: "2026-11-01T12:00:00Z"
     steps:
       - uses: actions/checkout@v4
@@ -104,13 +104,13 @@ jobs:
       - run: cd web && pnpm install --frozen-lockfile
       # the API and the page's generated types agree
       - run: |
-          uv run wgra web openapi > web/src/api/openapi.json
+          uv run undercurrent web openapi > web/src/api/openapi.json
           (cd web && pnpm gen:api)
           git diff --exit-code
-      - run: uv run python bench/demo.py seed --database wgra_demo --small
+      - run: uv run python bench/demo.py seed --database undercurrent_demo --small
       - run: cd web && pnpm build && pnpm exec playwright install --with-deps chromium webkit
       - run: |
-          uv run wgra web --port 3610 &
+          uv run undercurrent web --port 3610 &
           for i in $(seq 1 30); do curl -sf localhost:3610/api/v1/meta > /dev/null && break; sleep 1; done
           cd web && pnpm e2e
       - uses: actions/upload-artifact@v4

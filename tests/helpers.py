@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
-from wgra.config import Config, parse_config
-from wgra.detect.short_term import Trend
-from wgra.sources.base import Item
-from wgra.sources.reddit.models import RedditItem
-from wgra.sources.reddit.source import to_item
+from undercurrent.config import Config, parse_config
+from undercurrent.detect.short_term import Trend
+from undercurrent.sources.base import Item
+from undercurrent.sources.reddit.models import RedditItem
+from undercurrent.sources.reddit.source import to_item
 
 
 def no_sample(**reddit: object) -> dict[str, object]:

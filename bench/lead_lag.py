@@ -3,13 +3,13 @@
 Run it against a ClickHouse of its own (never the live one), for example one limited to
 the planned VPS (4 CPUs, 8 GB):
 
-    docker run -d --name wgra-dev-bench-clickhouse --cpus 4 --memory 8g \\
-        -p 127.0.0.1:3617:8123 -e CLICKHOUSE_USER=wgra -e CLICKHOUSE_PASSWORD=bench \\
-        -v "$PWD/clickhouse/wgra.xml:/etc/clickhouse-server/config.d/wgra.xml:ro" \\
+    docker run -d --name undercurrent-dev-bench-clickhouse --cpus 4 --memory 8g \\
+        -p 127.0.0.1:3617:8123 -e CLICKHOUSE_USER=undercurrent -e CLICKHOUSE_PASSWORD=bench \\
+        -v "$PWD/clickhouse/undercurrent.xml:/etc/clickhouse-server/config.d/undercurrent.xml:ro" \\
         clickhouse/clickhouse-server:26.8
     export CLICKHOUSE_PORT=3617 CLICKHOUSE_PASSWORD=bench
-    uv run python bench/lead_lag.py --database wgra_bench_ll generate
-    uv run python bench/lead_lag.py --database wgra_bench_ll run backfill
+    uv run python bench/lead_lag.py --database undercurrent_bench_ll generate
+    uv run python bench/lead_lag.py --database undercurrent_bench_ll run backfill
     # then: run daily, run forecast, run learn, run replay
 
 `generate` writes `term_hourly` and `scope_hourly` for `--days` days up to today: the
@@ -29,7 +29,7 @@ a fixed follower 2–4 days later, everything else is random. Every burst is a t
 * daily: a run a day later, the open events' onsets again and the edges
 * forecast: one analyze run's forecast step, 30 terms trending in leaders, 300 pending
 * learn: learning the edges from 180 days of events (the stored ones six times over)
-* replay: `wgra replay --forecast --events stored` over the event days, hourly steps
+* replay: `undercurrent replay --forecast --events stored` over the event days, hourly steps
 
 Per part: the wall time, the Python process's peak memory, and from system.query_log the
 queries' time, peak memory and rows read.
@@ -49,12 +49,12 @@ from pathlib import Path
 import numpy as np
 from dotenv import load_dotenv
 
-from wgra.config import Env, load_config
-from wgra.detect.short_term import CHANNEL, TREND_COLUMNS, Trend
-from wgra.ingest.run import write_channels
-from wgra.leadlag.edges import PLATFORM_FOLLOWER
-from wgra.sources.reddit.channels import PLATFORM, SAMPLE
-from wgra.store import connect, migrate
+from undercurrent.config import Env, load_config
+from undercurrent.detect.short_term import CHANNEL, TREND_COLUMNS, Trend
+from undercurrent.ingest.run import write_channels
+from undercurrent.leadlag.edges import PLATFORM_FOLLOWER
+from undercurrent.sources.reddit.channels import PLATFORM, SAMPLE
+from undercurrent.store import connect, migrate
 
 sys.path.insert(0, str(Path(__file__).parent))
 from synthetic import (
@@ -245,12 +245,12 @@ def query_stats(client, database: str, since: datetime) -> str:
 
 
 def run(client, config, database: str, step: str) -> None:
-    from wgra.detect.replay import stored_steps
-    from wgra.leadlag.edges import Network, learn_edges
-    from wgra.leadlag.evaluate import evaluate, report
-    from wgra.leadlag.events import Onset, load_events
-    from wgra.leadlag.forecasts import Forecast, write_forecasts
-    from wgra.leadlag.run import LeadLag
+    from undercurrent.detect.replay import stored_steps
+    from undercurrent.leadlag.edges import Network, learn_edges
+    from undercurrent.leadlag.evaluate import evaluate, report
+    from undercurrent.leadlag.events import Onset, load_events
+    from undercurrent.leadlag.forecasts import Forecast, write_forecasts
+    from undercurrent.leadlag.run import LeadLag
 
     (latest,) = client.query("SELECT max(hour) FROM scope_hourly").result_rows[0]
     now = latest.replace(tzinfo=UTC) + timedelta(hours=1, minutes=30)
@@ -375,7 +375,7 @@ def main() -> None:
     args = parser.parse_args()
 
     env = Env.from_environ()
-    if args.database == "wgra" or env.clickhouse_port == 3607:
+    if args.database == "undercurrent" or env.clickhouse_port == 3607:
         raise SystemExit("never against the live database or ClickHouse")
     config = load_config(args.config)
     admin = connect(env, database="default")

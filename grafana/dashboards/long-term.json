@@ -1,9 +1,9 @@
 {
-  "uid": "wgra-long-term",
+  "uid": "undercurrent-long-term",
   "title": "Long-term trends",
-  "description": "Terms growing or fading steadily over 13, 26 or 52 weeks, found once a day by wgra analyze.",
+  "description": "Terms growing or fading steadily over 13, 26 or 52 weeks, found once a day by undercurrent analyze.",
   "tags": [
-    "wgra"
+    "undercurrent"
   ],
   "timezone": "browser",
   "schemaVersion": 41,
@@ -357,7 +357,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'emerging'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'emerging'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {
@@ -659,7 +659,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'mainstreaming'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'mainstreaming'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {
@@ -961,7 +961,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'fading'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'fading'\nORDER BY abs(log(growth)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {
@@ -1263,7 +1263,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'one-off'\nORDER BY abs(log(change)) DESC\nLIMIT 100",
+          "rawSql": "WITH (SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest\nSELECT\n    concat(scope, ' · ', term) AS id,\n    scope,\n    term,\n    round(100 * (growth - 1), 1) AS per_month,\n    q_value AS q,\n    round(start_share, 3) AS start_per_1000,\n    round(end_share, 3) AS end_per_1000,\n    mentions,\n    round(spike_share, 2) AS spike_share,\n    round(peak, 1) AS peak,\n    kind,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&var-bucket=week&var-rate=macro&from=', toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now') AS explore\nFROM long_term_trends FINAL\nWHERE week = latest AND horizon = ${horizon:sqlstring} AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND category = 'one-off'\nORDER BY abs(log(change)) DESC\nLIMIT 100",
           "refId": "A"
         },
         {

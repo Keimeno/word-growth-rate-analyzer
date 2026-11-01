@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from scipy import special, stats
 
-from wgra.leadlag.stats import (
+from undercurrent.leadlag.stats import (
     beta_cdf,
     beta_quantile,
     binomial_tail,

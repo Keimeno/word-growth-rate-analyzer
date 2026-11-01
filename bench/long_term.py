@@ -1,7 +1,7 @@
 """Runs the long-term detector over a synthetic database and reports what each query cost.
 
     CLICKHOUSE_PORT=3617 CLICKHOUSE_PASSWORD=bench uv run python bench/long_term.py \\
-        --database wgra_bench --as-of 2026-10-12T00:30
+        --database undercurrent_bench --as-of 2026-10-12T00:30
 
 Time, peak memory and rows read per query come from system.query_log (the detector
 tags its queries with a log_comment). Nothing is written to the database.
@@ -16,9 +16,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from wgra.config import Env, load_config
-from wgra.detect.long_term import LongTermDetector
-from wgra.store import connect, migrate
+from undercurrent.config import Env, load_config
+from undercurrent.detect.long_term import LongTermDetector
+from undercurrent.store import connect, migrate
 
 
 def main() -> None:
@@ -38,7 +38,7 @@ def main() -> None:
     as_of = args.as_of.replace(tzinfo=UTC) if args.as_of.tzinfo is None else args.as_of
     scopes = None
     if args.scope:
-        from wgra.detect.short_term import load_scopes
+        from undercurrent.detect.short_term import load_scopes
 
         scopes = [scope for scope in load_scopes(client) if scope.name in args.scope]
 

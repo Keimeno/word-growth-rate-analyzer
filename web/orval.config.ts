@@ -1,7 +1,7 @@
 import { defineConfig } from "orval";
 
 // The page's types, fetch functions and TanStack Query hooks, from the API's schema
-// (src/api/openapi.json, exported by `uv run wgra web openapi`). `pnpm gen:api` writes
+// (src/api/openapi.json, exported by `uv run undercurrent web openapi`). `pnpm gen:api` writes
 // src/api/generated/, which is never edited by hand.
 export default defineConfig({
   api: {

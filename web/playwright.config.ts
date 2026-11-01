@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// The API serves the built page: `pnpm build`, then `uv run wgra web` (or the e2e job's
+// The API serves the built page: `pnpm build`, then `uv run undercurrent web` (or the e2e job's
 // demo database). E2E_URL points elsewhere.
 const baseURL = process.env.E2E_URL ?? "http://localhost:3610";
 

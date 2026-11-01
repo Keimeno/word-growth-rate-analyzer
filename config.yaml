@@ -18,7 +18,7 @@ ingest:
 
 # What to track. A group lists channels: a subreddit is "r/<name>", every subreddit listed
 # in a group is tracked completely (every comment and post), and a subreddit can be in
-# several groups. Groups only matter for analysis: dashboards and `wgra term --scope
+# several groups. Groups only matter for analysis: dashboards and `undercurrent term --scope
 # <group>` aggregate over them. All tracked subreddits together also form the group
 # "reddit".
 #
@@ -92,12 +92,12 @@ languages:
 # thinking of switching from Notion to Obsidian, should I ditch Notion?). English patterns
 # everywhere (considering only in english), german ones in german subreddits. Extracted by
 # the ingester from the raw text, which is deleted after 48 hours: no history before it
-# runs. See docs/ARCHITECTURE.md §4.7, `wgra intents` and the Intent radar dashboard.
+# runs. See docs/ARCHITECTURE.md §4.7, `undercurrent intents` and the Intent radar dashboard.
 intents:
   enabled: true
   sample: true               # also in the r/all sample (reddit-wide, and the prior)
 
-# Short-term trends (`wgra analyze`). Every 15 minutes, every channel (each tracked
+# Short-term trends (`undercurrent analyze`). Every 15 minutes, every channel (each tracked
 # subreddit, and r/all) and every group is scored: how much more of the conversation mentions a term in the window than
 # in the reference period before it. See docs/ARCHITECTURE.md §4.2.
 detect:
@@ -136,7 +136,7 @@ detect:
   max_per_scope: 50
   max_per_intent: 20
 
-# Long-term trends: once a day, `wgra analyze` looks at weekly shares (comments and posts
+# Long-term trends: once a day, `undercurrent analyze` looks at weekly shares (comments and posts
 # mentioning a term per week, divided by all of them) over the last 13, 26 and 52 complete
 # weeks, Monday to Sunday UTC, and classifies the terms that grow or fade steadily. A
 # window starts once a scope's channels have that many weeks of history. See
@@ -182,7 +182,7 @@ long_term:
 
 # Lead–lag early warning: which channels pick up terms before others, and forecasts of
 # which current bursts will reach other channels, groups or all of reddit (r/all).
-# Once a day `wgra analyze` turns new trends into events, finds every scope's onset (the
+# Once a day `undercurrent analyze` turns new trends into events, finds every scope's onset (the
 # first hour its last 24h crossed the gates below against its own 28 days before) and
 # learns the leader -> follower edges; after every detection run it makes forecasts. Edges
 # need about 4–6 weeks of history to mean anything. See docs/ARCHITECTURE.md §4.6.
@@ -226,7 +226,7 @@ forecast:
   enabled: true              # forecasts are stored and shown in Grafana
   min_probability: 0.3
   min_lift: 1.5
-  # ntfy alerts for forecasts: off until `wgra replay --forecast` shows they're worth it.
+  # ntfy alerts for forecasts: off until `undercurrent replay --forecast` shows they're worth it.
   # They count against notify.max_alerts_per_day, at most alert_max_per_day of it.
   alert: false
   alert_min_probability: 0.6
@@ -235,12 +235,12 @@ forecast:
 
 # Optional: do onsets come before interest on Wikipedia? Compares the daily
 # pageviews (Wikimedia's free API, no key, cached in ClickHouse) of the articles that
-# events' terms name with the onsets. `wgra wikipedia` runs it on demand.
+# events' terms name with the onsets. `undercurrent wikipedia` runs it on demand.
 wikipedia:
   enabled: false
   project: en.wikipedia
   # Wikimedia asks for a descriptive user agent with a way to contact you
-  user_agent: "wgra/2.0 (https://github.com/Keimeno/word-growth-rate-analyzer)"
+  user_agent: "undercurrent/2.0 (https://github.com/Keimeno/word-growth-rate-analyzer)"
   requests_per_second: 5
   min_views: 100             # interest starts on a day with this many views
   min_ratio: 3               # and 3 times the median of the 28 days before
@@ -276,7 +276,7 @@ notify:
 # single-word names count as names in intents in any case ("switched from evernote to
 # obsidian"). With search, posts naming a product anywhere on reddit are collected too,
 # in the channel r/_search that no detector sees, and the comment trees of those that ask
-# or tell about a switch. `wgra radar candidates` shows how much there is per product.
+# or tell about a switch. `undercurrent radar candidates` shows how much there is per product.
 radar:
   enabled: true
   search_interval_minutes: 15  # every product is searched this often, one request each

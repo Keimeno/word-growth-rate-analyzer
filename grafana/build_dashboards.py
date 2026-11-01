@@ -189,7 +189,7 @@ def dashboard(uid, title, description, panels, variables, time_from, refresh="")
         "uid": uid,
         "title": title,
         "description": description,
-        "tags": ["wgra"],
+        "tags": ["undercurrent"],
         "timezone": "browser",
         "schemaVersion": 41,
         "editable": False,
@@ -244,7 +244,7 @@ MENTIONS_PER_CHANNEL = term_rows(
 )
 
 terms_dashboard = dashboard(
-    "wgra-terms",
+    "undercurrent-terms",
     "Term explorer",
     "How often terms are mentioned in a group or channels, relative to all comments and posts.",
     [
@@ -438,7 +438,7 @@ LIMIT 100
 )
 
 rising_dashboard = dashboard(
-    "wgra-rising",
+    "undercurrent-rising",
     "Rising (preview)",
     "A first, simple look at what's rising. The real trend scoring is in Trending now.",
     [
@@ -542,7 +542,7 @@ TRACKED = (
     "channel IN (SELECT channel FROM channel_groups WHERE group_name IN (${platform:singlequote}))"
 )
 ingestion_dashboard = dashboard(
-    "wgra-ingestion",
+    "undercurrent-ingestion",
     "Ingestion",
     "Is the ingester healthy and complete?",
     [
@@ -711,7 +711,7 @@ ORDER BY c.platform, documents DESC, c.channel
     refresh="1m",
 )
 
-# What the analyzer found (wgra analyze, every 15 minutes). A scope is a channel
+# What the analyzer found (undercurrent analyze, every 15 minutes). A scope is a channel
 # ("r/technology", "r/all") or a group ("tech"), the dashboard shows a group and its
 # channels, or one channel.
 TREND_SCOPES = "scope IN (${scope:singlequote})"
@@ -729,7 +729,7 @@ def explore_url(scope: str = "scope") -> str:
     """SQL for the term explorer url of a trend, in its scope (a group or a channel, the
     scope picker takes either)."""
     return (
-        "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
+        "concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), "
         f"'&var-group=', encodeURLFormComponent({scope}), '&from=now-7d&to=now')"
     )
 
@@ -828,9 +828,9 @@ def width(column: str, pixels: int) -> dict:
 
 
 trending_dashboard = dashboard(
-    "wgra-trending",
+    "undercurrent-trending",
     "Trending now",
-    "Terms mentioned far more than usual, scored every 15 minutes by wgra analyze.",
+    "Terms mentioned far more than usual, scored every 15 minutes by undercurrent analyze.",
     [
         panel(
             "stat",
@@ -843,7 +843,8 @@ trending_dashboard = dashboard(
             4,
             table=True,
             unit="dateTimeFromNow",
-            description="When wgra analyze last scored this horizon. It runs every 15 minutes.",
+            description="When undercurrent analyze last scored this horizon. "
+            "It runs every 15 minutes.",
         ),
         panel(
             "stat",
@@ -1062,7 +1063,7 @@ LIMIT 200
 )
 
 
-# What the long-term detector found (once a day, wgra analyze): per scope and window
+# What the long-term detector found (once a day, undercurrent analyze): per scope and window
 # (13, 26, 52 weeks), the terms growing or fading steadily, of the latest analyzed week.
 LATEST_WEEK = (
     "(SELECT max(week) FROM long_term_trends WHERE horizon = ${horizon:sqlstring}) AS latest"
@@ -1078,7 +1079,7 @@ TREND_ID = "concat(scope, ' · ', term)"
 def weekly_explore_url() -> str:
     """SQL for the term explorer url of a long-term trend: weekly, over its window."""
     return (
-        "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
+        "concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), "
         "'&var-group=', encodeURLFormComponent(scope), "
         "'&var-bucket=week&var-rate=macro&from=', "
         "toString(toUnixTimestamp(toDateTime(window_start, 'UTC')) * 1000), '&to=now')"
@@ -1220,9 +1221,10 @@ LONG_TERM_COLUMNS_HELP = (
 )
 
 long_term_dashboard = dashboard(
-    "wgra-long-term",
+    "undercurrent-long-term",
     "Long-term trends",
-    "Terms growing or fading steadily over 13, 26 or 52 weeks, found once a day by wgra analyze.",
+    "Terms growing or fading steadily over 13, 26 or 52 weeks, "
+    "found once a day by undercurrent analyze.",
     [
         panel(
             "stat",
@@ -1369,7 +1371,7 @@ ORDER BY time
 )
 
 
-# The lead–lag layer (wgra analyze, leadlag/): which channels pick up terms before
+# The lead–lag layer (undercurrent analyze, leadlag/): which channels pick up terms before
 # others (edges, learned daily), and forecasts of which current bursts will reach which
 # scopes, with how they turned out.
 LATEST_EDGES = "day = (SELECT max(day) FROM propagation_edges)"
@@ -1396,7 +1398,7 @@ def hours_as_days(*columns: str) -> dict:
 
 
 early_warning_dashboard = dashboard(
-    "wgra-early-warning",
+    "undercurrent-early-warning",
     "Early warning",
     "Which channels pick up terms before others, and forecasts of which current bursts "
     "will reach other channels, groups or all of reddit (r/all). Learned from at least 4–6 "
@@ -1412,8 +1414,8 @@ early_warning_dashboard = dashboard(
             4,
             table=True,
             unit="dateTimeFromNow",
-            description="When wgra analyze last learned the edges. It does once a day, after "
-            "lead_lag.run_at (01:00 UTC).",
+            description="When undercurrent analyze last learned the edges. "
+            "It does once a day, after lead_lag.run_at (01:00 UTC).",
         ),
         panel(
             "stat",
@@ -1465,7 +1467,8 @@ early_warning_dashboard = dashboard(
             table=True,
             unit="percentunit",
             description="Precision of the forecasts resolved in the last 30 days. "
-            "`wgra replay --forecast` measures it on past data, with recall and calibration.",
+            "`undercurrent replay --forecast` measures it on past data, "
+            "with recall and calibration.",
         ),
         panel(
             "stat",
@@ -1756,7 +1759,7 @@ WHERE start > now() - INTERVAL 90 DAY
             table=True,
             description="With wikipedia.enabled: for events whose term names a Wikipedia "
             "article, did daily pageviews rise (3x their 28-day median, at least 100) after "
-            "the term's first onset? `wgra wikipedia` prints a sign test.",
+            "the term's first onset? `undercurrent wikipedia` prints a sign test.",
         ),
     ],
     [
@@ -1814,9 +1817,9 @@ INTENT_HOURS = (
 def intent_links(group: str = "${group:sqlstring}") -> str:
     """SQL for the urls of an intent: its comments on this dashboard, and the explorer."""
     return (
-        "concat('/d/wgra-intents?var-term=', encodeURLFormComponent(term), "
+        "concat('/d/undercurrent-intents?var-term=', encodeURLFormComponent(term), "
         f"'&var-group=', encodeURLFormComponent({group}), '&from=now-30d&to=now') AS examples, "
-        "concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), "
+        "concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), "
         f"'&var-group=', encodeURLFormComponent({group}), "
         "'&var-bucket=day&from=now-90d&to=now') AS explore"
     )
@@ -2199,7 +2202,7 @@ def intent_count(kind: str, title: str, x: int) -> dict:
 
 
 intent_dashboard = dashboard(
-    "wgra-intents",
+    "undercurrent-intents",
     "Intent radar",
     "Why people mention things: switches between products, switches considered, "
     "alternatives sought, complaints and unmet needs.",
@@ -2218,7 +2221,7 @@ intent_dashboard = dashboard(
             5,
             description="The first day with intents, in any channel: they're extracted at "
             "ingest, so there is no history before the ingester started extracting them (plus "
-            "the 48 hours of raw text before, with wgra backfill-intents).",
+            "the 48 hours of raw text before, with undercurrent backfill-intents).",
         ),
         switches_table,
         rising_table(

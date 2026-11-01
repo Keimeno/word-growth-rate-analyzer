@@ -5,12 +5,12 @@ live one): the tracked subreddits of config.yaml with about 130k comments a day 
 them, and the r/all sample with 400k a day, for as many weeks as asked. Run it against a
 ClickHouse of its own, for example one limited to the planned VPS (4 CPUs, 8 GB):
 
-    docker run -d --name wgra-dev-bench-clickhouse --cpus 4 --memory 8g \\
-        -p 127.0.0.1:3617:8123 -e CLICKHOUSE_USER=wgra -e CLICKHOUSE_PASSWORD=bench \\
-        -v "$PWD/clickhouse/wgra.xml:/etc/clickhouse-server/config.d/wgra.xml:ro" \\
+    docker run -d --name undercurrent-dev-bench-clickhouse --cpus 4 --memory 8g \\
+        -p 127.0.0.1:3617:8123 -e CLICKHOUSE_USER=undercurrent -e CLICKHOUSE_PASSWORD=bench \\
+        -v "$PWD/clickhouse/undercurrent.xml:/etc/clickhouse-server/config.d/undercurrent.xml:ro" \\
         clickhouse/clickhouse-server:26.8
     CLICKHOUSE_PORT=3617 CLICKHOUSE_PASSWORD=bench uv run python bench/synthetic.py \\
-        --database wgra_bench --weeks 53
+        --database undercurrent_bench --weeks 53
 
 The vocabulary is shared by all subreddits and Zipf-like: the share of comments
 mentioning the term of rank r is min(0.1, 110 / r^1.34). Per subreddit and day, every
@@ -31,10 +31,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from wgra.config import Env, load_config
-from wgra.ingest.run import write_channels
-from wgra.sources.reddit.channels import PLATFORM, SAMPLE
-from wgra.store import connect, migrate
+from undercurrent.config import Env, load_config
+from undercurrent.ingest.run import write_channels
+from undercurrent.sources.reddit.channels import PLATFORM, SAMPLE
+from undercurrent.store import connect, migrate
 
 A, S, VOCABULARY = 110.0, 1.34, 5_000_000
 MAX_SHARE = 0.1
@@ -112,7 +112,7 @@ def main() -> None:
     parser.add_argument("--end", type=date.fromisoformat, default=date(2026, 10, 12))
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     args = parser.parse_args()
-    if args.database == "wgra":
+    if args.database == "undercurrent":
         raise SystemExit("never into the live database")
 
     config = load_config(args.config)

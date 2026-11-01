@@ -35,8 +35,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 # The web dashboard: the API and the built page on 3610
 FROM base AS web
 COPY --from=web-build /web/dist /app/web-dist
-CMD ["wgra", "web", "--host", "0.0.0.0"]
+CMD ["undercurrent", "web", "--host", "0.0.0.0"]
 
 # The ingester and the analyzer; config.yaml is mounted at runtime, see docker-compose.yml
 FROM base AS app
-CMD ["wgra", "ingest"]
+CMD ["undercurrent", "ingest"]

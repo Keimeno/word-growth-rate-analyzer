@@ -16,8 +16,8 @@ import numpy as np
 import pytest
 from helpers import make_config
 
-from wgra.config import Config, Env, LongTermConfig
-from wgra.detect.long_term import (
+from undercurrent.config import Config, Env, LongTermConfig
+from undercurrent.detect.long_term import (
     LongTermDetector,
     LongTermTrend,
     first_full_week,
@@ -26,11 +26,11 @@ from wgra.detect.long_term import (
     week_start,
     write_long_term,
 )
-from wgra.detect.run import Analyzer
-from wgra.detect.short_term import load_scopes
-from wgra.ingest.run import write_channels
-from wgra.notify.ntfy import Ntfy
-from wgra.store import migrate
+from undercurrent.detect.run import Analyzer
+from undercurrent.detect.short_term import load_scopes
+from undercurrent.ingest.run import write_channels
+from undercurrent.notify.ntfy import Ntfy
+from undercurrent.store import migrate
 
 # the run is as of Monday 2026-06-22 00:30 UTC: the weeks before Monday Jun 22 count.
 # In the past, notifications are logged with the time they're really sent.
@@ -330,7 +330,7 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
         sent.append(json.loads(request.content))
         return httpx.Response(200, json={"id": "x"})
 
-    return Ntfy("http://ntfy", "wgra", transport=httpx.MockTransport(handle)), sent
+    return Ntfy("http://ntfy", "undercurrent", transport=httpx.MockTransport(handle)), sent
 
 
 def test_analyzer_runs_daily_and_reports_on_mondays(history_client):

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from helpers import make_config, make_doc
 
-from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor, RecentKeys
+from undercurrent.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor, RecentKeys
 
 
 def processor() -> Processor:

@@ -2,8 +2,8 @@ import math
 
 import pytest
 
-from wgra.config import Thresholds
-from wgra.detect.scoring import (
+from undercurrent.config import Thresholds
+from undercurrent.detect.scoring import (
     Candidate,
     Counts,
     Prior,

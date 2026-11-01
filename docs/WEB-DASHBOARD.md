@@ -1,10 +1,9 @@
 # Web dashboard in TypeScript: plan
 
 **Status: built 2026-11-01** (phases 0–5), on port 3610 next to Grafana as the pro mode;
-what was built differently or not at all is in §17. Written for after the rename to
-Undercurrent ([RENAME.md](RENAME.md)), so it uses the new names: the package
-`undercurrent`, the command `undercurrent web`, Grafana uids `undercurrent-*`. Until the
-rename lands, the code keeps today's names (RENAME.md §2).
+what was built differently or not at all is in §17. It uses the names of the rename to
+Undercurrent ([RENAME.md](RENAME.md)), which landed after phase 5: the package
+`undercurrent`, the command `undercurrent web`, Grafana uids `undercurrent-*`.
 
 The web dashboard of `85b365c` (2026-10-31) is a plainer view of what the Grafana dashboards
 show: a Python server with 19 JSON endpoints and a page in plain JavaScript with Preact
@@ -1369,10 +1368,9 @@ dependencies (it misread the utils alias); it was removed and the components poi
 
 Where the plan changed against the code:
 
-* **The rename isn't in yet**, so the package is `src/wgra`, the command `wgra web`, the
-  ClickHouse user `wgra_web`, the Grafana uids `wgra-*`. New names that the rename's sed
-  wouldn't touch are already the new ones: `UNDERCURRENT_NOW`, `UNDERCURRENT_API`, the
-  localStorage key `undercurrent.theme`.
+* **The rename** came after phase 5. Names its replacement wouldn't touch had the new
+  name from the start: `UNDERCURRENT_NOW`, `UNDERCURRENT_API`, the localStorage key
+  `undercurrent.theme`.
 * **The v1 leftovers** (`node_modules/`, `packages/`, `config.json`, `v2/`) are still
   there, waiting for the user's OK; `tsconfig.json` names its `types`, so they're inert.
 * **Endpoints** follow §5.2 with these differences: `/trends/series`, `/digest`, `/alerts`
@@ -1409,12 +1407,12 @@ Where the plan changed against the code:
 * **The demo database** (§10.2) is `bench/demo.py`, by an agent: `--small` keeps 52 days
   of hourly counts (the detector needs 29 before its first run, edges three weeks of
   events), not 30; noise is damped so nothing trends by chance; it runs the detectors and
-  the Analyzer directly instead of `wgra replay --store`; small in about 1.5 minutes,
-  full in 11. It removes the tables' TTLs, since its time is frozen in the past.
-* **Not built** from §4, §6–§10: `wgra web record`, MSW fixtures and `pnpm dev:mock`;
-  Vitest component tests in browser mode (Playwright covers the components on the demo
-  database); visual screenshot tests with frozen time (the charts' SVG snapshots are
-  there); sort orders in the url and virtualized tables (tables show 25 rows and "show
+  the Analyzer directly instead of `undercurrent replay --store`; small in about 1.5
+  minutes, full in 11. It removes the tables' TTLs, since its time is frozen in the past.
+* **Not built** from §4, §6–§10: `undercurrent web record`, MSW fixtures and
+  `pnpm dev:mock`; Vitest component tests in browser mode (Playwright covers the components
+  on the demo database); visual screenshot tests with frozen time (the charts' SVG snapshots
+  are there); sort orders in the url and virtualized tables (tables show 25 rows and "show
   all"); hover emphasis across charts and `hl=`; breadcrumbs from `from=` (a fixed one);
   hover cards for scopes and stories (terms have them); arrow keys on charts; decals for
   forced colours; the keyboard-only walk test; a comparison of each competitor on the

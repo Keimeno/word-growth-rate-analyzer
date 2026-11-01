@@ -1,7 +1,7 @@
 import pytest
 from helpers import make_config, make_item, no_sample
 
-from wgra.sources.reddit.feeds import FeedScheduler, build_feeds, observed_rate
+from undercurrent.sources.reddit.feeds import FeedScheduler, build_feeds, observed_rate
 
 
 def listing(newest_id: int, count: int, seconds_apart: float, newest_time: int = 1_700_000_000):

@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 import pytest
 from helpers import make_config, make_doc
 
-from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
-from wgra.ingest.run import write_channels
-from wgra.query import term_series
-from wgra.store import migrate, split_statements
+from undercurrent.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from undercurrent.ingest.run import write_channels
+from undercurrent.query import term_series
+from undercurrent.store import migrate, split_statements
 
 
 def test_split_statements_ignores_comment_lines():

@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from scipy import stats
 
-from wgra.config import LongTermConfig
-from wgra.detect.trend_stats import (
+from undercurrent.config import LongTermConfig
+from undercurrent.detect.trend_stats import (
     EMERGING,
     FADING,
     FLAT,

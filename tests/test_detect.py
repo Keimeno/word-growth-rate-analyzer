@@ -13,16 +13,22 @@ import httpx
 import pytest
 from helpers import make_config
 
-from wgra.config import Config, Env, Horizon, NotifyConfig
-from wgra.detect.alerts import SENT
-from wgra.detect.replay import replay, report
-from wgra.detect.run import Analyzer
-from wgra.detect.short_term import Detector, Trend, load_background, load_scopes, write_trends
-from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS
-from wgra.ingest.run import write_channels
-from wgra.notify.ntfy import Ntfy
-from wgra.query import latest_trends, resolve_scope
-from wgra.store import migrate
+from undercurrent.config import Config, Env, Horizon, NotifyConfig
+from undercurrent.detect.alerts import SENT
+from undercurrent.detect.replay import replay, report
+from undercurrent.detect.run import Analyzer
+from undercurrent.detect.short_term import (
+    Detector,
+    Trend,
+    load_background,
+    load_scopes,
+    write_trends,
+)
+from undercurrent.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS
+from undercurrent.ingest.run import write_channels
+from undercurrent.notify.ntfy import Ntfy
+from undercurrent.query import latest_trends, resolve_scope
+from undercurrent.store import migrate
 
 # the window of the 24h horizon is Sep 29 12:00 to Sep 30 12:00
 END = datetime(2026, 9, 30, 12, tzinfo=UTC)
@@ -215,7 +221,7 @@ def recording_ntfy() -> tuple[Ntfy, list[dict]]:
         sent.append(json.loads(request.content))
         return httpx.Response(200, json={"id": "x"})
 
-    return Ntfy("http://ntfy", "wgra", transport=httpx.MockTransport(handle)), sent
+    return Ntfy("http://ntfy", "undercurrent", transport=httpx.MockTransport(handle)), sent
 
 
 def test_analyzer_alerts_once_and_sends_one_digest_per_day(history_client):
@@ -233,7 +239,7 @@ def test_analyzer_alerts_once_and_sends_one_digest_per_day(history_client):
     assert sent[0]["title"].startswith("vision pro · ")
     # the term page, with Grafana as the second button, and the brand's icon, no emoji
     assert sent[0]["click"].startswith("https://web.test/t/phrase/vision%20pro?scope=")
-    assert sent[0]["actions"][-1]["url"].startswith("https://grafana.test/d/wgra-terms?")
+    assert sent[0]["actions"][-1]["url"].startswith("https://grafana.test/d/undercurrent-terms?")
     assert sent[0]["icon"] == "https://web.test/notification-icon.png"
     assert "tags" not in sent[0]
     # 11:59 UTC is past the digest time: one digest for the only configured group

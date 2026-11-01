@@ -6,8 +6,8 @@ from contextlib import contextmanager
 import pytest
 from dotenv import load_dotenv
 
-from wgra.config import Env
-from wgra.store import connect
+from undercurrent.config import Env
+from undercurrent.store import connect
 
 
 @contextmanager
@@ -27,7 +27,7 @@ def throwaway_database() -> Iterator:
             raise
         pytest.skip(f"ClickHouse not available: {error}")
 
-    database = f"wgra_test_{secrets.token_hex(4)}"
+    database = f"undercurrent_test_{secrets.token_hex(4)}"
     admin.command(f"CREATE DATABASE {database}")
     try:
         yield connect(env, database=database)

@@ -111,7 +111,7 @@ migrations.
 
 ### 2.3 Collection: one interface, a module per source
 
-* `wgra/sources/base.py` defines an `Item` (id, platform, channel, doc_type, author,
+* `undercurrent/sources/base.py` defines an `Item` (id, platform, channel, doc_type, author,
   created_at, text, url, lang, and `skip`: why the source drops it, such as bot, moderation
   or deleted) and a `Source` that runs forever and hands items and poll rows to the shared
   pipeline.
@@ -121,10 +121,10 @@ migrations.
 * The `Processor` stays shared: author hash, copypasta filter, terms, intents. The author is
   hashed together with its platform (`hn:pg`, `bsky:did:plc:…`). The same name on two
   platforms counts as two people, and identities are never linked across platforms.
-* One process per source: `wgra ingest --source hn`, one Compose service each. A Bluesky
-  reconnect or a GitHub backfill can't stall Reddit's polling, and Bluesky gets a core of
-  its own. `wgra ingest` without `--source` runs every enabled source in one process, for a
-  laptop.
+* One process per source: `undercurrent ingest --source hn`, one Compose service each. A
+  Bluesky reconnect or a GitHub backfill can't stall Reddit's polling, and Bluesky gets a
+  core of its own. `undercurrent ingest` without `--source` runs every enabled source in one
+  process, for a laptop.
 * `REDDIT_*` are only required while Reddit is enabled. With `platforms.reddit.enabled:
   false` the stack runs without Reddit (§5).
 
@@ -227,7 +227,7 @@ more late, and Google Trends 2 days late.
 
 * **Cascades.** Per event, its onsets in order with the time since the first. For example:
   "llama 4: hn 0 h → gh/stars 5 h → r/LocalLLaMA 9 h → r/all 31 h → bsky 40 h → wiki 4 d".
-  In `wgra spread --term "llama 4"`, and as a table on the new dashboard.
+  In `undercurrent spread --term "llama 4"`, and as a table on the new dashboard.
 * **First movers.** Per topic, the share of events that started on each platform (the
   earliest rise onset), with n: "of 212 tech events in the last 90 days, 41% started on HN".
 * **The platform map.** For each pair of platforms: the median lag (and IQR), the hit rate
@@ -305,7 +305,7 @@ changes with the code.
 * HN with its Algolia backfill, the `repo` kind, GitHub's watched repos and their star
   backfill, `wiki` as a follower.
 * Run the detector over the backfilled weeks and store the trends, so they become events.
-  `wgra replay` already runs it as of past hours; it gets a `--store` option.
+  `undercurrent replay` already runs it as of past hours; it gets a `--store` option.
 * **Done when:** 120 days of HN and of the watched repos' stars are in, and each source's
   daily volume, CPU and disk are measured and written into §4.
 * Both backfill, so HN, GitHub and Wikipedia have months of history on the first day.
@@ -313,8 +313,9 @@ changes with the code.
 
 ### Phase 3: the spread map (about 4 days)
 
-* Rise onsets, thinning, first movers, cascades, common paths, `wgra spread`, the Spread map
-  dashboard, the weekly report's section, and `wgra replay --forecast` across platforms.
+* Rise onsets, thinning, first movers, cascades, common paths, `undercurrent spread`, the
+  Spread map dashboard, the weekly report's section, and `undercurrent replay --forecast`
+  across platforms.
 * **Done when:** gate 1 (§6) can be answered from the HN, GitHub and Wikipedia history.
 
 ### Phase 4: Bluesky (about 2 days)
@@ -369,10 +370,10 @@ With Hacker News, the source the examples lean on, it needs YC's written permiss
    and Wikipedia show at least 3 directed edges between platforms that survive thinning,
    each with n ≥ 10, or first movers that differ clearly from each platform's share of the
    volume. If not, the thesis is weak where it should be strongest: stop before Bluesky.
-2. **Forecasts across platforms (6 weeks after phase 4).** `wgra replay --forecast` across
-   platforms: calibrated within 10 points per bin, a lift of at least 2 over the follower's
-   base rate, and a median warning of at least 12 hours. Until then they're hints on the
-   dashboard, without alerts.
+2. **Forecasts across platforms (6 weeks after phase 4).** `undercurrent replay --forecast`
+   across platforms: calibrated within 10 points per bin, a lift of at least 2 over the
+   follower's base rate, and a median warning of at least 12 hours. Until then they're hints
+   on the dashboard, without alerts.
 3. **Data rights (when it becomes a product, before anyone outside sees it).** Written
    answers from YC and GitHub, or
    those sources off for the product; App Store reviews only after a lawyer's reading;
@@ -415,10 +416,10 @@ With Hacker News, the source the examples lean on, it needs YC's written permiss
 
 The same system with new names and a new structure, and the same results. Afterwards only
 these know Reddit: `sources/reddit/`, the churn radar's search and comment trees (`radar/`
-and the `r/_search` channel), `wgra suggest-subreddits` (it finds untracked subreddits in
-r/all items), and the `subreddit` term kind (mentions of r/x, which HN and Bluesky have
-too). Everything that changes results waits for phase 2 (§8.9), so phase 1 can be checked
-by comparing numbers (§8.7).
+and the `r/_search` channel), `undercurrent suggest-subreddits` (it finds untracked
+subreddits in r/all items), and the `subreddit` term kind (mentions of r/x, which HN and
+Bluesky have too). Everything that changes results waits for phase 2 (§8.9), so phase 1 can
+be checked by comparing numbers (§8.7).
 
 ### 8.1 Before starting
 
@@ -458,8 +459,8 @@ type instead.
   001.
 * `items`: id, platform, channel, doc_type, created_at, author_hash, text, url, lang,
   token_count, intents, ingested_at. Sorted by (channel, created_at, id), deleted after 48
-  hours. `lang` is stored so `wgra backfill-intents` no longer needs to parse the subreddit
-  out of the permalink.
+  hours. `lang` is stored so `undercurrent backfill-intents` no longer needs to parse the
+  subreddit out of the permalink.
 * `scope_hourly`, `term_events`, `term_hourly`, `term_daily`: `channel` and `doc_type`,
   otherwise unchanged, with the same materialized views.
 * `channels` (channel, platform, language, analyzed, background) and `channel_groups`
@@ -471,7 +472,7 @@ type instead.
 * `trends`, `long_term_trends`, `lead_lag_events`, `propagation_edges`, `forecasts`: the
   new values of §8.2, no new columns. `wiki_leads`: the renamed columns.
 * Recreating the local database: `docker compose down`, `docker volume rm
-  wgra_clickhouse_data`, `docker compose up -d --build`. What was collected since
+  undercurrent_clickhouse_data`, `docker compose up -d --build`. What was collected since
   2026-10-31 is lost, a few days at most, and history restarts. Alert cooldowns restart
   with `trends`. If those days are worth keeping, a one-off `INSERT … SELECT` from the old
   tables into a second database carries them over. It's a command for that day, not a
@@ -525,7 +526,7 @@ the author hash), `ingest/writer.py`, `ingest/backfill.py`, and `ingest/run.py`,
 writes `channels` and `channel_groups`, starts every enabled source with one `Sink`, and
 reports. The author hash takes `platform:author`, so every hash changes once, which the
 recreated database absorbs. `max_ngram` and whether intents are extracted come from the
-item's channel (background channels: 2-grams, `intents.sample`). `wgra ingest` gets
+item's channel (background channels: 2-grams, `intents.sample`). `undercurrent ingest` gets
 `--source`, defaulting to every enabled platform; one Compose service stays as today.
 
 ### 8.5 Analysis
@@ -542,7 +543,7 @@ item's channel (background channels: 2-grams, `intents.sample`). `wgra ingest` g
 | `leadlag/wikipedia.py` | The renamed columns; "first onset" for "reddit onset". |
 | `leadlag/suggest.py` | Stays Reddit-only; reads the subreddit from `url`. |
 | `notify/messages.py` | Scope type instead of the `r/` prefix; a background channel's label from the config ("reddit-wide (the r/all sample)"). |
-| `query.py`, `cli.py` | `--scope` takes a group or a channel id; `wgra status` lists channels with their platform. |
+| `query.py`, `cli.py` | `--scope` takes a group or a channel id; `undercurrent status` lists channels with their platform. |
 | `radar/candidates.py` | Buckets by the watchlist's group, `reddit`, `r/all` and `r/_search`. |
 | `text/` | Unchanged; the `subreddit` kind is text. |
 
@@ -587,8 +588,8 @@ item's channel (background channels: 2-grams, `intents.sample`). `wgra ingest` g
 ### 8.7 How we know nothing changed
 
 1. **Before**, on the code before phase 1: `bench/lead_lag.py` (seed 1) generates its
-   history into a bench database. Dump a `wgra replay --csv` over its last 3 days, and the
-   events with onsets and the edges of `run backfill`.
+   history into a bench database. Dump a `undercurrent replay --csv` over its last 3 days,
+   and the events with onsets and the edges of `run backfill`.
 2. **After**, the same on the phase 1 code, on the same day (the generator's history ends
    today). As built: `generate` can't be repeated identically, its noise comes from
    ClickHouse's `rand()` and `randCanonical()`, so the seed only fixes the planted events.
@@ -615,8 +616,8 @@ item's channel (background channels: 2-grams, `intents.sample`). `wgra ingest` g
      with identical counts. Ties keep the order ClickHouse returns them in, which depends
      on how the parts are laid out, and the copied history's parts differ.
 4. `uv run pytest`, `ruff check`, `ruff format --check` and `mypy` pass.
-5. Recreate the local database (§8.3), run a day, and check `wgra status`, the ingestion
-   dashboard and Trending now.
+5. Recreate the local database (§8.3), run a day, and check `undercurrent status`, the
+   ingestion dashboard and Trending now.
 
 ### 8.8 Order of work
 
@@ -682,11 +683,11 @@ or incomplete against the code:
   The `source` variable is the query variable `doc_type`, every type by default. The
   intent radar's needs table lists the configured groups and `r/all`, as it listed
   `sample`.
-* **`wgra status`** lists every channel of `config.yaml` with its platform, its documents
-  of the last 24 hours and their types. **`wgra suggest-subreddits`** prints channel ids to
-  paste. **`wgra radar candidates`** buckets as `watchlist`, `reddit`, `r/all` and
-  `r/_search`, and only counts those channels: another platform's channels won't land in
-  `reddit` in phase 2.
+* **`undercurrent status`** lists every channel of `config.yaml` with its platform, its
+  documents of the last 24 hours and their types. **`undercurrent suggest-subreddits`**
+  prints channel ids to paste. **`undercurrent radar candidates`** buckets as `watchlist`,
+  `reddit`, `r/all` and `r/_search`, and only counts those channels: another platform's
+  channels won't land in `reddit` in phase 2.
 * **`backfill-intents` and `bench/intent_precision.py`** read the stored `lang`;
   `real_subreddit()` is gone. `bench/intent_names.py` reads the english items by `lang`.
 * **Wikipedia:** `wiki_leads.first_onset`, `first_scope` as planned, and the summary's
@@ -698,7 +699,7 @@ or incomplete against the code:
 * **Migration 001 creates its tables `IF NOT EXISTS`**, like 002–004: on the recreated
   database the ingester and the analyzer migrated at the same moment, and the ingester
   crashed once on "table items already exists" before Docker restarted it.
-* **`bench/synthetic.py`** connected to the `wgra` database to create its own, which a
-  fresh bench ClickHouse doesn't have; it uses `default` now, like `bench/lead_lag.py`.
+* **`bench/synthetic.py`** connected to the `undercurrent` database to create its own, which
+  a fresh bench ClickHouse doesn't have; it uses `default` now, like `bench/lead_lag.py`.
 * **`ruff format --check` failed before phase 1:** ruff 0.17 formats the Python block of
   §8.4, which now follows its formatting.

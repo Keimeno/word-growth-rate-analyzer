@@ -1,9 +1,9 @@
 {
-  "uid": "wgra-ingestion",
+  "uid": "undercurrent-ingestion",
   "title": "Ingestion",
   "description": "Is the ingester healthy and complete?",
   "tags": [
-    "wgra"
+    "undercurrent"
   ],
   "timezone": "browser",
   "schemaVersion": 41,

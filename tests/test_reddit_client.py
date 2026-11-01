@@ -1,8 +1,8 @@
 import httpx
 import pytest
 
-from wgra.sources.reddit.client import RedditClient, RedditError
-from wgra.sources.reddit.models import parse_listing
+from undercurrent.sources.reddit.client import RedditClient, RedditError
+from undercurrent.sources.reddit.models import parse_listing
 
 
 class FakeTime:
@@ -62,7 +62,7 @@ def make_client(fake: FakeReddit, time: FakeTime, requests_per_minute: float = 6
     return RedditClient(
         "id",
         "secret",
-        "python:wgra-test:1.0 (by /u/test)",
+        "python:undercurrent-test:1.0 (by /u/test)",
         requests_per_minute,
         transport=httpx.MockTransport(fake.handler),
         clock=time.clock,
@@ -91,7 +91,7 @@ async def test_listing_authenticates_and_sends_user_agent():
     assert items[0].subreddit == "technology"
     request = fake.api_requests[0]
     assert request.headers["authorization"] == "bearer token-1"
-    assert request.headers["user-agent"] == "python:wgra-test:1.0 (by /u/test)"
+    assert request.headers["user-agent"] == "python:undercurrent-test:1.0 (by /u/test)"
     assert request.url.params["limit"] == "100"
     assert request.url.params["raw_json"] == "1"
 

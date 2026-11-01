@@ -3,8 +3,16 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from helpers import make_config
 
-from wgra.config import Horizon
-from wgra.detect.short_term import CHANNEL, GROUP, Detector, Scope, Window, next_hour, prior_days
+from undercurrent.config import Horizon
+from undercurrent.detect.short_term import (
+    CHANNEL,
+    GROUP,
+    Detector,
+    Scope,
+    Window,
+    next_hour,
+    prior_days,
+)
 
 
 def test_live_runs_include_the_current_hour():

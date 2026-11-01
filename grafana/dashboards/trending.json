@@ -1,9 +1,9 @@
 {
-  "uid": "wgra-trending",
+  "uid": "undercurrent-trending",
   "title": "Trending now",
-  "description": "Terms mentioned far more than usual, scored every 15 minutes by wgra analyze.",
+  "description": "Terms mentioned far more than usual, scored every 15 minutes by undercurrent analyze.",
   "tags": [
-    "wgra"
+    "undercurrent"
   ],
   "timezone": "browser",
   "schemaVersion": 41,
@@ -181,7 +181,7 @@
     {
       "type": "stat",
       "title": "Last run",
-      "description": "When wgra analyze last scored this horizon. It runs every 15 minutes.",
+      "description": "When undercurrent analyze last scored this horizon. It runs every 15 minutes.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -375,7 +375,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH (SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run\nSELECT\n    scope,\n    term,\n    kind,\n    round(z, 1) AS score,\n    if(is_new, 'new', toString(round(ratio, 1))) AS times_usual,\n    mentions,\n    authors,\n    if(scope_type = 'group', concat(toString(breadth), '/', toString(members)), '')\n        AS breadth,\n    reference_mentions AS mentions_before,\n    alert,\n    subsumed_by,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&from=now-7d&to=now') AS explore\nFROM trends FINAL\nWHERE horizon = ${horizon:sqlstring} AND detected_at = latest_run AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND (subsumed_by = '' OR ${subsumed:sqlstring} = 'show')\nORDER BY z DESC\nLIMIT 200",
+          "rawSql": "WITH (SELECT max(detected_at) FROM trends WHERE horizon = ${horizon:sqlstring}) AS latest_run\nSELECT\n    scope,\n    term,\n    kind,\n    round(z, 1) AS score,\n    if(is_new, 'new', toString(round(ratio, 1))) AS times_usual,\n    mentions,\n    authors,\n    if(scope_type = 'group', concat(toString(breadth), '/', toString(members)), '')\n        AS breadth,\n    reference_mentions AS mentions_before,\n    alert,\n    subsumed_by,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&from=now-7d&to=now') AS explore\nFROM trends FINAL\nWHERE horizon = ${horizon:sqlstring} AND detected_at = latest_run AND scope IN (${scope:singlequote}) AND kind IN (${kind:singlequote}) AND (subsumed_by = '' OR ${subsumed:sqlstring} = 'show')\nORDER BY z DESC\nLIMIT 200",
           "refId": "A"
         },
         {
@@ -700,7 +700,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    term,\n    argMax(scope, z) AS strongest_in,\n    round(max(z), 1) AS score,\n    if(argMax(is_new, z), 'new', toString(round(argMax(ratio, z), 1))) AS times_usual,\n    argMax(mentions, z) AS mentions,\n    min(detected_at) AS first_seen,\n    max(detected_at) AS last_seen,\n    arrayStringConcat(arraySort(groupUniqArray(horizon)), ', ') AS horizons,\n    concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(strongest_in), '&from=now-7d&to=now') AS explore\nFROM trends\nWHERE detected_at > now() - INTERVAL 24 HOUR AND scope IN (${scope:singlequote})\n  AND kind IN (${kind:singlequote}) AND subsumed_by = ''\nGROUP BY term\nORDER BY max(z) DESC\nLIMIT 100",
+          "rawSql": "SELECT\n    term,\n    argMax(scope, z) AS strongest_in,\n    round(max(z), 1) AS score,\n    if(argMax(is_new, z), 'new', toString(round(argMax(ratio, z), 1))) AS times_usual,\n    argMax(mentions, z) AS mentions,\n    min(detected_at) AS first_seen,\n    max(detected_at) AS last_seen,\n    arrayStringConcat(arraySort(groupUniqArray(horizon)), ', ') AS horizons,\n    concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(strongest_in), '&from=now-7d&to=now') AS explore\nFROM trends\nWHERE detected_at > now() - INTERVAL 24 HOUR AND scope IN (${scope:singlequote})\n  AND kind IN (${kind:singlequote}) AND subsumed_by = ''\nGROUP BY term\nORDER BY max(z) DESC\nLIMIT 100",
           "refId": "A"
         }
       ],
@@ -763,7 +763,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT detected_at AS time, horizon, scope, term, alert, round(z, 1) AS score,\n       if(is_new, 'new', toString(round(ratio, 1))) AS times_usual, mentions, authors,\n       concat('/d/wgra-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&from=now-7d&to=now') AS explore\nFROM trends FINAL\nWHERE alert != '' AND detected_at > now() - INTERVAL 14 DAY AND scope IN (${scope:singlequote})\nORDER BY detected_at DESC\nLIMIT 200",
+          "rawSql": "SELECT detected_at AS time, horizon, scope, term, alert, round(z, 1) AS score,\n       if(is_new, 'new', toString(round(ratio, 1))) AS times_usual, mentions, authors,\n       concat('/d/undercurrent-terms?var-terms=', encodeURLFormComponent(term), '&var-group=', encodeURLFormComponent(scope), '&from=now-7d&to=now') AS explore\nFROM trends FINAL\nWHERE alert != '' AND detected_at > now() - INTERVAL 14 DAY AND scope IN (${scope:singlequote})\nORDER BY detected_at DESC\nLIMIT 200",
           "refId": "A"
         }
       ],

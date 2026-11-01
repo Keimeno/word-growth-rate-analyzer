@@ -1,9 +1,9 @@
 {
-  "uid": "wgra-terms",
+  "uid": "undercurrent-terms",
   "title": "Term explorer",
   "description": "How often terms are mentioned in a group or channels, relative to all comments and posts.",
   "tags": [
-    "wgra"
+    "undercurrent"
   ],
   "timezone": "browser",
   "schemaVersion": 41,

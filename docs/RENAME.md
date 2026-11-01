@@ -1,7 +1,8 @@
 # Rename to Undercurrent: plan
 
-**Status: planned, not started.** The project becomes Undercurrent everywhere except the
-GitHub repository, which keeps its name for now.
+**Status: code renamed 2026-11-01 (§3.2–§3.4); the switch of the running stack (§3.5) is
+next.** The project becomes Undercurrent everywhere except the GitHub repository, which
+keeps its name for now.
 
 "Word Growth Rate Analyzer" describes the first engine: which words gain share of the
 conversation. The project now also says where a term starts and where it goes next (§4.6

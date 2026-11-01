@@ -1,4 +1,4 @@
-from wgra.text import DOMAIN, PHRASE, SUBREDDIT, WORD, extract_terms
+from undercurrent.text import DOMAIN, PHRASE, SUBREDDIT, WORD, extract_terms
 
 
 def words(text: str, language: str = "en") -> list[str]:

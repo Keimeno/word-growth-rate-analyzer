@@ -3,8 +3,8 @@ made the patterns what they are (docs/ARCHITECTURE.md §4.7)."""
 
 import pytest
 
-from wgra.text import extract_terms
-from wgra.text.intents import (
+from undercurrent.text import extract_terms
+from undercurrent.text.intents import (
     ALTERNATIVE,
     COMPLAINT,
     CONSIDERING,
@@ -15,7 +15,7 @@ from wgra.text.intents import (
     intent_term,
     source_sentence,
 )
-from wgra.text.terms import clean
+from undercurrent.text.terms import clean
 
 
 def intents(text: str, language: str = "en") -> set[tuple[str, str]]:
@@ -362,7 +362,7 @@ def test_german_negatives(text):
 def test_every_pattern_has_a_trigger_word():
     """The prefilter skips sentences without any word a pattern needs: every golden
     example must get through it."""
-    from wgra.text.intents import _TRIGGERS
+    from undercurrent.text.intents import _TRIGGERS
 
     examples = [
         "made the switch from Windows to Linux",

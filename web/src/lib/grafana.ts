@@ -1,12 +1,12 @@
 /** "Pro mode": the same view in Grafana, with the same choices made. */
 const DASHBOARDS: Record<string, string> = {
-  trending: "wgra-trending",
-  quick: "wgra-rising",
-  "long-term": "wgra-long-term",
-  intents: "wgra-intents",
-  spread: "wgra-early-warning",
-  explore: "wgra-terms",
-  collection: "wgra-ingestion",
+  trending: "undercurrent-trending",
+  quick: "undercurrent-rising",
+  "long-term": "undercurrent-long-term",
+  intents: "undercurrent-intents",
+  spread: "undercurrent-early-warning",
+  explore: "undercurrent-terms",
+  collection: "undercurrent-ingestion",
 };
 
 const VARIABLES: Record<string, string> = {
@@ -45,5 +45,5 @@ export function grafanaLink(
     query.set("from", `now-${range}`);
     query.set("to", "now");
   }
-  return `${base}/d/${DASHBOARDS[page] ?? "wgra-trending"}?${query.toString()}`;
+  return `${base}/d/${DASHBOARDS[page] ?? "undercurrent-trending"}?${query.toString()}`;
 }

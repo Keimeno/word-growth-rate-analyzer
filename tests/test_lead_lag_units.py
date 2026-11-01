@@ -7,17 +7,17 @@ import numpy as np
 import pytest
 from helpers import make_config
 
-from wgra.config import (
+from undercurrent.config import (
     ForecastConfig,
     LeadLagConfig,
     NotifyConfig,
     parse_config,
 )
-from wgra.detect.scoring import Counts, Prior, score_arrays
-from wgra.leadlag.edges import ALL, Edge, Network, learn_edges
-from wgra.leadlag.evaluate import Evaluation, first_per_follower, scheduled_run
-from wgra.leadlag.events import Event, Onset, Sighting, assign_events, event_span, topic_of
-from wgra.leadlag.forecasts import (
+from undercurrent.detect.scoring import Counts, Prior, score_arrays
+from undercurrent.leadlag.edges import ALL, Edge, Network, learn_edges
+from undercurrent.leadlag.evaluate import Evaluation, first_per_follower, scheduled_run
+from undercurrent.leadlag.events import Event, Onset, Sighting, assign_events, event_span, topic_of
+from undercurrent.leadlag.forecasts import (
     HIT,
     MISS,
     OFF,
@@ -28,9 +28,9 @@ from wgra.leadlag.forecasts import (
     decide_forecast_alerts,
     resolve,
 )
-from wgra.leadlag.onsets import first_crossings
-from wgra.leadlag.stats import given_nothing_yet
-from wgra.notify.messages import ForecastSummary, forecast_message
+from undercurrent.leadlag.onsets import first_crossings
+from undercurrent.leadlag.stats import given_nothing_yet
+from undercurrent.notify.messages import ForecastSummary, forecast_message
 
 MINUTE = timedelta(minutes=1)
 HOUR = timedelta(hours=1)
@@ -564,5 +564,5 @@ def test_forecast_message():
     )
     assert "within 7.0 days, after 2.5 days (median)" in message.body
     assert "Chance this time: 62% (45%–78%), against 9% for any trending term" in message.body
-    assert message.click.startswith("https://grafana.test/d/wgra-terms?var-terms=ollama")
-    assert ("Early warning", "https://grafana.test/d/wgra-early-warning") in message.links
+    assert message.click.startswith("https://grafana.test/d/undercurrent-terms?var-terms=ollama")
+    assert ("Early warning", "https://grafana.test/d/undercurrent-early-warning") in message.links

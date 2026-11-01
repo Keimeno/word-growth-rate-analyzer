@@ -3,17 +3,21 @@
   <img src="docs/brand/readme-header.svg" alt="Undercurrent" width="640">
 </picture>
 
-# Word Growth Rate Analyzer
+# Undercurrent
 
 **Early signals in online conversation.** What's rising, where it starts, where it spreads
 next, and why people switch products. The look and the voice are in
 [docs/BRAND.md](docs/BRAND.md).
 
-Finds out which words and phrases are gaining or losing share of the conversation in
-subreddits and groups of subreddits, over hours (short term) and months (long term).
-The design and the roadmap are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Formerly Word Growth Rate Analyzer (WGRA). The repository keeps its name.
 
-![WGRA architecture](docs/architecture.png)
+It finds the words and phrases that gain or lose share of the conversation in subreddits
+and groups of subreddits, over hours (short term) and months (long term); where a rising
+term starts and which communities pick it up next; and why people mention products:
+switching, looking for alternatives, complaining. The design and the roadmap are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+![Undercurrent architecture](docs/architecture.png)
 
 The diagram is generated from [docs/architecture.html](docs/architecture.html), the command
 to render it is at the top of that file.
@@ -101,7 +105,7 @@ Requires Docker. Works the same on a laptop and on a server.
 
    Grafana stays as the pro mode, with every panel and setting: open
    <http://localhost:3608>, log in as `admin` with `GRAFANA_ADMIN_PASSWORD`.
-   The dashboards are in the WGRA folder:
+   The dashboards are in the Undercurrent folder:
    * **Trending now**: what the analyzer found, per group and its channels: score,
      times the usual share, mentions, authors, breadth, a sparkline of the last week,
      and the alerts. Click a term to explore it.
@@ -123,11 +127,11 @@ Requires Docker. Works the same on a laptop and on a server.
    Every dashboard picks a group or a single channel: `reddit` is every tracked subreddit,
    `r/all` the sample of the rest of reddit.
 
-5. Subscribe to the alerts: open <http://localhost:3609/wgra> in a browser, or see
+5. Subscribe to the alerts: open <http://localhost:3609/undercurrent> in a browser, or see
    [Notifications on your phone](#notifications-on-your-phone). Check that they arrive:
 
    ```bash
-   uv run wgra notify-test
+   uv run undercurrent notify-test
    ```
 
 On a server the ports only listen on localhost. Reach the dashboards through an SSH tunnel:
@@ -144,8 +148,8 @@ docker compose stop ingest analyze
 
 ## Trends and alerts
 
-Every 15 minutes, `wgra analyze` compares, for every channel (each tracked subreddit, and
-r/all) and every group,
+Every 15 minutes, `undercurrent analyze` compares, for every channel (each tracked
+subreddit, and r/all) and every group,
 the share of comments and posts mentioning each term in a window with its share before:
 
 * **24h**: the last 24 hours against the 28 days before.
@@ -177,22 +181,22 @@ of history. The full 28-day reference period takes 4 weeks.
 
 ### Tuning without waiting
 
-`wgra replay` runs the detector as of past hours on the stored data and simulates the
-alert rules. It writes and sends nothing, so it can run next to the live analyzer:
+`undercurrent replay` runs the detector as of past hours on the stored data and simulates
+the alert rules. It writes and sends nothing, so it can run next to the live analyzer:
 
 ```bash
-uv run wgra replay --from 2026-10-14T00:00 --to 2026-10-21T00:00 --horizon 24h
-uv run wgra replay --from 2026-10-14T00:00 --min-z 4 --alert-min-z 8 --csv trends.csv
+uv run undercurrent replay --from 2026-10-14T00:00 --to 2026-10-21T00:00 --horizon 24h
+uv run undercurrent replay --from 2026-10-14T00:00 --min-z 4 --alert-min-z 8 --csv trends.csv
 ```
 
 It prints how many alerts each day and group would get, and lists them.
 
 ### Notifications on your phone
 
-Install the ntfy app (Android, iOS) and subscribe to the topic `wgra` on your server.
-Tapping an alert opens the term's page in the web dashboard (`WEB_URL`), with a second
-button for Grafana (`GRAFANA_URL`); `notify.links: grafana` in `config.yaml` opens Grafana
-instead. The phone has to reach ntfy and, for the links, the dashboard and Grafana:
+Install the ntfy app (Android, iOS) and subscribe to the topic `undercurrent` on your
+server. Tapping an alert opens the term's page in the web dashboard (`WEB_URL`), with a
+second button for Grafana (`GRAFANA_URL`); `notify.links: grafana` in `config.yaml` opens
+Grafana instead. The phone has to reach ntfy and, for the links, the dashboard and Grafana:
 
 * **On a server:** put ntfy (port 3609), the web dashboard (3610) and Grafana (3608)
   behind a reverse proxy with TLS, set `NTFY_BASE_URL`, `WEB_URL` and `GRAFANA_URL` in
@@ -202,14 +206,14 @@ instead. The phone has to reach ntfy and, for the links, the dashboard and Grafa
   `NTFY_UPSTREAM_BASE_URL=https://ntfy.sh` for instant delivery (free, only message ids
   pass through ntfy.sh).
 * **Without a server of your own:** set `NTFY_URL=https://ntfy.sh` and a long random
-  `NTFY_TOPIC`. Free and without an account (up to 250 messages a day, WGRA sends about
-  a dozen), but anyone who knows the topic can read it.
+  `NTFY_TOPIC`. Free and without an account (up to 250 messages a day, Undercurrent sends
+  about a dozen), but anyone who knows the topic can read it.
 
 ## Long-term trends
 
-Once a day after 00:30 UTC, `wgra analyze` looks at weekly shares: per ISO week (Monday
-to Sunday, UTC), the comments and posts mentioning a term divided by all of them. The
-current week is left out, so the results change on Mondays. For every channel and group,
+Once a day after 00:30 UTC, `undercurrent analyze` looks at weekly shares: per ISO week
+(Monday to Sunday, UTC), the comments and posts mentioning a term divided by all of them.
+The current week is left out, so the results change on Mondays. For every channel and group,
 over the last 13, 26 and 52 weeks:
 
 * Terms mentioned at least 20 times a week on average are tested. ClickHouse fits a
@@ -234,16 +238,17 @@ the `long_term:` section of [config.yaml](config.yaml), the statistics are expla
 the [architecture](docs/ARCHITECTURE.md#43-long-term-sustained-trends).
 
 ```bash
-uv run wgra long-term --once                      # run now, store and print the result
-uv run wgra long-term --once --as-of 2027-03-01   # as of a past date: the weeks before it
-uv run wgra long-term --once --dry-run            # store nothing
-uv run wgra trends --horizon 26w --scope tech     # the stored results
+uv run undercurrent long-term --once                      # run now, store and print the result
+uv run undercurrent long-term --once --as-of 2027-03-01   # as of a past date: the weeks before it
+uv run undercurrent long-term --once --dry-run            # store nothing
+uv run undercurrent trends --horizon 26w --scope tech     # the stored results
 ```
 
 `--as-of` replays a past date over the stored data: it analyzes the complete weeks before
 that date's week and stores them under that week (runs of the same week replace each
-other). `wgra analyze --no-long-term` turns the daily run off, `wgra long-term` without
-`--once` runs only the daily long-term loop and the reports.
+other). `undercurrent analyze --no-long-term` turns the daily run off,
+`undercurrent long-term` without `--once` runs only the daily long-term loop and the
+reports.
 
 ## Early warning
 
@@ -277,20 +282,20 @@ these leader → follower edges from its own trends and turns them into forecast
 
 Edges need history: an event takes 17 days to be over, and a pair needs several of them.
 Expect the first edges after 4–6 weeks of collection, and treat them as hints until
-`wgra replay --forecast` says how often forecasts come true. Settings are in the
+`undercurrent replay --forecast` says how often forecasts come true. Settings are in the
 `lead_lag:` and `forecast:` sections of [config.yaml](config.yaml), the method in the
 [architecture](docs/ARCHITECTURE.md#46-lead-lag-early-warning).
 
 ```bash
-uv run wgra lead-lag --once                 # turn new trends into events, learn the edges
-uv run wgra edges --leader r/localllama     # the latest edges
-uv run wgra forecasts --pending             # what's expected to spread
-uv run wgra forecasts --days 30             # and how earlier forecasts turned out
+uv run undercurrent lead-lag --once                 # turn new trends into events, learn the edges
+uv run undercurrent edges --leader r/localllama     # the latest edges
+uv run undercurrent forecasts --pending             # what's expected to spread
+uv run undercurrent forecasts --days 30             # and how earlier forecasts turned out
 ```
 
-`wgra analyze --no-lead-lag` turns the layer off, `lead_lag.enabled: false` too.
+`undercurrent analyze --no-lead-lag` turns the layer off, `lead_lag.enabled: false` too.
 
-**How good are the forecasts?** `wgra replay --forecast` replays them over stored
+**How good are the forecasts?** `undercurrent replay --forecast` replays them over stored
 history, learning the edges as of each day like the live loop, so nothing it uses comes
 from after the forecast. It reports precision (forecasts that came true), recall
 (followers that followed and were forecast before they did), the warning time and the
@@ -298,22 +303,22 @@ calibration (do 60% forecasts come true 60% of the time). `--events stored` uses
 trends the analyzer stored instead of re-running the detector, which is much faster:
 
 ```bash
-uv run wgra replay --forecast --events stored --from 2026-11-01 --to 2026-12-01
-uv run wgra replay --forecast --events stored --min-events 8 --max-q 0.01
-uv run wgra replay --forecast --step 6 --horizon 24h    # re-running the detector
+uv run undercurrent replay --forecast --events stored --from 2026-11-01 --to 2026-12-01
+uv run undercurrent replay --forecast --events stored --min-events 8 --max-q 0.01
+uv run undercurrent replay --forecast --step 6 --horizon 24h    # re-running the detector
 ```
 
 **Publishing them** is planned in [docs/FORECAST-LEDGER.md](docs/FORECAST-LEDGER.md): every
 forecast in a public ledger the moment it's made, timestamped through OpenTimestamps so it
 can't be backdated, and graded when it resolves.
 
-**Which subreddits to add?** `wgra suggest-subreddits` looks at the r/all sample's comments
-and posts of the last 48 hours: their urls name the untracked subreddit they come
+**Which subreddits to add?** `undercurrent suggest-subreddits` looks at the r/all sample's
+comments and posts of the last 48 hours: their urls name the untracked subreddit they come
 from. It lists those that mentioned the terms rising now early (before they trended) or
 far more than their size explains, as lines to paste into a group of `config.yaml`. It
 never changes the config.
 
-**Do the onsets come first?** Optionally (`wikipedia.enabled`, or `wgra wikipedia`),
+**Do the onsets come first?** Optionally (`wikipedia.enabled`, or `undercurrent wikipedia`),
 events whose term names a Wikipedia article are compared with its daily pageviews
 (Wikimedia's free API, cached, rate limited): did interest there rise after the event's
 first onset? It prints how often the onset was first and a sign test.
@@ -353,21 +358,22 @@ long-term trends) and are ranked apart from words, in `config.yaml` (`detect.kin
 `long_term.kind_min_mentions_per_week`, `lead_lag.kind_onset_min_mentions`).
 
 ```bash
-uv run wgra intents --scope tech                           # all five kinds, last 7 days
-uv run wgra intents --scope r/all --kind switch --days 30 --examples 2
-uv run wgra term "complaint: reddit" --scope tech --bucket hour --days 2
+uv run undercurrent intents --scope tech                           # all five kinds, last 7 days
+uv run undercurrent intents --scope r/all --kind switch --days 30 --examples 2
+uv run undercurrent term "complaint: reddit" --scope tech --bucket hour --days 2
 ```
 
-`wgra intents` shows the most mentioned intents of a scope with the number of authors, the
-share per 10,000 comments and posts, the change against the days before, whether the
-analyzer finds them trending, and with `--examples` the sentences they came from.
+`undercurrent intents` shows the most mentioned intents of a scope with the number of
+authors, the share per 10,000 comments and posts, the change against the days before,
+whether the analyzer finds them trending, and with `--examples` the sentences they came
+from.
 
 **After upgrading the ingester**, count the intents of the items it stored before, once:
 their text is still there for up to 48 hours. `--before` is when the new ingester started:
 
 ```bash
-uv run wgra backfill-intents --before 2026-10-12T09:30 --dry-run
-uv run wgra backfill-intents --before 2026-10-12T09:30
+uv run undercurrent backfill-intents --before 2026-10-12T09:30 --dry-run
+uv run undercurrent backfill-intents --before 2026-10-12T09:30
 ```
 
 ## Churn radar
@@ -395,39 +401,39 @@ see how much there is to report on, per product and where it comes from (the wat
 subreddits, the other tracked ones, the r/all sample, the search):
 
 ```bash
-uv run wgra radar candidates --days 1
+uv run undercurrent radar candidates --days 1
 ```
 
 ## Command line
 
 Needs [uv](https://docs.astral.sh/uv/). It reads `.env`, so it reaches the ClickHouse
-started by Docker Compose.
+started by Docker Compose. `uc` is short for `undercurrent`: `uv run uc status`.
 
 ```bash
 uv sync
-uv run wgra status
-uv run wgra term "claude code" --scope tech --days 14
-uv run wgra term rust --scope r/programming --bucket hour --days 2
-uv run wgra term ai --scope tech --bucket week --days 180
-uv run wgra trends --scope tech                 # the latest trends
-uv run wgra trends --horizon 13w                # the latest long-term trends
-uv run wgra analyze --once --no-notify          # one analysis run, prints the top trends
-uv run wgra long-term --once --dry-run          # one long-term run
-uv run wgra lead-lag --once --dry-run           # one lead–lag run, prints the edges
-uv run wgra edges && uv run wgra forecasts
-uv run wgra suggest-subreddits                  # untracked subreddits worth adding
-uv run wgra intents --scope tech --kind switch  # who switches from what to what
-uv run wgra radar candidates                    # the churn radar's material per product
-uv run wgra wikipedia                           # onsets vs Wikipedia pageviews
-uv run wgra notify-test
+uv run undercurrent status
+uv run undercurrent term "claude code" --scope tech --days 14
+uv run undercurrent term rust --scope r/programming --bucket hour --days 2
+uv run undercurrent term ai --scope tech --bucket week --days 180
+uv run undercurrent trends --scope tech                 # the latest trends
+uv run undercurrent trends --horizon 13w                # the latest long-term trends
+uv run undercurrent analyze --once --no-notify          # one analysis run, prints the top trends
+uv run undercurrent long-term --once --dry-run          # one long-term run
+uv run undercurrent lead-lag --once --dry-run           # one lead–lag run, prints the edges
+uv run undercurrent edges && uv run undercurrent forecasts
+uv run undercurrent suggest-subreddits                  # untracked subreddits worth adding
+uv run undercurrent intents --scope tech --kind switch  # who switches from what to what
+uv run undercurrent radar candidates                    # the churn radar's material per product
+uv run undercurrent wikipedia                           # onsets vs Wikipedia pageviews
+uv run undercurrent notify-test
 ```
 
 A scope is a group from `config.yaml`, a channel (`r/technology`), `reddit` (every tracked
-subreddit) or `r/all` (the r/all sample of everything else). `wgra status` lists every
-channel with its platform and what it collected in the last 24 hours.
+subreddit) or `r/all` (the r/all sample of everything else). `undercurrent status` lists
+every channel with its platform and what it collected in the last 24 hours.
 
 To run the ingester outside of Docker, stop the container first (both would share one
-API budget), then run `uv run wgra ingest` (every enabled platform, or `--source reddit`). The analyzer can run anywhere, but run only
+API budget), then run `uv run undercurrent ingest` (every enabled platform, or `--source reddit`). The analyzer can run anywhere, but run only
 one of it with notifications on, or alerts go out twice.
 
 ## How the data is stored
@@ -469,30 +475,30 @@ uv run pytest            # integration tests need ClickHouse: docker compose up 
 uv run ruff check . && uv run ruff format --check . && uv run mypy
 ```
 
-* While nothing is deployed, schema changes edit the files in `src/wgra/migrations/` in
-  place and the local database is recreated (`docker compose down`, `docker volume rm
-  wgra_clickhouse_data`, `docker compose up -d --build`), see
+* While nothing is deployed, schema changes edit the files in `src/undercurrent/migrations/`
+  in place and the local database is recreated (`docker compose down`, `docker volume rm
+  undercurrent_clickhouse_data`, `docker compose up -d --build`), see
   [docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md) §2.2. Once there's history worth
   keeping they go into a new file again, applied on the next start (or with
-  `uv run wgra migrate`).
-* A new platform is a source in `src/wgra/sources/` (`sources/base.py`: an `Item`, a
+  `uv run undercurrent migrate`).
+* A new platform is a source in `src/undercurrent/sources/` (`sources/base.py`: an `Item`, a
   `Sink`, a `Source`), like `sources/reddit/`.
 * The dashboards are generated: edit `grafana/build_dashboards.py` and run
   `uv run python grafana/build_dashboards.py`. Grafana reloads them within 10 seconds.
 * The web dashboard ([docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)) has two halves:
-  * **The API** in `src/wgra/web/`: FastAPI under `/api/v1/`, the SQL in `queries/`, a
-    Pydantic model per response in `models.py`, the routes in `routes/`, the live stream
+  * **The API** in `src/undercurrent/web/`: FastAPI under `/api/v1/`, the SQL in `queries/`,
+    a Pydantic model per response in `models.py`, the routes in `routes/`, the live stream
     in `stream.py`. Every query runs as of a time (`as_of`, or `UNDERCURRENT_NOW` for
     the demo database). A change to a panel's numbers usually belongs in Grafana's builder
-    too. `uv run wgra web --dev --port 3612 --reload` serves only the API.
+    too. `uv run undercurrent web --dev --port 3612 --reload` serves only the API.
   * **The page** in `web/`: React and TypeScript, built by Vite, on Node 26 and pnpm 12
     ([web/AGENTS.md](web/AGENTS.md) has the conventions). In `web/`: `pnpm install`,
     `pnpm dev` (port 3611, `/api` proxied to 3610 or `UNDERCURRENT_API`), `pnpm check`
     (types, lint, format, unit tests), `pnpm e2e` (Playwright and axe against a running
     API, `E2E_URL`), `pnpm build`.
   * A change to the API's data is a change to a model, then
-    `uv run wgra web openapi > web/src/api/openapi.json` and `cd web && pnpm gen:api`. CI
-    fails when the two disagree.
+    `uv run undercurrent web openapi > web/src/api/openapi.json` and
+    `cd web && pnpm gen:api`. CI fails when the two disagree.
 * `bench/demo.py` seeds a deterministic demo database with planted stories into a
   ClickHouse of its own (`--small` in about a minute and a half, the full one in about 11
   minutes), the data the end-to-end tests and screenshots run on.

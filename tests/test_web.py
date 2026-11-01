@@ -17,19 +17,19 @@ from fastapi.testclient import TestClient
 from helpers import make_config, make_doc, make_trend
 from pydantic import BaseModel
 
-from wgra.config import Env
-from wgra.detect.scoring import Counts, Prior
-from wgra.detect.short_term import write_trends
-from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
-from wgra.ingest.run import write_channels
-from wgra.store import connect, migrate
-from wgra.web.app import Settings, create_app
-from wgra.web.models import Time
-from wgra.web.queries import WindowQuery, daily_series, hourly_series
-from wgra.web.queries.explore import ExploreQuery
-from wgra.web.queries.trends import TrendQuery
-from wgra.web.server import openapi, web_client
-from wgra.web.stream import State, changes, read_alerts, read_state
+from undercurrent.config import Env
+from undercurrent.detect.scoring import Counts, Prior
+from undercurrent.detect.short_term import write_trends
+from undercurrent.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
+from undercurrent.ingest.run import write_channels
+from undercurrent.store import connect, migrate
+from undercurrent.web.app import Settings, create_app
+from undercurrent.web.models import Time
+from undercurrent.web.queries import WindowQuery, daily_series, hourly_series
+from undercurrent.web.queries.explore import ExploreQuery
+from undercurrent.web.queries.trends import TrendQuery
+from undercurrent.web.server import openapi, web_client
+from undercurrent.web.stream import State, changes, read_alerts, read_state
 
 HOUR = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 

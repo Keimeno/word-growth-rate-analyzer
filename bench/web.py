@@ -6,8 +6,8 @@ queries each made, their time, peak memory and rows read. An endpoint over the b
 §7.2 (1 s, 500 MB at production scale) is flagged: fix it or precompute it before it ships.
 Run it against a ClickHouse of its own, as the other benches (bench/demo.py makes one):
 
-    export CLICKHOUSE_PORT=3617 CLICKHOUSE_PASSWORD=bench CLICKHOUSE_USER=wgra
-    uv run python bench/web.py --database wgra_demo --as-of 2026-11-01T12:00:00Z
+    export CLICKHOUSE_PORT=3617 CLICKHOUSE_PASSWORD=bench CLICKHOUSE_USER=undercurrent
+    uv run python bench/web.py --database undercurrent_demo --as-of 2026-11-01T12:00:00Z
 
 The path parameters are filled from the database: its strongest trend, its first group, a
 story's start, the busiest product of the switches.
@@ -25,10 +25,10 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 
-from wgra.config import Env, load_config
-from wgra.store import connect
-from wgra.web.app import Settings, create_app
-from wgra.web.server import openapi, web_client
+from undercurrent.config import Env, load_config
+from undercurrent.store import connect
+from undercurrent.web.app import Settings, create_app
+from undercurrent.web.server import openapi, web_client
 
 BUDGET_MS = 1000
 BUDGET_BYTES = 500 * 1024**2

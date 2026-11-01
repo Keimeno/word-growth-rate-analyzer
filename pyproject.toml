@@ -1,5 +1,5 @@
 [project]
-name = "wgra"
+name = "undercurrent"
 version = "2.0.0.dev0"
 description = "What's rising in online conversation, where it starts, where it spreads next, and why people switch products"
 readme = "README.md"
@@ -15,7 +15,8 @@ dependencies = [
 ]
 
 [project.scripts]
-wgra = "wgra.cli:main"
+undercurrent = "undercurrent.cli:main"
+uc = "undercurrent.cli:main"
 
 [dependency-groups]
 dev = [

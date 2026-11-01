@@ -14,12 +14,12 @@ import httpx
 import pytest
 from helpers import make_config, make_item
 
-from wgra.ingest.run import Pipeline, run_sources, write_channels
-from wgra.sources.base import Item, Poll, Sink
-from wgra.sources.reddit.client import RedditClient
-from wgra.sources.reddit.feeds import FeedScheduler, build_feeds
-from wgra.sources.reddit.source import RedditSource, to_item
-from wgra.store import migrate
+from undercurrent.ingest.run import Pipeline, run_sources, write_channels
+from undercurrent.sources.base import Item, Poll, Sink
+from undercurrent.sources.reddit.client import RedditClient
+from undercurrent.sources.reddit.feeds import FeedScheduler, build_feeds
+from undercurrent.sources.reddit.source import RedditSource, to_item
+from undercurrent.store import migrate
 
 HOUR = datetime(2026, 10, 30, 14, tzinfo=UTC)
 MINUTES = timedelta(minutes=5)
