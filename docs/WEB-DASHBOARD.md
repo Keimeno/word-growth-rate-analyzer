@@ -1,6 +1,6 @@
 # Web dashboard in TypeScript: plan
 
-**Status: in progress since 2026-11-01** (phase 0 done). Written for after the rename to
+**Status: in progress since 2026-11-01** (phases 0 and 1 done). Written for after the rename to
 Undercurrent ([RENAME.md](RENAME.md)), so it uses the new names: the package
 `undercurrent`, the command `undercurrent web`, Grafana uids `undercurrent-*`. Until the
 rename lands, the code keeps today's names (RENAME.md §2).

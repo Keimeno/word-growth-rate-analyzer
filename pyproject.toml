@@ -6,10 +6,12 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "clickhouse-connect>=0.8",
+    "fastapi>=0.162",
     "httpx>=0.28",
     "numpy>=2.0",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
+    "uvicorn>=0.54",
 ]
 
 [project.scripts]
@@ -43,7 +45,10 @@ python_version = "3.13"
 files = ["src", "tests"]
 check_untyped_defs = true
 ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# FastAPI's TestClient still uses httpx, which Starlette now warns about
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

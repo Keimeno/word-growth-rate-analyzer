@@ -1,0 +1,5214 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Undercurrent",
+    "summary": "Early signals in online conversation: the web dashboard's API.",
+    "version": "1"
+  },
+  "paths": {
+    "/api/v1/meta": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Meta",
+        "description": "Scopes, kinds and document types for the pickers, and the server's settings.",
+        "operationId": "meta",
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends": {
+      "get": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Trends",
+        "description": "The latest run of a scope and horizon, with each term's 7-day sparkline.",
+        "operationId": "trends",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "horizon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "6h"
+              ],
+              "type": "string",
+              "default": "24h",
+              "title": "Horizon"
+            }
+          },
+          {
+            "name": "kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "term kinds, or intent kinds",
+              "default": [
+                "word",
+                "phrase",
+                "domain",
+                "subreddit"
+              ],
+              "title": "Kinds"
+            },
+            "description": "term kinds, or intent kinds"
+          },
+          {
+            "name": "subsumed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "also terms a phrase explains",
+              "default": false,
+              "title": "Subsumed"
+            },
+            "description": "also terms a phrase explains"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trends"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends/series": {
+      "get": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Trend Series",
+        "description": "The 8 strongest trends of the latest run over time, per 1,000 documents.",
+        "operationId": "trend_series",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "horizon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "6h"
+              ],
+              "type": "string",
+              "default": "24h",
+              "title": "Horizon"
+            }
+          },
+          {
+            "name": "kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "term kinds, or intent kinds",
+              "default": [
+                "word",
+                "phrase",
+                "domain",
+                "subreddit"
+              ],
+              "title": "Kinds"
+            },
+            "description": "term kinds, or intent kinds"
+          },
+          {
+            "name": "subsumed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "also terms a phrase explains",
+              "default": false,
+              "title": "Subsumed"
+            },
+            "description": "also terms a phrase explains"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SharePoint"
+                  },
+                  "title": "Response Trend Series"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends/digest": {
+      "get": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Trend Digest",
+        "description": "Each term at its strongest in the last 24 hours.",
+        "operationId": "trend_digest",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "horizon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "6h"
+              ],
+              "type": "string",
+              "default": "24h",
+              "title": "Horizon"
+            }
+          },
+          {
+            "name": "kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "term kinds, or intent kinds",
+              "default": [
+                "word",
+                "phrase",
+                "domain",
+                "subreddit"
+              ],
+              "title": "Kinds"
+            },
+            "description": "term kinds, or intent kinds"
+          },
+          {
+            "name": "subsumed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "also terms a phrase explains",
+              "default": false,
+              "title": "Subsumed"
+            },
+            "description": "also terms a phrase explains"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DigestEntry"
+                  },
+                  "title": "Response Trend Digest"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends/alerts": {
+      "get": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Trend Alerts",
+        "description": "Alerts of the last 14 days, sent or held back.",
+        "operationId": "trend_alerts",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Alert"
+                  },
+                  "title": "Response Trend Alerts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rising": {
+      "get": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Rising",
+        "description": "The quick look: the last 24 hours against the 7 days before, without scoring.",
+        "operationId": "rising",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "word",
+                "phrase"
+              ],
+              "title": "Kinds"
+            }
+          },
+          {
+            "name": "min_mentions",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10,
+              "title": "Min Mentions"
+            }
+          },
+          {
+            "name": "min_authors",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5,
+              "title": "Min Authors"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Rising"
+                  },
+                  "title": "Response Rising"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/long-term": {
+      "get": {
+        "tags": [
+          "spread"
+        ],
+        "summary": "Long Term",
+        "description": "A scope's emerging, mainstreaming, fading and one-off terms of the latest week.",
+        "operationId": "long_term",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "horizon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "13w",
+                "26w",
+                "52w"
+              ],
+              "type": "string",
+              "default": "13w",
+              "title": "Horizon"
+            }
+          },
+          {
+            "name": "kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "word",
+                "phrase",
+                "domain",
+                "subreddit"
+              ],
+              "title": "Kinds"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LongTerm"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/edges": {
+      "get": {
+        "tags": [
+          "spread"
+        ],
+        "summary": "Edges",
+        "description": "Which channels lead which, learned daily, with the layer's status.",
+        "operationId": "edges",
+        "parameters": [
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "'all', or the group the events trended in",
+              "default": "all",
+              "title": "Topic"
+            },
+            "description": "'all', or the group the events trended in"
+          },
+          {
+            "name": "leaders",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only edges from these channels",
+              "default": [],
+              "title": "Leaders"
+            },
+            "description": "only edges from these channels"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Edges"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/forecasts": {
+      "get": {
+        "tags": [
+          "spread"
+        ],
+        "summary": "Forecasts",
+        "description": "Forecasts waiting for their follower.",
+        "operationId": "forecasts",
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Forecast"
+                  },
+                  "title": "Response Forecasts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/forecasts/record": {
+      "get": {
+        "tags": [
+          "spread"
+        ],
+        "summary": "Forecast Record",
+        "description": "How forecasts turned out: the last 30 days, calibration, per day, Wikipedia.",
+        "operationId": "forecast_record",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "spread"
+        ],
+        "summary": "Events",
+        "description": "Stories of the last 14 days that reached more than one scope.",
+        "operationId": "events",
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Cascade"
+                  },
+                  "title": "Response Events"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Intents",
+        "description": "Intent mentions per kind, in all and per day.",
+        "operationId": "intents",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "min_authors",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Min Authors"
+            }
+          },
+          {
+            "name": "min_mentions",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 2,
+              "title": "Min Mentions"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Intents"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/flows": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Intent Flows",
+        "description": "The top switching flows, with the flow the other way.",
+        "operationId": "intent_flows",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "min_authors",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Min Authors"
+            }
+          },
+          {
+            "name": "min_mentions",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 2,
+              "title": "Min Mentions"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Flows"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/rising": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Intent Rising",
+        "description": "An intent kind's last 7 days against the 28 before.",
+        "operationId": "intent_rising",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "min_authors",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Min Authors"
+            }
+          },
+          {
+            "name": "min_mentions",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 2,
+              "title": "Min Mentions"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "alternative",
+                "complaint",
+                "considering",
+                "need"
+              ],
+              "type": "string",
+              "default": "alternative",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RisingIntents"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/needs": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Intent Needs",
+        "description": "The needs mentioned most in each group and the background.",
+        "operationId": "intent_needs",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "min_authors",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Min Authors"
+            }
+          },
+          {
+            "name": "min_mentions",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 2,
+              "title": "Min Mentions"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Need"
+                  },
+                  "title": "Response Intent Needs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/examples": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Intent Examples",
+        "description": "Comments and posts of the last 48 hours an intent was found in.",
+        "operationId": "intent_examples",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "intent_kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "switch",
+                "alternative",
+                "complaint",
+                "need",
+                "considering"
+              ],
+              "title": "Intent Kinds"
+            }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "only this intent",
+              "default": "",
+              "title": "Term"
+            },
+            "description": "only this intent"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IntentExample"
+                  },
+                  "title": "Response Intent Examples"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/explore": {
+      "get": {
+        "tags": [
+          "explore"
+        ],
+        "summary": "Explore",
+        "description": "Terms over time: mentions, people and share, pooled and per channel.",
+        "operationId": "explore",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "terms",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "up to 12 terms, as the detector stores them",
+              "title": "Terms"
+            },
+            "description": "up to 12 terms, as the detector stores them"
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "auto",
+                "hour",
+                "day",
+                "week"
+              ],
+              "type": "string",
+              "default": "auto",
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Explore"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/explore/mentions": {
+      "get": {
+        "tags": [
+          "explore"
+        ],
+        "summary": "Explore Mentions",
+        "description": "Recent comments and posts with the terms (the last 48 hours).",
+        "operationId": "explore_mentions",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "a platform, group or channel",
+              "default": "reddit",
+              "title": "Scope"
+            },
+            "description": "a platform, group or channel"
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these of the scope's channels",
+              "default": [],
+              "title": "Channels"
+            },
+            "description": "only these of the scope's channels"
+          },
+          {
+            "name": "doc_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these document types (post, comment)",
+              "default": [],
+              "title": "Doc Types"
+            },
+            "description": "only these document types (post, comment)"
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "tables of trends: only the group or these channels",
+              "default": [],
+              "title": "Scopes"
+            },
+            "description": "tables of trends: only the group or these channels"
+          },
+          {
+            "name": "terms",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "up to 12 terms, as the detector stores them",
+              "title": "Terms"
+            },
+            "description": "up to 12 terms, as the detector stores them"
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "auto",
+                "hour",
+                "day",
+                "week"
+              ],
+              "type": "string",
+              "default": "auto",
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Mention"
+                  },
+                  "title": "Response Explore Mentions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingestion": {
+      "get": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Ingestion",
+        "description": "Collection health: polls, gaps, volume per channel, storage.",
+        "operationId": "ingestion",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "platforms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these platforms",
+              "default": [],
+              "title": "Platforms"
+            },
+            "description": "only these platforms"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ingestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingestion/series": {
+      "get": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Ingestion Series",
+        "description": "New items per minute per feed, and requests, errors and gaps per minute.",
+        "operationId": "ingestion_series",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d+)([hdw])$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "back from now: 6h, 7d, 26w",
+              "title": "Range"
+            },
+            "description": "back from now: 6h, 7d, 26w"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "From"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix seconds",
+              "title": "To"
+            },
+            "description": "unix seconds"
+          },
+          {
+            "name": "platforms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "only these platforms",
+              "default": [],
+              "title": "Platforms"
+            },
+            "description": "only these platforms"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "show it as it was then, as far as the stored history goes",
+              "title": "As Of"
+            },
+            "description": "show it as it was then, as far as the stored history goes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionSeries"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Alert": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "alert": {
+            "type": "string",
+            "title": "Alert"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "is_new": {
+            "type": "boolean",
+            "title": "Is New"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "horizon",
+          "scope",
+          "term",
+          "kind",
+          "alert",
+          "score",
+          "is_new",
+          "ratio",
+          "mentions",
+          "authors"
+        ],
+        "title": "Alert"
+      },
+      "CalibrationBin": {
+        "properties": {
+          "bin": {
+            "type": "integer",
+            "title": "Bin"
+          },
+          "forecasts": {
+            "type": "integer",
+            "title": "Forecasts"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "came_true": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Came True"
+          },
+          "base_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bin",
+          "forecasts",
+          "predicted",
+          "came_true",
+          "base_rate"
+        ],
+        "title": "CalibrationBin"
+      },
+      "Cascade": {
+        "properties": {
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "cascade": {
+            "items": {
+              "$ref": "#/components/schemas/Onset"
+            },
+            "type": "array",
+            "title": "Cascade"
+          },
+          "closed": {
+            "type": "boolean",
+            "title": "Closed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "term",
+          "kind",
+          "start",
+          "topic",
+          "cascade",
+          "closed"
+        ],
+        "title": "Cascade"
+      },
+      "ChannelVolume": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "background": {
+            "type": "boolean",
+            "title": "Background"
+          },
+          "analyzed": {
+            "type": "boolean",
+            "title": "Analyzed"
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents"
+          },
+          "by_type": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "By Type"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "platform",
+          "background",
+          "analyzed",
+          "documents",
+          "by_type",
+          "authors"
+        ],
+        "title": "ChannelVolume"
+      },
+      "DigestEntry": {
+        "properties": {
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "term_kind": {
+            "type": "string",
+            "title": "Term Kind"
+          },
+          "strongest_in": {
+            "type": "string",
+            "title": "Strongest In"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "is_new": {
+            "type": "boolean",
+            "title": "Is New"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "first_seen": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen"
+          },
+          "horizons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Horizons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "term",
+          "term_kind",
+          "strongest_in",
+          "score",
+          "is_new",
+          "ratio",
+          "mentions",
+          "first_seen",
+          "last_seen",
+          "horizons"
+        ],
+        "title": "DigestEntry"
+      },
+      "Edge": {
+        "properties": {
+          "leader": {
+            "type": "string",
+            "title": "Leader"
+          },
+          "follower": {
+            "type": "string",
+            "title": "Follower"
+          },
+          "without_leader": {
+            "type": "boolean",
+            "title": "Without Leader"
+          },
+          "follower_type": {
+            "type": "string",
+            "title": "Follower Type"
+          },
+          "lag_median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Median"
+          },
+          "lag_q25": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Q25"
+          },
+          "lag_q75": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Q75"
+          },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "hits": {
+            "type": "integer",
+            "title": "Hits"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate"
+          },
+          "base_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rate"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "probability_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability Low"
+          },
+          "probability_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability High"
+          },
+          "lift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lift"
+          },
+          "lead_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Share"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "leader_onsets": {
+            "type": "integer",
+            "title": "Leader Onsets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "leader",
+          "follower",
+          "without_leader",
+          "follower_type",
+          "lag_median",
+          "lag_q25",
+          "lag_q75",
+          "events",
+          "hits",
+          "hit_rate",
+          "base_rate",
+          "probability",
+          "probability_low",
+          "probability_high",
+          "lift",
+          "lead_share",
+          "q",
+          "leader_onsets"
+        ],
+        "title": "Edge"
+      },
+      "Edges": {
+        "properties": {
+          "edges_learned": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edges Learned"
+          },
+          "edge_count": {
+            "type": "integer",
+            "title": "Edge Count"
+          },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "closed_events": {
+            "type": "integer",
+            "title": "Closed Events"
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          },
+          "precision_30d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision 30D"
+          },
+          "resolved_30d": {
+            "type": "integer",
+            "title": "Resolved 30D"
+          },
+          "forecast_alerts": {
+            "type": "integer",
+            "title": "Forecast Alerts"
+          },
+          "topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Topics"
+          },
+          "leaders": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Leaders"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/Edge"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "edges_learned",
+          "edge_count",
+          "events",
+          "closed_events",
+          "pending",
+          "precision_30d",
+          "resolved_30d",
+          "forecast_alerts",
+          "topics",
+          "leaders",
+          "edges"
+        ],
+        "title": "Edges"
+      },
+      "Explore": {
+        "properties": {
+          "terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Terms"
+          },
+          "bucket": {
+            "type": "string",
+            "enum": [
+              "hour",
+              "day",
+              "week"
+            ],
+            "title": "Bucket"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step",
+            "description": "seconds per bucket, for hours"
+          },
+          "from": {
+            "type": "integer",
+            "title": "From"
+          },
+          "to": {
+            "type": "integer",
+            "title": "To"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ExplorePoint"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "where": {
+            "items": {
+              "$ref": "#/components/schemas/ExploreWhere"
+            },
+            "type": "array",
+            "title": "Where"
+          }
+        },
+        "type": "object",
+        "required": [
+          "terms",
+          "bucket",
+          "step",
+          "from",
+          "to",
+          "points",
+          "where"
+        ],
+        "title": "Explore"
+      },
+      "ExplorePoint": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "pooled": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pooled",
+            "description": "all mentions over all documents, per 1,000"
+          },
+          "macro": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Macro",
+            "description": "the average of the channels' shares, per 1,000"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "term",
+          "mentions",
+          "authors",
+          "pooled",
+          "macro"
+        ],
+        "title": "ExplorePoint"
+      },
+      "ExploreWhere": {
+        "properties": {
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "per_1000": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per 1000"
+          }
+        },
+        "type": "object",
+        "required": [
+          "term",
+          "channel",
+          "mentions",
+          "authors",
+          "per_1000"
+        ],
+        "title": "ExploreWhere"
+      },
+      "Feed": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "feed": {
+            "type": "string",
+            "title": "Feed"
+          },
+          "polls": {
+            "type": "integer",
+            "title": "Polls"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "new_items": {
+            "type": "integer",
+            "title": "New Items"
+          },
+          "gaps": {
+            "type": "integer",
+            "title": "Gaps"
+          },
+          "poll_every_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll Every S"
+          },
+          "items_per_minute": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items Per Minute"
+          },
+          "last_poll": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Poll"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "feed",
+          "polls",
+          "errors",
+          "new_items",
+          "gaps",
+          "poll_every_s",
+          "items_per_minute",
+          "last_poll"
+        ],
+        "title": "Feed"
+      },
+      "FeedRate": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "feed": {
+            "type": "string",
+            "title": "Feed"
+          },
+          "per_minute": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Minute"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "feed",
+          "per_minute"
+        ],
+        "title": "FeedRate"
+      },
+      "Flow": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "other_way": {
+            "type": "integer",
+            "title": "Other Way"
+          },
+          "per_10k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per 10K"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "mentions",
+          "authors",
+          "other_way",
+          "per_10k",
+          "term"
+        ],
+        "title": "Flow"
+      },
+      "Flows": {
+        "properties": {
+          "flows": {
+            "items": {
+              "$ref": "#/components/schemas/Flow"
+            },
+            "type": "array",
+            "title": "Flows"
+          },
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day"
+          },
+          "sparklines": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Sparklines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flows",
+          "first_day",
+          "sparklines"
+        ],
+        "title": "Flows"
+      },
+      "Forecast": {
+        "properties": {
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "leader": {
+            "type": "string",
+            "title": "Leader"
+          },
+          "follower": {
+            "type": "string",
+            "title": "Follower"
+          },
+          "without_leader": {
+            "type": "boolean",
+            "title": "Without Leader"
+          },
+          "follower_type": {
+            "type": "string",
+            "title": "Follower Type"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "probability_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability Low"
+          },
+          "probability_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability High"
+          },
+          "base_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rate"
+          },
+          "expected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expected At"
+          },
+          "due_by": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due By"
+          },
+          "leader_onset": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Leader Onset"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "edge_events": {
+            "type": "integer",
+            "title": "Edge Events"
+          },
+          "lift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lift"
+          },
+          "alert": {
+            "type": "string",
+            "title": "Alert"
+          }
+        },
+        "type": "object",
+        "required": [
+          "term",
+          "kind",
+          "leader",
+          "follower",
+          "without_leader",
+          "follower_type",
+          "probability",
+          "probability_low",
+          "probability_high",
+          "base_rate",
+          "expected_at",
+          "due_by",
+          "leader_onset",
+          "created_at",
+          "edge_events",
+          "lift",
+          "alert"
+        ],
+        "title": "Forecast"
+      },
+      "ForecastDay": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "came_true": {
+            "type": "integer",
+            "title": "Came True"
+          },
+          "missed": {
+            "type": "integer",
+            "title": "Missed"
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "came_true",
+          "missed",
+          "pending"
+        ],
+        "title": "ForecastDay"
+      },
+      "ForecastRecord": {
+        "properties": {
+          "resolved": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedForecast"
+            },
+            "type": "array",
+            "title": "Resolved"
+          },
+          "calibration": {
+            "items": {
+              "$ref": "#/components/schemas/CalibrationBin"
+            },
+            "type": "array",
+            "title": "Calibration"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "wikipedia": {
+            "$ref": "#/components/schemas/WikipediaRecord"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resolved",
+          "calibration",
+          "daily",
+          "wikipedia"
+        ],
+        "title": "ForecastRecord"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Ingestion": {
+        "properties": {
+          "documents_24h": {
+            "type": "integer",
+            "title": "Documents 24H"
+          },
+          "requests_10m": {
+            "type": "integer",
+            "title": "Requests 10M"
+          },
+          "gaps_24h": {
+            "type": "integer",
+            "title": "Gaps 24H"
+          },
+          "sampled_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sampled Share"
+          },
+          "last_poll": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Poll"
+          },
+          "feeds": {
+            "items": {
+              "$ref": "#/components/schemas/Feed"
+            },
+            "type": "array",
+            "title": "Feeds"
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelVolume"
+            },
+            "type": "array",
+            "title": "Channels"
+          },
+          "storage": {
+            "items": {
+              "$ref": "#/components/schemas/TableSize"
+            },
+            "type": "array",
+            "title": "Storage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "documents_24h",
+          "requests_10m",
+          "gaps_24h",
+          "sampled_share",
+          "last_poll",
+          "feeds",
+          "channels",
+          "storage"
+        ],
+        "title": "Ingestion"
+      },
+      "IngestionSeries": {
+        "properties": {
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FeedRate"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/RequestRate"
+            },
+            "type": "array",
+            "title": "Requests"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "items",
+          "requests"
+        ],
+        "title": "IngestionSeries"
+      },
+      "IntentDay": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "kind",
+          "mentions"
+        ],
+        "title": "IntentDay"
+      },
+      "IntentExample": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "doc_type": {
+            "type": "string",
+            "title": "Doc Type"
+          },
+          "found": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Found"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "channel",
+          "doc_type",
+          "found",
+          "text",
+          "url"
+        ],
+        "title": "IntentExample"
+      },
+      "Intents": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/IntentDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          }
+        },
+        "type": "object",
+        "required": [
+          "counts",
+          "daily",
+          "since"
+        ],
+        "title": "Intents"
+      },
+      "LongTerm": {
+        "properties": {
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "analyzed_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyzed Until"
+          },
+          "weeks_of_history": {
+            "type": "integer",
+            "title": "Weeks Of History"
+          },
+          "trends": {
+            "items": {
+              "$ref": "#/components/schemas/LongTermTrend"
+            },
+            "type": "array",
+            "title": "Trends"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_run",
+          "analyzed_until",
+          "weeks_of_history",
+          "trends"
+        ],
+        "title": "LongTerm"
+      },
+      "LongTermTrend": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "growth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Growth"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "start_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Share"
+          },
+          "end_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Share"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "spike_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spike Share"
+          },
+          "peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          },
+          "window_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Window Start"
+          },
+          "weekly": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Weekly"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "term",
+          "kind",
+          "category",
+          "growth",
+          "q",
+          "start_share",
+          "end_share",
+          "mentions",
+          "spike_share",
+          "peak",
+          "change",
+          "window_start",
+          "weekly"
+        ],
+        "title": "LongTermTrend"
+      },
+      "Mention": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "doc_type": {
+            "type": "string",
+            "title": "Doc Type"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "intents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Intents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "channel",
+          "doc_type",
+          "text",
+          "url",
+          "intents"
+        ],
+        "title": "Mention"
+      },
+      "Meta": {
+        "properties": {
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "groups": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Groups"
+          },
+          "doc_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Doc Types"
+          },
+          "platforms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Platforms"
+          },
+          "word_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Word Kinds"
+          },
+          "intent_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Intent Kinds"
+          },
+          "grafana_url": {
+            "type": "string",
+            "title": "Grafana Url"
+          },
+          "now": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Now",
+            "description": "The time every query is as of: now, or `as_of`"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scopes",
+          "groups",
+          "doc_types",
+          "platforms",
+          "word_kinds",
+          "intent_kinds",
+          "grafana_url",
+          "now"
+        ],
+        "title": "Meta",
+        "description": "What the pickers offer, and what the page needs to know about the server."
+      },
+      "Need": {
+        "properties": {
+          "group_name": {
+            "type": "string",
+            "title": "Group Name"
+          },
+          "need": {
+            "type": "string",
+            "title": "Need"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group_name",
+          "need",
+          "mentions",
+          "authors",
+          "term"
+        ],
+        "title": "Need"
+      },
+      "Onset": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "at"
+        ],
+        "title": "Onset"
+      },
+      "RequestRate": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "requests": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requests"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          },
+          "gaps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gaps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "requests",
+          "errors",
+          "gaps"
+        ],
+        "title": "RequestRate"
+      },
+      "ResolvedForecast": {
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "leader": {
+            "type": "string",
+            "title": "Leader"
+          },
+          "follower": {
+            "type": "string",
+            "title": "Follower"
+          },
+          "without_leader": {
+            "type": "boolean",
+            "title": "Without Leader"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "warning_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning Hours"
+          },
+          "lag_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Hours"
+          },
+          "expected_lag_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Lag Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created_at",
+          "term",
+          "kind",
+          "leader",
+          "follower",
+          "without_leader",
+          "probability",
+          "outcome",
+          "warning_hours",
+          "lag_hours",
+          "expected_lag_hours"
+        ],
+        "title": "ResolvedForecast"
+      },
+      "Rising": {
+        "properties": {
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "mentions_before": {
+            "type": "integer",
+            "title": "Mentions Before"
+          },
+          "mentions_background": {
+            "type": "integer",
+            "title": "Mentions Background"
+          },
+          "usual_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usual Share"
+          },
+          "per_1000_now": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per 1000 Now"
+          },
+          "per_1000_usual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per 1000 Usual"
+          },
+          "times_usual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Times Usual"
+          }
+        },
+        "type": "object",
+        "required": [
+          "term",
+          "kind",
+          "mentions",
+          "authors",
+          "mentions_before",
+          "mentions_background",
+          "usual_share",
+          "per_1000_now",
+          "per_1000_usual",
+          "times_usual"
+        ],
+        "title": "Rising"
+      },
+      "RisingIntent": {
+        "properties": {
+          "entity": {
+            "type": "string",
+            "title": "Entity"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "per_week_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Week Before"
+          },
+          "times_usual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Times Usual"
+          },
+          "excess": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excess"
+          },
+          "trend_z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trend Z"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity",
+          "mentions",
+          "authors",
+          "per_week_before",
+          "times_usual",
+          "excess",
+          "trend_z",
+          "term"
+        ],
+        "title": "RisingIntent"
+      },
+      "RisingIntents": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/RisingIntent"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day"
+          },
+          "sparklines": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Sparklines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "first_day",
+          "sparklines"
+        ],
+        "title": "RisingIntents"
+      },
+      "Scope": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "platform",
+              "group",
+              "channel"
+            ],
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type"
+        ],
+        "title": "Scope"
+      },
+      "SharePoint": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "per_1000": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per 1000"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "term",
+          "per_1000"
+        ],
+        "title": "SharePoint"
+      },
+      "TableSize": {
+        "properties": {
+          "table": {
+            "type": "string",
+            "title": "Table"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table",
+          "rows",
+          "bytes"
+        ],
+        "title": "TableSize"
+      },
+      "Trend": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type"
+          },
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "z: how far above its usual share, in standard errors"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio",
+            "description": "times its usual share"
+          },
+          "is_new": {
+            "type": "boolean",
+            "title": "Is New"
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "authors": {
+            "type": "integer",
+            "title": "Authors"
+          },
+          "breadth": {
+            "type": "integer",
+            "title": "Breadth"
+          },
+          "members": {
+            "type": "integer",
+            "title": "Members"
+          },
+          "mentions_before": {
+            "type": "integer",
+            "title": "Mentions Before"
+          },
+          "alert": {
+            "type": "string",
+            "title": "Alert"
+          },
+          "subsumed_by": {
+            "type": "string",
+            "title": "Subsumed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "scope_type",
+          "term",
+          "kind",
+          "score",
+          "ratio",
+          "is_new",
+          "mentions",
+          "authors",
+          "breadth",
+          "members",
+          "mentions_before",
+          "alert",
+          "subsumed_by"
+        ],
+        "title": "Trend"
+      },
+      "Trends": {
+        "properties": {
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "reference_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Days"
+          },
+          "trending": {
+            "type": "integer",
+            "title": "Trending"
+          },
+          "alerts_sent": {
+            "type": "integer",
+            "title": "Alerts Sent"
+          },
+          "trends": {
+            "items": {
+              "$ref": "#/components/schemas/Trend"
+            },
+            "type": "array",
+            "title": "Trends"
+          },
+          "sparklines": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Sparklines",
+            "description": "each term's mentions per hour in the scope, the 7 days up to the run"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_run",
+          "reference_days",
+          "trending",
+          "alerts_sent",
+          "trends",
+          "sparklines"
+        ],
+        "title": "Trends"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WikipediaRecord": {
+        "properties": {
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "with_interest": {
+            "type": "integer",
+            "title": "With Interest"
+          },
+          "onset_first": {
+            "type": "integer",
+            "title": "Onset First"
+          },
+          "same_day": {
+            "type": "integer",
+            "title": "Same Day"
+          },
+          "wikipedia_first": {
+            "type": "integer",
+            "title": "Wikipedia First"
+          },
+          "median_lead_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Lead Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "events",
+          "with_interest",
+          "onset_first",
+          "same_day",
+          "wikipedia_first",
+          "median_lead_days"
+        ],
+        "title": "WikipediaRecord"
+      }
+    }
+  }
+}

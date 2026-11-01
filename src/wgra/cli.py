@@ -570,9 +570,14 @@ def cmd_migrate(_: argparse.Namespace) -> None:
 
 
 def cmd_web(args: argparse.Namespace) -> None:
-    from wgra.web.server import serve
+    from wgra.web import server
 
-    serve(Env.from_environ(), args.host, args.port, os.environ.get("WEB_PASSWORD", ""))
+    if args.action == "openapi":
+        server.print_openapi()
+        return
+    if args.dev:
+        os.environ["WEB_API_ONLY"] = "1"
+    server.serve(args.host, args.port, reload=args.reload)
 
 
 def cmd_status(_: argparse.Namespace) -> None:
@@ -907,10 +912,14 @@ def main(argv: Sequence[str] | None = None) -> None:
         "web",
         help="the web dashboard, a simpler view of what Grafana shows",
         description="Serves the web dashboard and its data, read only. Set WEB_PASSWORD to "
-        "ask for it (HTTP basic auth, any user name).",
+        "ask for it (HTTP basic auth, any user name). `openapi` prints the API's schema "
+        "instead, for web/src/api/openapi.json.",
     )
+    web.add_argument("action", nargs="?", choices=["serve", "openapi"], default="serve")
     web.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to listen everywhere")
     web.add_argument("--port", type=int, default=3610)
+    web.add_argument("--dev", action="store_true", help="only the API, for pnpm dev in web/")
+    web.add_argument("--reload", action="store_true", help="restart when the code changes")
     web.set_defaults(func=cmd_web)
 
     intents = commands.add_parser(

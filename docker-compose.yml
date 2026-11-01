@@ -18,9 +18,12 @@ services:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-wgra}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-wgra}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+      # the web dashboard's user, which can only read (clickhouse/users.d/web.xml)
+      WEB_CLICKHOUSE_PASSWORD: ${WEB_CLICKHOUSE_PASSWORD:?set WEB_CLICKHOUSE_PASSWORD in .env}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse/wgra.xml:/etc/clickhouse-server/config.d/wgra.xml:ro
+      - ./clickhouse/users.d/web.xml:/etc/clickhouse-server/users.d/web.xml:ro
     ports:
       - 127.0.0.1:3607:8123
     ulimits:
@@ -56,8 +59,8 @@ services:
     ports:
       - 127.0.0.1:3608:3000
 
-  # The web dashboard: what Grafana shows, plainer. Grafana stays as the pro mode. It only
-  # reads ClickHouse, so it gets no other secrets.
+  # The web dashboard: the page and its API. Grafana stays as the pro mode. It connects as
+  # a ClickHouse user that can only read, and gets no other secrets.
   web:
     build: .
     command: ["wgra", "web", "--host", "0.0.0.0"]
@@ -69,8 +72,8 @@ services:
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_PORT: "8123"
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-wgra}
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-wgra}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_USER: wgra_web
+      CLICKHOUSE_PASSWORD: ${WEB_CLICKHOUSE_PASSWORD}
       # where its "Pro mode" links go
       GRAFANA_URL: ${GRAFANA_URL:-http://localhost:3608}
       WEB_PASSWORD: ${WEB_PASSWORD:-}

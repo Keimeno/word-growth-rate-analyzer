@@ -1,68 +1,86 @@
 import base64
 import json
-import math
+import os
+import re
+import secrets
 import threading
 import time
-import urllib.error
-import urllib.request
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+from xml.etree import ElementTree
 
 import pytest
+from clickhouse_connect.driver.exceptions import DatabaseError
+from fastapi.testclient import TestClient
 from helpers import make_config, make_doc, make_trend
+from pydantic import BaseModel
 
 from wgra.config import Env
 from wgra.detect.short_term import write_trends
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
 from wgra.ingest.run import write_channels
-from wgra.store import connect, migrate
-from wgra.web.queries import ENDPOINTS, Params, _json, daily_series, hourly_series
-from wgra.web.server import Dashboard
+from wgra.store import migrate
+from wgra.web import legacy
+from wgra.web.app import Settings, create_app
+from wgra.web.models import Time
+from wgra.web.queries import WindowQuery, daily_series, hourly_series
+from wgra.web.queries.explore import ExploreQuery
+from wgra.web.queries.trends import TrendQuery
+from wgra.web.server import openapi, web_client
+
+HOUR = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
 
-def params(**values: str) -> Params:
-    return Params({key: [value] for key, value in values.items()})
-
-
-def test_params_read_lists_numbers_and_ranges():
-    p = params(channels="r/a, r/b,,", min_authors="-3", horizon="6h", range="2d")
-    assert p.items("channels") == ["r/a", "r/b"]
-    assert p.items("kinds", ["word"]) == ["word"]
-    assert params(kinds="").items("kinds", ["word"]) == []
-    assert p.number("min_authors", 1, 1) == 1
-    assert p.choice("horizon", ["24h", "6h"], "24h") == "6h"
-    start, end = p.window("7d")
-    assert end - start == 2 * 86400
+def test_queries_read_lists_and_ranges():
+    query = TrendQuery.model_validate({"scopes": ["r/a, r/b,,"], "horizon": "6h"})
+    assert query.scopes == ["r/a", "r/b"]
+    assert query.kinds == ["word", "phrase", "domain", "subreddit"]
+    assert TrendQuery.model_validate({"kinds": [""]}).kinds == []
+    assert TrendQuery.model_validate({"kinds": ["word", "phrase,domain"]}).kinds == [
+        "word",
+        "phrase",
+        "domain",
+    ]
+    now = datetime(2026, 11, 1, 12, tzinfo=UTC)
+    window = WindowQuery.model_validate({"range": "2d"}).window(now, "7d")
+    assert window["to"] - window["from"] == 2 * 86400
+    assert window["to"] == int(now.timestamp())
+    assert WindowQuery().window(now, "6h")["from"] == int(now.timestamp()) - 6 * 3600
 
 
 @pytest.mark.parametrize(
     "bad",
     [
-        lambda: params(horizon="1h").choice("horizon", ["24h", "6h"], "24h"),
-        lambda: params(range="2 days").window("7d"),
-        lambda: params(min_authors="many").number("min_authors", 1),
+        lambda: TrendQuery.model_validate({"horizon": "1h"}),
+        lambda: WindowQuery.model_validate({"range": "2 days"}),
+        lambda: ExploreQuery.model_validate({"terms": [" , "]}),
     ],
 )
-def test_params_reject_what_they_cant_read(bad):
+def test_queries_reject_what_they_cant_read(bad):
     with pytest.raises(ValueError):
         bad()
 
 
-def test_json_values():
-    assert _json(datetime(2026, 10, 31, 12, 0, 5)) == "2026-10-31T12:00:05Z"
-    assert _json(datetime(2026, 10, 31, 13, tzinfo=UTC)) == "2026-10-31T13:00:00Z"
-    assert _json(date(2026, 10, 31)) == "2026-10-31"
-    assert _json([math.nan, math.inf, 1.5, ("a", 2)]) == [None, None, 1.5, ["a", 2]]
+def test_times_are_utc_with_a_z_and_nan_is_null():
+    class Row(BaseModel):
+        time: Time
+        value: float | None
+
+    row = Row(time=datetime(2026, 10, 31, 12, 0, 5), value=float("nan"))
+    assert row.model_dump_json() == '{"time":"2026-10-31T12:00:05Z","value":null}'
 
 
 def test_series_fill_the_hours_and_days_without_mentions():
     end = datetime(2026, 10, 31, 15, 45)
     points = [
-        {"time": "2026-10-31T15:00:00Z", "term": "ai", "mentions": 3},
-        {"time": "2026-10-31T13:00:00Z", "term": "ai", "mentions": 1},
-        {"time": "2026-10-20T13:00:00Z", "term": "ai", "mentions": 9},
+        {"time": datetime(2026, 10, 31, 15), "term": "ai", "mentions": 3},
+        {"time": datetime(2026, 10, 31, 13), "term": "ai", "mentions": 1},
+        {"time": datetime(2026, 10, 20, 13), "term": "ai", "mentions": 9},
     ]
     assert hourly_series(points, end, 4) == {"ai": [0, 1, 0, 3]}
-    days = [{"day": "2026-10-30", "term": "x", "mentions": 2}]
+    days = [{"day": date(2026, 10, 30), "term": "x", "mentions": 2}]
     assert daily_series(days, date(2026, 10, 29), 3) == {"x": [0, 2, 0]}
 
 
@@ -74,8 +92,7 @@ def stored(module_client):
     config = make_config()
     write_channels(client, config)
     processor = Processor(config, b"key")
-    hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
-    created = int(hour.timestamp()) + 60
+    created = int(HOUR.timestamp()) + 60
     items = [
         make_doc(config, 1, created, author="alice", text="rust is great, rust rust"),
         make_doc(config, 2, created + 60, author="bob", text="I like rust"),
@@ -92,11 +109,11 @@ def stored(module_client):
     )
     write_trends(
         client,
-        [make_trend("rust", kind="word", scope="tech", scope_type="group", detected_at=hour)],
+        [make_trend("rust", kind="word", scope="tech", scope_type="group", detected_at=HOUR)],
     )
     client.insert(
         "polls",
-        [[hour, "reddit", "comments-1", "comments", False, 200, 100, 40, False, 0, 80, 60, 1, 99]],
+        [[HOUR, "reddit", "comments-1", "comments", False, 200, 100, 40, False, 0, 80, 60, 1, 99]],
         column_names=[
             "ts", "platform", "feed", "kind", "sample", "status", "items", "new_items", "gap",
             "id_span", "latency_ms", "interval_s", "rate", "ratelimit_remaining",
@@ -105,31 +122,74 @@ def stored(module_client):
     return client
 
 
-@pytest.mark.parametrize("name", sorted(ENDPOINTS))
-def test_every_endpoint_runs_on_the_schema(stored, name):
-    data = ENDPOINTS[name](stored, params(scope="tech", terms="rust", kind="complaint"))
-    json.dumps(data)
+@pytest.fixture(scope="module")
+def web(stored):
+    app = create_app(web_client(Env.from_environ(), stored.database), Settings("http://grafana"))
+    with TestClient(app) as test_client:
+        yield test_client
 
 
-def test_meta_lists_groups_then_channels(stored):
-    meta = ENDPOINTS["meta"](stored, params())
+def get(web: TestClient, path: str) -> Any:
+    response = web.get(path)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+V1 = sorted(path for path in openapi()["paths"] if path.startswith("/api/v1/"))
+
+
+@pytest.mark.parametrize("path", V1)
+def test_every_endpoint_runs_on_the_schema(web, path):
+    get(web, f"{path}?scope=tech&terms=rust&kind=complaint")
+
+
+@pytest.mark.parametrize("name", sorted(legacy.ALIASES))
+def test_the_old_page_s_endpoints_still_answer(web, name):
+    get(web, f"/api/{name}?scope=tech&terms=rust&kind=complaint")
+
+
+def test_every_endpoint_has_a_model_in_the_schema():
+    schema = openapi()
+    for path in V1:
+        response = schema["paths"][path]["get"]["responses"]["200"]
+        assert response["content"]["application/json"]["schema"], path
+    assert schema["paths"]["/api/v1/trends"]["get"]["operationId"] == "trends"
+
+
+def test_meta_lists_groups_then_channels(web):
+    meta = get(web, "/api/v1/meta")
     names = [scope["name"] for scope in meta["scopes"]]
     assert names[0] == "reddit"
     assert names.index("tech") < names.index("r/technology")
     assert meta["groups"]["tech"] == ["r/programming", "r/technology"]
+    assert meta["grafana_url"] == "http://grafana"
 
 
-def test_trending_shows_the_latest_run_with_sparklines(stored):
-    data = ENDPOINTS["trending"](stored, params(scope="tech"))
+def test_trends_show_the_latest_run_with_sparklines(web):
+    data = get(web, "/api/v1/trends?scope=tech")
     assert [trend["term"] for trend in data["trends"]] == ["rust"]
     assert data["trending"] == 1
+    assert data["last_run"] == HOUR.isoformat().replace("+00:00", "Z")
     # the hour before the run: 3 comments mentioned rust in tech
     assert data["sparklines"]["rust"][-1] == 3
-    assert ENDPOINTS["trending"](stored, params(scope="tech", kinds="phrase"))["trends"] == []
+    assert get(web, "/api/v1/trends?scope=tech&kinds=phrase")["trends"] == []
 
 
-def test_explore_counts_mentions_and_shares(stored):
-    data = ENDPOINTS["explore"](stored, params(scope="tech", terms="Rust", range="2d"))
+def test_as_of_shows_the_past(web):
+    before = (HOUR - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%MZ")
+    data = get(web, f"/api/v1/trends?scope=tech&as_of={before}")
+    assert (data["last_run"], data["trends"]) == (None, [])
+    assert get(web, f"/api/v1/explore/mentions?scope=tech&terms=rust&as_of={before}") == []
+
+
+def test_missing_is_null_not_1970(web):
+    edges = get(web, "/api/v1/edges")
+    assert edges["edges_learned"] is None and edges["precision_30d"] is None
+    assert get(web, "/api/v1/long-term?scope=tech")["last_run"] is None
+
+
+def test_explore_counts_mentions_and_shares(web):
+    data = get(web, "/api/v1/explore?scope=tech&terms=Rust&range=2d")
     assert data["terms"] == ["rust"]
     assert data["bucket"] == "hour"
     [point] = data["points"]
@@ -141,83 +201,65 @@ def test_explore_counts_mentions_and_shares(stored):
         "r/technology": 2,
         "r/programming": 1,
     }
-    channel = ENDPOINTS["explore"](
-        stored, params(scope="tech", terms="rust", channels="r/programming")
-    )
+    channel = get(web, "/api/v1/explore?scope=tech&terms=rust&channels=r/programming")
     assert channel["points"][0]["mentions"] == 1
-    mentions = ENDPOINTS["explore-mentions"](stored, params(scope="tech", terms="rust"))
-    assert len(mentions) == 3
+    assert len(get(web, "/api/v1/explore/mentions?scope=tech&terms=rust")) == 3
 
 
-def test_intents_show_the_switch_and_its_comment(stored):
-    flows = ENDPOINTS["intents-switches"](stored, params(scope="tech"))["flows"]
+def test_intents_show_the_switch_and_its_comment(web):
+    flows = get(web, "/api/v1/intents/flows?scope=tech")["flows"]
     assert [(flow["from"], flow["to"], flow["mentions"]) for flow in flows] == [
         ("notion", "obsidian", 1)
     ]
-    examples = ENDPOINTS["intents-examples"](stored, params(scope="tech", term="notion → obsidian"))
+    examples = get(web, "/api/v1/intents/examples?scope=tech&term=notion → obsidian")
     assert [row["found"] for row in examples] == [["notion → obsidian"]]
-    assert ENDPOINTS["intents-examples"](stored, params(scope="tech", intent_kinds="need")) == []
+    assert get(web, "/api/v1/intents/examples?scope=tech&intent_kinds=need") == []
 
 
-def test_explore_needs_a_term(stored):
-    with pytest.raises(ValueError):
-        ENDPOINTS["explore"](stored, params(scope="tech", terms=" , "))
+def test_the_old_page_gets_its_shapes(web):
+    data = get(web, "/api/early-warning-forecasts")
+    assert data == {"pending": [], "cascades": []}
+    assert get(web, "/api/config") == {"grafana_url": "http://grafana"}
+    assert get(web, "/api/trending?scope=tech&kinds=word,phrase")["trending"] == 1
 
 
-@pytest.fixture
-def server(stored):
-    # as `wgra web` connects: without a session, which would take one query at a time
-    client = connect(Env.from_environ(), stored.database, autogenerate_session_id=False)
-    dashboard = Dashboard(("127.0.0.1", 0), client, "http://grafana", password="")
-    thread = threading.Thread(target=dashboard.serve_forever, daemon=True)
-    thread.start()
-    yield dashboard
-    dashboard.shutdown()
-    dashboard.server_close()
+def test_the_server_serves_the_page(web):
+    response = web.get("/")
+    assert response.status_code == 200 and b"<title>Undercurrent</title>" in response.content
+    assert web.get("/static/app.js").status_code == 200
+    assert web.get("/static/../app.py").status_code == 404
+    assert web.get("/static/%2e%2e/app.py").status_code == 404
 
 
-def get(dashboard: Dashboard, path: str, password: str | None = None) -> tuple[int, bytes]:
-    request = urllib.request.Request(f"http://127.0.0.1:{dashboard.server_address[1]}{path}")
-    if password is not None:
-        token = base64.b64encode(f"me:{password}".encode()).decode()
-        request.add_header("Authorization", f"Basic {token}")
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return response.status, response.read()
-    except urllib.error.HTTPError as error:
-        return error.code, error.read()
+def test_the_server_refuses_bad_requests(web):
+    assert web.get("/api/v1/nothing").status_code == 404
+    assert web.get("/api/nothing").json() == {"error": "no endpoint nothing"}
+    response = web.get("/api/v1/trends?horizon=1h")
+    assert response.status_code == 400 and "horizon" in response.json()["error"]
+    response = web.get("/api/explore?terms=,")
+    assert response.status_code == 400 and "term" in response.json()["error"]
 
 
-def test_server_serves_the_page_and_the_data(server):
-    status, body = get(server, "/")
-    assert status == 200 and b"<title>Undercurrent</title>" in body
-    status, body = get(server, "/static/app.js")
-    assert status == 200
-    status, body = get(server, "/api/config")
-    assert json.loads(body) == {"grafana_url": "http://grafana"}
-    status, body = get(server, "/api/trending?scope=tech")
-    assert status == 200 and json.loads(body)["trends"][0]["term"] == "rust"
+def test_the_server_asks_for_the_password(stored):
+    app = create_app(stored, Settings(password="secret"))
+    with TestClient(app) as web:
+
+        def status(password: str | None) -> int:
+            headers = {}
+            if password is not None:
+                token = base64.b64encode(f"me:{password}".encode()).decode()
+                headers["Authorization"] = f"Basic {token}"
+            return web.get("/api/config", headers=headers).status_code
+
+        assert status(None) == 401
+        assert status("wrong") == 401
+        assert status("secret") == 200
 
 
-def test_server_refuses_bad_requests(server):
-    assert get(server, "/api/nothing")[0] == 404
-    assert get(server, "/static/../server.py")[0] == 404
-    assert get(server, "/static/%2e%2e/server.py")[0] == 404
-    status, body = get(server, "/api/trending?horizon=1h")
-    assert status == 400 and "horizon" in json.loads(body)["error"]
-
-
-def test_server_asks_for_the_password(server):
-    server.password = "secret"
-    assert get(server, "/api/config")[0] == 401
-    assert get(server, "/api/config", password="wrong")[0] == 401
-    assert get(server, "/api/config", password="secret")[0] == 200
-
-
-def test_server_answers_while_another_request_runs(server):
+def test_the_server_answers_while_another_request_runs(web):
     results: list[int] = []
     threads = [
-        threading.Thread(target=lambda: results.append(get(server, "/api/meta")[0]))
+        threading.Thread(target=lambda: results.append(web.get("/api/v1/meta").status_code))
         for _ in range(4)
     ]
     started = time.monotonic()
@@ -227,3 +269,54 @@ def test_server_answers_while_another_request_runs(server):
         thread.join()
     assert results == [200] * 4
     assert time.monotonic() - started < 10
+
+
+def test_the_schema_is_json():
+    json.dumps(openapi())
+
+
+USERS = Path(__file__).parent.parent / "clickhouse" / "users.d" / "web.xml"
+
+
+@pytest.fixture
+def readonly(stored):
+    """The dashboard's ClickHouse user, created with SQL from clickhouse/users.d/web.xml
+    (CI's ClickHouse can't mount the file), on the test database."""
+    root = ElementTree.parse(USERS).getroot()
+    [profile] = root.findall("profiles/*")
+    [user] = root.findall("users/*")
+    settings = ", ".join(f"{setting.tag} = {setting.text}" for setting in profile)
+    grants = [
+        re.sub(r"ON (?!system\.)\w+\.\*", f"ON {stored.database}.*", query.text or "")
+        for query in user.findall("grants/query")
+    ]
+    name, password = f"web_test_{secrets.token_hex(4)}", secrets.token_hex(16)
+    try:
+        stored.command(f"CREATE SETTINGS PROFILE {name} SETTINGS {settings}")
+    except DatabaseError as error:
+        if "ACCESS_DENIED" in str(error) and not os.environ.get("CI"):
+            pytest.skip("this ClickHouse user can't create users (CI's can)")
+        raise
+    try:
+        stored.command(f"CREATE USER {name} IDENTIFIED BY '{password}' SETTINGS PROFILE {name}")
+        for grant in grants:
+            stored.command(f"{grant} TO {name}")
+        env = replace(Env.from_environ(), clickhouse_user=name, clickhouse_password=password)
+        yield web_client(env, stored.database)
+    finally:
+        stored.command(f"DROP USER IF EXISTS {name}")
+        stored.command(f"DROP SETTINGS PROFILE IF EXISTS {name}")
+
+
+def test_the_dashboard_s_user_can_read_but_not_write(readonly):
+    with TestClient(create_app(readonly, Settings())) as web:
+        assert get(web, "/api/v1/trends?scope=tech")["trending"] == 1
+        assert get(web, "/api/v1/ingestion")["storage"]
+    for statement in [
+        "INSERT INTO notifications (kind, term) VALUES ('test', 'x')",
+        "CREATE TABLE nothing (x UInt8) ENGINE = Memory",
+        "DROP TABLE trends",
+        "ALTER TABLE trends DELETE WHERE 1",
+    ]:
+        with pytest.raises(DatabaseError):
+            readonly.command(statement)
