@@ -22,7 +22,7 @@ from wgra.detect.scoring import Counts, Prior
 from wgra.detect.short_term import write_trends
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
 from wgra.ingest.run import write_channels
-from wgra.store import migrate
+from wgra.store import connect, migrate
 from wgra.web.app import Settings, create_app
 from wgra.web.models import Time
 from wgra.web.queries import WindowQuery, daily_series, hourly_series
@@ -125,7 +125,12 @@ def stored(module_client):
 
 @pytest.fixture(scope="module")
 def web(stored):
-    app = create_app(web_client(Env.from_environ(), stored.database), Settings("http://grafana"))
+    env = Env.from_environ()
+    app = create_app(
+        web_client(env, stored.database),
+        Settings("http://grafana"),
+        writer=connect(env, stored.database, autogenerate_session_id=False),
+    )
     with TestClient(app) as test_client:
         yield test_client
 
@@ -321,7 +326,7 @@ def readonly(stored):
     [user] = root.findall("users/*")
     settings = ", ".join(f"{setting.tag} = {setting.text}" for setting in profile)
     grants = [
-        re.sub(r"ON (?!system\.)\w+\.\*", f"ON {stored.database}.*", query.text or "")
+        re.sub(r"ON (?!system\.)\w+\.", f"ON {stored.database}.", query.text or "")
         for query in user.findall("grants/query")
     ]
     name, password = f"web_test_{secrets.token_hex(4)}", secrets.token_hex(16)
@@ -336,16 +341,22 @@ def readonly(stored):
         for grant in grants:
             stored.command(f"{grant} TO {name}")
         env = replace(Env.from_environ(), clickhouse_user=name, clickhouse_password=password)
-        yield web_client(env, stored.database)
+        yield env
     finally:
         stored.command(f"DROP USER IF EXISTS {name}")
         stored.command(f"DROP SETTINGS PROFILE IF EXISTS {name}")
 
 
-def test_the_dashboard_s_user_can_read_but_not_write(readonly):
-    with TestClient(create_app(readonly, Settings())) as web:
+def test_the_dashboard_s_user_can_read_but_not_write(stored, readonly):
+    reader = web_client(readonly, stored.database)
+    writer = connect(readonly, stored.database, autogenerate_session_id=False)
+    with TestClient(create_app(reader, Settings(), writer)) as web:
         assert get(web, "/api/v1/trends?scope=tech")["trending"] == 1
         assert get(web, "/api/v1/ingestion")["storage"]
+        # its pins and views, and nothing else
+        pinned = web.put("/api/v1/pins", json={"kind": "word", "term": "x"})
+        assert pinned.status_code == 200, pinned.text
+        assert web.delete("/api/v1/pins?kind=word&term=x").status_code == 204
     for statement in [
         "INSERT INTO notifications (kind, term) VALUES ('test', 'x')",
         "CREATE TABLE nothing (x UInt8) ENGINE = Memory",
@@ -353,7 +364,7 @@ def test_the_dashboard_s_user_can_read_but_not_write(readonly):
         "ALTER TABLE trends DELETE WHERE 1",
     ]:
         with pytest.raises(DatabaseError):
-            readonly.command(statement)
+            writer.command(statement)
 
 
 def test_the_term_page_summarizes_the_term(web):
@@ -494,3 +505,33 @@ def test_the_stream_starts_with_hello_and_polls_once_for_every_tab(stored):
     )
     sent = read_alerts(stored, HOUR + timedelta(minutes=1))
     assert [(alert["kind"], alert["scope"]) for alert in sent] == [("forecast", "r/de")]
+
+
+def test_pins_and_saved_views(web):
+    assert get(web, "/api/v1/pins") == []
+    assert web.get("/api/v1/pins").headers["cache-control"] == "no-cache"
+    pinned = web.put("/api/v1/pins", json={"kind": "word", "term": "rust", "scope": "tech"})
+    assert pinned.status_code == 200 and pinned.json()["term"] == "rust"
+    assert [(pin["kind"], pin["term"]) for pin in get(web, "/api/v1/pins")] == [("word", "rust")]
+    assert web.delete("/api/v1/pins?kind=word&term=rust").status_code == 204
+    assert get(web, "/api/v1/pins") == []
+
+    view = {"name": "AI in tech", "url": "/trending?scope=tech&kinds=word"}
+    assert web.put("/api/v1/views", json=view).status_code == 200
+    assert [saved["url"] for saved in get(web, "/api/v1/views")] == [view["url"]]
+    assert (
+        web.put("/api/v1/views", json={"name": "x", "url": "https://elsewhere"}).status_code == 400
+    )
+    assert web.delete("/api/v1/views?name=AI in tech").status_code == 204
+    assert get(web, "/api/v1/views") == []
+
+
+def test_writes_come_from_the_dashboard_s_own_pages(web):
+    body = {"kind": "word", "term": "rust"}
+    foreign = web.put("/api/v1/pins", json=body, headers={"Origin": "https://evil.example"})
+    assert foreign.status_code == 403
+    form = web.put("/api/v1/pins", content="kind=word", headers={"Content-Type": "text/plain"})
+    assert form.status_code == 415
+    own = web.put("/api/v1/pins", json=body, headers={"Origin": "http://testserver"})
+    assert own.status_code == 200
+    web.delete("/api/v1/pins?kind=word&term=rust", headers={"Origin": "http://testserver"})

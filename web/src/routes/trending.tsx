@@ -14,6 +14,7 @@ import { Sparkline } from "@/charts/micro";
 import { type Series, timeSeries } from "@/charts/options";
 import { Filters, PageHeader } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
+import { usePinned } from "@/components/Personal";
 import { BumpPanel, WhatIfPanel } from "@/components/Extras";
 import { ALERT_HELP, AlertBadge, KindBadge, StrengthWord, TermLink } from "@/components/Entity";
 import { EmptyState, Loaded, Notice, Panel } from "@/components/Panel";
@@ -89,6 +90,7 @@ function Scored() {
   const series = useTrendSeries({ ...params, range: search.chart });
   const digest = useTrendDigest(params);
   const alerts = useTrendAlerts({ ...asOf, scope: search.scope, scopes: search.scopes });
+  const pinned = usePinned();
   const data = trends.data;
 
   // one row per term at its strongest (rows come strongest first), with where else
@@ -100,8 +102,12 @@ function Scored() {
       if (seen) seen.others.push(trend.scope);
       else byTerm.set(key, { ...trend, others: [] });
     }
-    return [...byTerm.values()];
-  }, [data]);
+    // pinned terms first (WEB-DASHBOARD.md §7.1, item 17)
+    return [...byTerm.values()].sort(
+      (a, b) =>
+        Number(pinned.has(`${b.kind}|${b.term}`)) - Number(pinned.has(`${a.kind}|${a.term}`)),
+    );
+  }, [data, pinned]);
   // the chart's 8 terms keep their colour in the table
   const slots = useMemo(
     () => assignSlots(rows.filter((row) => !row.subsumed_by).map((row) => row.term)),
@@ -232,6 +238,9 @@ function Scored() {
                     <div className="min-w-0">
                       <TermLink term={row.term} kind={row.kind} color={colorOf(slots, row.term)} />
                       <KindBadge kind={row.kind} />
+                      {pinned.has(`${row.kind}|${row.term}`) && (
+                        <span className="ml-1.5 text-[11px] text-primary-ink">pinned</span>
+                      )}
                       {row.subsumed_by && (
                         <div className="text-xs text-ink-muted">
                           explained by “{row.subsumed_by}”

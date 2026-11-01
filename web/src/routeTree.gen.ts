@@ -16,6 +16,7 @@ import { Route as EdgeRouteImport } from "./routes/edge"
 import { Route as ExploreRouteImport } from "./routes/explore"
 import { Route as IntentsRouteImport } from "./routes/intents"
 import { Route as LongTermRouteImport } from "./routes/long-term"
+import { Route as PinnedRouteImport } from "./routes/pinned"
 import { Route as SpreadRouteImport } from "./routes/spread"
 import { Route as TrendingRouteImport } from "./routes/trending"
 import { Route as PSplatRouteImport } from "./routes/p.$"
@@ -58,6 +59,11 @@ const LongTermRoute = LongTermRouteImport.update({
   path: "/long-term",
   getParentRoute: () => rootRouteImport,
 } as any)
+const PinnedRoute = PinnedRouteImport.update({
+  id: "/pinned",
+  path: "/pinned",
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SpreadRoute = SpreadRouteImport.update({
   id: "/spread",
   path: "/spread",
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   "/explore": typeof ExploreRoute
   "/intents": typeof IntentsRoute
   "/long-term": typeof LongTermRoute
+  "/pinned": typeof PinnedRoute
   "/spread": typeof SpreadRoute
   "/trending": typeof TrendingRoute
   "/p/$": typeof PSplatRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   "/explore": typeof ExploreRoute
   "/intents": typeof IntentsRoute
   "/long-term": typeof LongTermRoute
+  "/pinned": typeof PinnedRoute
   "/spread": typeof SpreadRoute
   "/trending": typeof TrendingRoute
   "/p/$": typeof PSplatRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   "/explore": typeof ExploreRoute
   "/intents": typeof IntentsRoute
   "/long-term": typeof LongTermRoute
+  "/pinned": typeof PinnedRoute
   "/spread": typeof SpreadRoute
   "/trending": typeof TrendingRoute
   "/p/$": typeof PSplatRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | "/explore"
     | "/intents"
     | "/long-term"
+    | "/pinned"
     | "/spread"
     | "/trending"
     | "/p/$"
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
     | "/explore"
     | "/intents"
     | "/long-term"
+    | "/pinned"
     | "/spread"
     | "/trending"
     | "/p/$"
@@ -175,6 +186,7 @@ export interface FileRouteTypes {
     | "/explore"
     | "/intents"
     | "/long-term"
+    | "/pinned"
     | "/spread"
     | "/trending"
     | "/p/$"
@@ -191,6 +203,7 @@ export interface RootRouteChildren {
   ExploreRoute: typeof ExploreRoute
   IntentsRoute: typeof IntentsRoute
   LongTermRoute: typeof LongTermRoute
+  PinnedRoute: typeof PinnedRoute
   SpreadRoute: typeof SpreadRoute
   TrendingRoute: typeof TrendingRoute
   PSplatRoute: typeof PSplatRoute
@@ -250,6 +263,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LongTermRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/pinned": {
+      id: "/pinned"
+      path: "/pinned"
+      fullPath: "/pinned"
+      preLoaderRoute: typeof PinnedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     "/spread": {
       id: "/spread"
       path: "/spread"
@@ -303,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExploreRoute: ExploreRoute,
   IntentsRoute: IntentsRoute,
   LongTermRoute: LongTermRoute,
+  PinnedRoute: PinnedRoute,
   SpreadRoute: SpreadRoute,
   TrendingRoute: TrendingRoute,
   PSplatRoute: PSplatRoute,

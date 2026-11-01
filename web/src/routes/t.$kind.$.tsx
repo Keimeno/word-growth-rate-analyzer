@@ -17,6 +17,7 @@ import { Comments } from "@/components/Comments";
 import { DataTable } from "@/components/DataTable";
 import { EventLink, ScopeLink, StrengthWord } from "@/components/Entity";
 import { Explainer } from "@/components/Explainer";
+import { PinButton } from "@/components/Personal";
 import { ChannelsPanel, RelatedPanel, RhythmPanel } from "@/components/TermSections";
 import { EmptyState, Loaded, Panel } from "@/components/Panel";
 import { Field, ScopePicker, Segmented } from "@/components/Pickers";
@@ -105,6 +106,7 @@ function TermPage() {
               </a>
             </Button>
           )}
+          <PinButton kind={kind} term={term} scope={scope} />
           <Button
             size="sm"
             variant="ghost"

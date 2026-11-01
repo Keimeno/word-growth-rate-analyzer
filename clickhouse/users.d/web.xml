@@ -1,12 +1,12 @@
 <clickhouse>
-    <!-- The web dashboard's own user (docs/WEB-DASHBOARD.md §5.5): it can only read, so a
-         bug in the dashboard can't write, and its profile caps what it takes from the
-         ingester and the analyzer on the shared machine. Its password comes from
-         WEB_CLICKHOUSE_PASSWORD in .env. tests/test_web.py creates the same user with SQL
-         from this file. -->
+    <!-- The web dashboard's own user (docs/WEB-DASHBOARD.md §5.5): it can read, and insert
+         into its pins and saved views only, so a bug in the dashboard can't write anything
+         else; its profile caps what it takes from the ingester and the analyzer on the
+         shared machine. The dashboard's reads still ask for readonly themselves. Its
+         password comes from WEB_CLICKHOUSE_PASSWORD in .env. tests/test_web.py creates the
+         same user with SQL from this file. -->
     <profiles>
         <wgra_web>
-            <readonly>2</readonly>
             <max_threads>2</max_threads>
             <max_memory_usage>1000000000</max_memory_usage>
             <max_execution_time>30</max_execution_time>
@@ -28,6 +28,8 @@
                 <!-- the Collection page: storage per table, the dashboard's own cost -->
                 <query>GRANT SELECT ON system.parts</query>
                 <query>GRANT SELECT ON system.query_log</query>
+                <query>GRANT INSERT ON wgra.web_pins</query>
+                <query>GRANT INSERT ON wgra.web_views</query>
             </grants>
         </wgra_web>
     </users>

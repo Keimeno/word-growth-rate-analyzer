@@ -788,3 +788,25 @@ class MapNode(Model):
     median_lag: Num = Field(description="hours from a story's first onset to its own")
     events: int
     first_mover: int = Field(description="stories it was first in")
+
+
+# --- pins and saved views -----------------------------------------------------------------
+
+
+class PinIn(Model):
+    kind: str = Field(max_length=40)
+    term: str = Field(min_length=1, max_length=300)
+    scope: str = Field("reddit", max_length=200)
+
+
+class Pin(PinIn):
+    pinned_at: Time
+
+
+class ViewIn(Model):
+    name: str = Field(min_length=1, max_length=100)
+    url: str = Field(pattern=r"^/[^\s]*$", max_length=2000, description="a path and query")
+
+
+class View(ViewIn):
+    saved_at: Time

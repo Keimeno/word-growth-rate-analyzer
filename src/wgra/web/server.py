@@ -46,7 +46,8 @@ def web_client(env: Env, database: str | None = None) -> Client:
 def app_from_environ() -> FastAPI:
     """The app as `wgra web` builds it, for uvicorn's --reload, which imports a factory."""
     env = Env.from_environ()
-    return create_app(web_client(env), settings_from_environ(env))
+    writer = connect(env, autogenerate_session_id=False)
+    return create_app(web_client(env), settings_from_environ(env), writer)
 
 
 def serve(host: str, port: int, reload: bool = False) -> None:

@@ -10,6 +10,7 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/Panel";
 import { Palette } from "@/components/Palette";
 import { Peek } from "@/components/Peek";
+import { Shortcuts } from "@/components/Shortcuts";
 import { Toasts } from "@/components/Toasts";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { rootDefaults, rootSearch } from "@/lib/search";
@@ -40,6 +41,7 @@ function Root() {
       <Peek />
       <Palette />
       <Toasts />
+      <Shortcuts />
     </TooltipProvider>
   );
 }

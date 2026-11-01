@@ -43,9 +43,18 @@ ERRORS: dict[int | str, dict[str, Any]] = {
 
 
 def api() -> APIRouter:
-    from wgra.web.routes import entities, explore, ingestion, intents, meta, spread, trends
+    from wgra.web.routes import (
+        entities,
+        explore,
+        ingestion,
+        intents,
+        meta,
+        personal,
+        spread,
+        trends,
+    )
 
     router = APIRouter(prefix="/api/v1", responses=ERRORS)
-    for module in (meta, trends, spread, intents, explore, ingestion, entities):
+    for module in (meta, trends, spread, intents, explore, ingestion, entities, personal):
         router.include_router(module.router)
     return router

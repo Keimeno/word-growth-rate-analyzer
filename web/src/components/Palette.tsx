@@ -1,7 +1,26 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Compass, Copy, Eye, Hash, Layers, Moon } from "lucide-react";
+import {
+  Bookmark,
+  BookmarkPlus,
+  Compass,
+  Copy,
+  Eye,
+  Hash,
+  History,
+  Keyboard,
+  Layers,
+  Moon,
+  Pin,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearch as useTermSearch } from "@/api/generated/endpoints";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  getViewsQueryKey,
+  saveView,
+  usePins,
+  useSearch as useTermSearch,
+  useViews,
+} from "@/api/generated/endpoints";
 import { useAsOf, useMetaData } from "@/api/hooks";
 import {
   CommandDialog,
@@ -14,7 +33,7 @@ import {
 } from "@/components/ui/command";
 import { setTheme, useTheme } from "@/lib/theme";
 import { PAGES } from "./AppShell";
-import { searchOf } from "@/lib/navigation";
+import { searchOf, withSearch } from "@/lib/navigation";
 
 /** ⌘K or `/`: pages, scopes and actions, and any typed term (WEB-DASHBOARD.md §6.6). Terms
  * from the catalog come with phase 3. */
@@ -54,6 +73,15 @@ export function Palette() {
   };
   const term = typed.trim().toLowerCase().replace(/\s+/g, " ");
   const asOf = useAsOf();
+  const queryClient = useQueryClient();
+  const pins = usePins(undefined, { query: { enabled: open } });
+  const views = useViews(undefined, { query: { enabled: open } });
+  const save = useMutation({
+    mutationFn: (name: string) => saveView({ name, url: location.pathname + location.search }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: getViewsQueryKey() }),
+  });
+  // "2026-10-01" or "2026-10-01 14:00": the dashboard as it was then
+  const when = typed.trim().match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?$/);
   const hits = useTermSearch(
     { ...asOf, q: term },
     { query: { enabled: term.length >= 2, staleTime: 60_000 } },
@@ -91,6 +119,59 @@ export function Palette() {
               >
                 <Hash className="size-4" /> <span className="term">{hit.term}</span>
                 <CommandShortcut>{hit.kind}</CommandShortcut>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+        {when && (
+          <CommandGroup heading="Time travel">
+            <CommandItem
+              value={`as of ${typed}`}
+              onSelect={() =>
+                go(
+                  () =>
+                    void navigate({
+                      to: ".",
+                      search: withSearch({ as_of: `${when[1]}T${when[2] ?? "12:00"}Z` }),
+                    }),
+                )
+              }
+            >
+              <History className="size-4" /> Show the dashboard as of {when[1]} {when[2] ?? "12:00"}{" "}
+              UTC
+            </CommandItem>
+          </CommandGroup>
+        )}
+        {(pins.data ?? []).length > 0 && (
+          <CommandGroup heading="Pinned">
+            {(pins.data ?? []).map((pin) => (
+              <CommandItem
+                key={`${pin.kind}:${pin.term}`}
+                value={`pinned ${pin.term}`}
+                onSelect={() =>
+                  go(
+                    () =>
+                      void navigate({
+                        to: "/t/$kind/$",
+                        params: { kind: pin.kind, _splat: pin.term },
+                      }),
+                  )
+                }
+              >
+                <Pin className="size-4" /> <span className="term">{pin.term}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+        {(views.data ?? []).length > 0 && (
+          <CommandGroup heading="Saved views">
+            {(views.data ?? []).map((view) => (
+              <CommandItem
+                key={view.name}
+                value={`view ${view.name}`}
+                onSelect={() => go(() => void navigate({ href: view.url }))}
+              >
+                <Bookmark className="size-4" /> {view.name}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -135,6 +216,20 @@ export function Palette() {
             onSelect={() => go(() => setTheme(theme === "dark" ? "light" : "dark"))}
           >
             <Moon className="size-4" /> {theme === "dark" ? "Light mode" : "Dark mode"}
+          </CommandItem>
+          {typed.trim() && !when && (
+            <CommandItem
+              value={`action save view ${typed}`}
+              onSelect={() => go(() => save.mutate(typed.trim()))}
+            >
+              <BookmarkPlus className="size-4" /> Save this view as “{typed.trim()}”
+            </CommandItem>
+          )}
+          <CommandItem
+            value="action keyboard shortcuts help"
+            onSelect={() => go(() => window.dispatchEvent(new Event("undercurrent:shortcuts")))}
+          >
+            <Keyboard className="size-4" /> Keyboard shortcuts
           </CommandItem>
           <CommandItem
             value="action copy link"

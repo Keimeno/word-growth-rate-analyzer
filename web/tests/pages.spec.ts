@@ -117,3 +117,45 @@ test("a term's plain click peeks, its page is one more click", async ({ page }) 
   await page.getByRole("dialog").getByRole("link", { name: "Open term page" }).click();
   await expect(page).toHaveURL(/\/t\//);
 });
+
+test("a pin made on a term page shows on the Pinned page", async ({ page }) => {
+  await page.goto("/t/word/claude");
+  const pin = page.getByRole("button", { name: "Pin", exact: true });
+  await pin.click();
+  await expect(page.getByRole("button", { name: "Unpin" })).toBeVisible();
+  await page.goto("/pinned");
+  await expect(page.getByRole("link", { name: "claude" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Unpin" }).first().click();
+  await expect(page.getByText("Nothing pinned yet")).toBeVisible();
+});
+
+test("every chart has its table, a keystroke away", async ({ page }) => {
+  await page.goto("/trending");
+  const frame = page.locator('[aria-label$="Press t for its table."]').first();
+  await frame.focus();
+  await page.keyboard.press("t");
+  await expect(page.getByRole("table", { name: /as a table/ }).first()).toBeVisible();
+});
+
+test("time travel shows the page as of then, and says so", async ({ page }) => {
+  await page.goto("/trending");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.getByPlaceholder("A page, a scope or a term…").fill("2026-10-30 12:00");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/as_of=2026-10-30T12:00Z/);
+  await expect(page.getByText(/Showing the dashboard as of/)).toBeVisible();
+  await page.getByRole("link", { name: "Back to now" }).click();
+  await expect(page).not.toHaveURL(/as_of/);
+});
+
+test("? shows the keyboard shortcuts, g then a letter goes to a page", async ({ page }) => {
+  await page.goto("/trending");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.keyboard.press("?");
+  await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("g");
+  await page.keyboard.press("c");
+  await expect(page).toHaveURL(/\/collection/);
+});

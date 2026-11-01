@@ -6,6 +6,7 @@ import {
   Compass,
   Moon,
   Network,
+  Pin,
   Repeat,
   Search,
   Sun,
@@ -34,6 +35,7 @@ export const PAGES = [
   { to: "/spread", label: "Early warning", short: "Spread", icon: Network, grafana: "spread" },
   { to: "/explore", label: "Explore", short: "Explore", icon: Compass, grafana: "explore" },
   { to: "/alerts", label: "Alerts", short: "Alerts", icon: Bell, grafana: "trending" },
+  { to: "/pinned", label: "Pinned", short: "Pinned", icon: Pin, grafana: "trending" },
   {
     to: "/collection",
     label: "Collection",

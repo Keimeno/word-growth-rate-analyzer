@@ -29,7 +29,7 @@ from typing import Any
 
 from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import ClickHouseError
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
@@ -66,6 +66,9 @@ TIMEOUT = re.compile(r"\bCode: 159\b")
 # collection every minute
 CACHE = [
     ("/api/v1/stream", "no-cache"),
+    # personal state: a write must show on the next read
+    ("/api/v1/pins", "no-cache"),
+    ("/api/v1/views", "no-cache"),
     ("/api/v1/ingestion", "no-cache"),
     ("/api/v1/meta", "max-age=60"),
     ("/api/v1/", "max-age=60"),
@@ -89,7 +92,7 @@ class Settings:
     stream_seconds: float = 1800
 
 
-def create_app(client: Client, settings: Settings) -> FastAPI:
+def create_app(client: Client, settings: Settings, writer: Client | None = None) -> FastAPI:
     app = FastAPI(
         title="Undercurrent",
         summary="Early signals in online conversation: the web dashboard's API.",
@@ -101,6 +104,8 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
         generate_unique_id_function=lambda route: route.name,
     )
     app.state.client = client
+    # pins and saved views: a client without the reads' readonly setting
+    app.state.writer = writer or client
     app.state.settings = settings
 
     app.include_router(api())
@@ -141,6 +146,10 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
     @app.exception_handler(NotFound)
     def not_found(_: Request, error: NotFound) -> JSONResponse:
         return JSONResponse({"error": str(error).strip("'")}, status_code=404)
+
+    @app.exception_handler(HTTPException)
+    def refused(_: Request, error: HTTPException) -> JSONResponse:
+        return JSONResponse({"error": error.detail}, status_code=error.status_code)
 
     @app.exception_handler(ValueError)
     def bad_value(_: Request, error: ValueError) -> JSONResponse:
