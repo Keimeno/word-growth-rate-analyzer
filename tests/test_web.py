@@ -23,7 +23,6 @@ from wgra.detect.short_term import write_trends
 from wgra.ingest.pipeline import ITEM_COLUMNS, TERM_COLUMNS, Processor
 from wgra.ingest.run import write_channels
 from wgra.store import migrate
-from wgra.web import legacy
 from wgra.web.app import Settings, create_app
 from wgra.web.models import Time
 from wgra.web.queries import WindowQuery, daily_series, hourly_series
@@ -159,11 +158,6 @@ def test_every_endpoint_runs_on_the_schema(web, path):
     )
 
 
-@pytest.mark.parametrize("name", sorted(legacy.ALIASES))
-def test_the_old_page_s_endpoints_still_answer(web, name):
-    get(web, f"/api/{name}?scope=tech&terms=rust&kind=complaint")
-
-
 def test_every_endpoint_has_a_model_in_the_schema():
     schema = openapi()
     for path in V1:
@@ -232,21 +226,11 @@ def test_intents_show_the_switch_and_its_comment(web):
     assert get(web, "/api/v1/intents/examples?scope=tech&intent_kinds=need") == []
 
 
-def test_the_old_page_gets_its_shapes(web):
-    data = get(web, "/api/early-warning-forecasts")
-    assert data == {"pending": [], "cascades": []}
-    assert get(web, "/api/config") == {"grafana_url": "http://grafana"}
-    assert get(web, "/api/trending?scope=tech&kinds=word,phrase")["trending"] == 1
-
-
-def test_the_server_serves_today_s_page_without_a_build(stored):
+def test_the_server_says_when_the_page_isn_t_built(stored):
     with TestClient(create_app(stored, Settings(dist=None))) as web:
         response = web.get("/")
-        assert response.status_code == 200 and b"<title>Undercurrent</title>" in response.content
-        assert web.get("/classic/").status_code == 200
-        assert web.get("/static/app.js").status_code == 200
-        assert web.get("/static/../app.py").status_code == 404
-        assert web.get("/static/%2e%2e/app.py").status_code == 404
+        assert response.status_code == 503 and "pnpm build" in response.text
+        assert web.get("/api/v1/meta").status_code == 200
 
 
 def test_the_server_serves_the_built_app(stored, tmp_path):
@@ -270,16 +254,19 @@ def test_the_server_serves_the_built_app(stored, tmp_path):
         assert plain.text == "console.log(1)"
         assert web.get("/favicon.svg").text == "<svg/>"
         assert web.get("/assets/missing.js").status_code == 404
-        assert web.get("/classic/").status_code == 200
+        # nothing outside the build is served
+        assert web.get("/assets/%2e%2e/%2e%2e/pyproject.toml").status_code == 404
+        assert b"id=root" in web.get("/%2e%2e/pyproject.toml").content
         assert web.get("/api/v1/nothing").status_code == 404
 
 
 def test_the_server_refuses_bad_requests(web):
     assert web.get("/api/v1/nothing").status_code == 404
     assert web.get("/api/nothing").json() == {"error": "no endpoint nothing"}
+    assert web.get("/api/trending").status_code == 404
     response = web.get("/api/v1/trends?horizon=1h")
     assert response.status_code == 400 and "horizon" in response.json()["error"]
-    response = web.get("/api/explore?terms=,")
+    response = web.get("/api/v1/explore?terms=,")
     assert response.status_code == 400 and "term" in response.json()["error"]
 
 
@@ -292,7 +279,7 @@ def test_the_server_asks_for_the_password(stored):
             if password is not None:
                 token = base64.b64encode(f"me:{password}".encode()).decode()
                 headers["Authorization"] = f"Basic {token}"
-            return web.get("/api/config", headers=headers).status_code
+            return web.get("/api/v1/meta", headers=headers).status_code
 
         assert status(None) == 401
         assert status("wrong") == 401

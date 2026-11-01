@@ -113,7 +113,7 @@ export function ScopeLink({ scope, children }: { scope: string; children?: React
     <Link
       to="/s/$"
       params={{ _splat: scope }}
-      className="rounded-sm text-ink hover:text-primary hover:underline"
+      className="rounded-sm text-ink underline decoration-border-strong underline-offset-2 hover:text-primary hover:decoration-primary"
       onClick={(event) => event.stopPropagation()}
     >
       {children ?? scope}

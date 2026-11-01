@@ -34,7 +34,6 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from wgra.config import Config
-from wgra.web import legacy
 from wgra.web.queries.entities import NotFound
 from wgra.web.routes import api
 
@@ -42,8 +41,6 @@ log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[3]
 
-# today's page, at /classic/ until phase 3 deletes it
-STATIC = (Path(__file__).parent / "static").resolve()
 # the built TypeScript app: web/dist when run from the repository, /app/web-dist in the image
 DIST = next(
     (
@@ -100,7 +97,6 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
     app.state.settings = settings
 
     app.include_router(api())
-    app.include_router(legacy.router())
     _errors_as_400(app)
 
     @app.exception_handler(RequestValidationError)
@@ -134,15 +130,6 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
         return JSONResponse({"error": f"no endpoint {path}"}, status_code=404)
 
     if settings.page:
-
-        @app.get("/static/{path:path}", include_in_schema=False)
-        def static(path: str) -> Response:
-            return _file(STATIC, path)
-
-        @app.get("/classic/", include_in_schema=False)
-        def classic() -> Response:
-            return _file(STATIC, "index.html")
-
         dist = settings.dist
 
         @app.get("/{path:path}", include_in_schema=False)
@@ -150,7 +137,11 @@ def create_app(client: Client, settings: Settings) -> FastAPI:
             """The app's files, and its index.html for every other path, so the router
             handles deep links (/t/word/claude after a reload)."""
             if dist is None:
-                return _file(STATIC, "index.html") if path == "" else _not_found()
+                return Response(
+                    "The page isn't built: cd web && pnpm build (the API is under /api/v1/).",
+                    status_code=503,
+                    media_type="text/plain",
+                )
             if path.startswith("assets/"):
                 # named by their content: cached for a year
                 return _built(dist, path, request, "public, max-age=31536000, immutable")
@@ -187,14 +178,6 @@ def _errors_as_400(app: FastAPI) -> None:
 
 def _not_found() -> Response:
     return Response("not found", status_code=404, media_type="text/plain")
-
-
-def _file(root: Path, relative: str) -> Response:
-    path = (root / relative).resolve()
-    if not path.is_relative_to(root) or not path.is_file():
-        return _not_found()
-    # the page is small and changes with the code
-    return FileResponse(path, headers={"Cache-Control": "no-cache"})
 
 
 def _built(root: Path, relative: str, request: Request, cache: str) -> Response:

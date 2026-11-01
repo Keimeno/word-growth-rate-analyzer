@@ -11,6 +11,9 @@ const PAGES = [
   ["/spread", "Early warning"],
   ["/explore?terms=ai", "Explore"],
   ["/collection", "Collection"],
+  ["/alerts", "Alerts"],
+  ["/t/word/ai", "ai"],
+  ["/s/reddit", "reddit"],
 ] as const;
 
 function watchErrors(page: Page): string[] {
@@ -88,4 +91,29 @@ test("the scope follows from page to page", async ({ page }) => {
   await page.goto("/trending?scope=tech");
   await page.getByRole("link", { name: "Long-term" }).first().click();
   await expect(page).toHaveURL(/\/long-term\?scope=tech/);
+});
+
+test("an alert's link opens the term page, which explains the trend", async ({ page }) => {
+  // what an ntfy alert's click is: the term page in the alert's scope
+  await page.goto("/trending");
+  const first = page.getByRole("table", { name: "Trending terms" }).getByRole("link").first();
+  const href = await first.getAttribute("href");
+  test.skip(!href, "nothing trending in this database");
+  await page.goto(href ?? "/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByText("Share of the conversation")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Why it's trending" })).toBeVisible();
+  await expect(page.getByText("The gates")).toBeVisible();
+});
+
+test("a term's plain click peeks, its page is one more click", async ({ page }) => {
+  await page.goto("/trending");
+  const table = page.getByRole("table", { name: "Trending terms" });
+  await table.or(page.getByText("Nothing trending here right now")).waitFor({ timeout: 15_000 });
+  const first = table.getByRole("link").first();
+  test.skip((await first.count()) === 0, "nothing trending in this database");
+  await first.click();
+  await expect(page).toHaveURL(/peek=/);
+  await page.getByRole("dialog").getByRole("link", { name: "Open term page" }).click();
+  await expect(page).toHaveURL(/\/t\//);
 });
